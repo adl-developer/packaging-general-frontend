@@ -8,6 +8,19 @@ export interface SizeOption {
   dimensions: string; // e.g. "300 × 200 × 150 mm"
 }
 
+export interface MaterialOption {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export interface PrintingOption {
+  id: string;
+  label: string;
+  description: string;
+  setupFee?: string; // e.g. "Setup fee: GH₵ 500.00 + GH₵ 0.50/unit"
+}
+
 export interface Product {
   id: string;
   slug: string;
@@ -25,6 +38,37 @@ const CARTON_SIZES: SizeOption[] = [
   { id: "m", label: "Medium (40×30×20cm)", dimensions: "400 × 300 × 200 mm" },
   { id: "l", label: "Large (50×40×30cm)", dimensions: "500 × 400 × 300 mm" },
 ];
+
+// Customization options (Figma frame 404:1371). Shared across cartons for now.
+// TODO(medusa): drive these from product variants/options per product.
+export const CARTON_MATERIALS: MaterialOption[] = [
+  { id: "single", label: "Kraft Single Wall", description: "Standard brown kraft paper, 125gsm" },
+  { id: "double", label: "Kraft Double Wall", description: "Extra strength for heavy goods, 200gsm" },
+];
+
+export const CARTON_PRINTING: PrintingOption[] = [
+  { id: "none", label: "No Printing", description: "Plain packaging" },
+  {
+    id: "1color",
+    label: "1-Color Print",
+    description: "Single color logo/text",
+    setupFee: "Setup fee: GH₵ 500.00 + GH₵ 0.50/unit",
+  },
+  {
+    id: "2color",
+    label: "2-Color Print",
+    description: "Two color printing",
+    setupFee: "Setup fee: GH₵ 750.00 + GH₵ 0.80/unit",
+  },
+];
+
+/** Quantity → pricing-tier label (Figma shows "50-199 units - Base pricing"). */
+export function quantityTier(qty: number): string {
+  if (qty >= 1000) return "1000+ units - Best pricing";
+  if (qty >= 500) return "500-999 units - Volume discount";
+  if (qty >= 200) return "200-499 units - Bulk discount";
+  return "50-199 units - Base pricing";
+}
 
 export const products: Product[] = [
   {
