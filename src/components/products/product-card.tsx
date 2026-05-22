@@ -3,6 +3,8 @@ import { ImageIcon, Package } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
 import type { Product } from "@/lib/products";
+import { cardHoverClass } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 /**
  * Browse/catalog product card — exact specs from Figma frame 389:928 (REST API).
@@ -10,7 +12,12 @@ import type { Product } from "@/lib/products";
  */
 export function ProductCard({ product }: { product: Product }) {
   return (
-    <div className="flex flex-col overflow-hidden rounded-card border border-line bg-surface">
+    <div
+      className={cn(
+        "flex h-full flex-col overflow-hidden rounded-card border border-line bg-surface",
+        cardHoverClass,
+      )}
+    >
       {/* Product image / placeholder (208px), with category badge */}
       <div className="relative flex h-52 items-center justify-center bg-[#f3f4f6]">
         <span className="absolute left-4 top-4 rounded-full border border-line bg-[#a59a87] px-2.5 py-0.5 text-xs font-semibold text-white">

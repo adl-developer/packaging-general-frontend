@@ -3,6 +3,8 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { ProductCard } from "@/components/products/product-card";
 import { products } from "@/lib/products";
+import { Reveal } from "@/components/motion/reveal";
+import { Stagger, StaggerItem } from "@/components/motion/stagger";
 
 export const metadata: Metadata = {
   title: "Browse Packaging Solutions",
@@ -24,7 +26,7 @@ export default function ProductsPage() {
         </Link>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <Reveal className="flex flex-col gap-2">
         <h1 className="text-4xl font-medium leading-10 tracking-[0.37px] text-brand">
           Browse Our Packaging Solutions
         </h1>
@@ -32,13 +34,15 @@ export default function ProductsPage() {
           Select a packaging type to customize and get instant pricing. All
           products meet quality standards for West African markets.
         </p>
-      </div>
+      </Reveal>
 
-      <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
+      <Stagger className="grid grid-cols-1 gap-8 sm:grid-cols-2">
         {products.map((p) => (
-          <ProductCard key={p.id} product={p} />
+          <StaggerItem key={p.id} className="h-full">
+            <ProductCard product={p} />
+          </StaggerItem>
         ))}
-      </div>
+      </Stagger>
     </div>
   );
 }
