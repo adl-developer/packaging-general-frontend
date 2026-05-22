@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { buttonVariants } from "@/components/ui/button";
+import { Reveal } from "@/components/motion/reveal";
 
 // Full-bleed filmstrip: the 3 photos repeated to 9 cells (Figma: 320×256
 // each, white mat border 16px top/bottom, 8px left/right), bleeding both edges.
@@ -18,7 +19,7 @@ export function Hero() {
   return (
     <section className="bg-background">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 text-center">
+        <Reveal fade={false} className="mx-auto flex max-w-4xl flex-col items-center gap-6 text-center">
           <h1 className="text-[2.5rem] font-medium leading-tight tracking-[0.26px] text-brand sm:text-[60px] sm:leading-[60px]">
             Quality Packaging for Africa&apos;s Growing Businesses
           </h1>
@@ -41,7 +42,7 @@ export function Hero() {
               Track Order
             </Link>
           </div>
-        </div>
+        </Reveal>
 
       </div>
 
