@@ -1,26 +1,66 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+  Packaging General — design tokens (single source of truth)
+  Derived from the PG-MVP Figma file. Warm kraft-paper palette with
+  lavender/plum accents. Tailwind v4 CSS-first config: every token below
+  generates utilities, e.g. --color-brand -> bg-brand/text-brand/border-brand,
+  --radius-card -> rounded-card.
+*/
+@theme {
+  /* Brand & surfaces */
+  --color-background: #e8e5de; /* warm cream page background */
+  --color-surface: #fefdfb; /* cards, header, footer */
+  --color-brand: #3d3428; /* kraft brown — primary text + buttons */
+  --color-brand-foreground: #fefdfb; /* text on brand surfaces */
+
+  /* Text */
+  --color-muted: #7a7575; /* secondary / supporting text */
+
+  /* Lines & inputs */
+  --color-line: #c4bcb0; /* card borders, dividers */
+  --color-input: #d1d5dc; /* default input border */
+
+  /* Accents */
+  --color-accent: #b8a8d9; /* lavender promo bar */
+  --color-accent-foreground: #fefdfb;
+  --color-plum: #9b6b8f; /* cart badge */
+  --color-rust: #964022; /* terracotta — feature/cert icon accent */
+
+  --color-taupe: #a49a87; /* "Why Packaging General?" band */
+  --color-mist: #f7f7f7; /* light section bg, e.g. "How It Works" */
+
+  /* Dark sections (e.g. "Why Packaging General?", "Ready to Get Started?") */
+  --color-dark: #282827;
+  --color-dark-foreground: #fefdfb;
+
+  /* Feedback */
+  --color-destructive: #e7000b; /* error text */
+  --color-destructive-border: #fb2c36; /* error border */
+
+  /* Radii (semantic) */
+  --radius-chip: 4px;
+  --radius-button: 14px;
+  --radius-option: 16px;
+  --radius-card: 20px;
+
+  /* Typography */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
+
+  /* Header elevation */
+  --shadow-header: 0px 1px 1.5px rgba(0, 0, 0, 0.1),
+    0px 1px 1px rgba(0, 0, 0, 0.1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-background);
+  color: var(--color-brand);
+  font-family: var(--font-sans);
+  letter-spacing: -0.011em; /* matches the Figma's slight negative tracking */
 }

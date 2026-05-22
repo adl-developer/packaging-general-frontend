@@ -1,0 +1,108 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Building2 } from "lucide-react";
+
+/**
+ * Checkout — Company Information step (Figma frame 424:2868, step 1 of the
+ * flow: Cart → Company Info → Delivery → Payment). Single centered 672px card:
+ * Company Name, Contact Person, Phone, Email, plus a "save time / create an
+ * account" prompt. Back → Cart, Continue → Delivery.
+ *
+ * TODO(medusa): persist company details to the cart / customer metadata.
+ */
+const label = "text-sm font-medium leading-none text-brand";
+const input =
+  "h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-brand focus-visible:outline-none";
+
+export function CompanyInfoForm() {
+  const router = useRouter();
+
+  return (
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <Link
+        href="/cart"
+        className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-brand transition-colors hover:text-brand/70"
+      >
+        <ArrowLeft className="size-4" aria-hidden />
+        Back to Cart
+      </Link>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          router.push("/checkout/delivery");
+        }}
+        className="mx-auto flex max-w-2xl flex-col gap-6 rounded-card border border-line bg-surface p-6"
+      >
+        <div className="flex items-start gap-3">
+          <Building2 className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden />
+          <div className="flex flex-col gap-1">
+            <h1 className="text-base font-medium tracking-tight text-brand">
+              Company Information
+            </h1>
+            <p className="text-base text-muted">
+              Please provide your company details for this order
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <Field id="company-name" label="Company Name *">
+            <input id="company-name" name="companyName" type="text" autoComplete="organization" placeholder="ABC Co." className={input} />
+          </Field>
+          <Field id="contact-person" label="Contact Person Name *">
+            <input id="contact-person" name="contactPerson" type="text" autoComplete="name" placeholder="Emmanuel Ntim" className={input} />
+          </Field>
+          <Field id="company-phone" label="Phone Number *">
+            <input id="company-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 123 456 890" className={input} />
+          </Field>
+          <Field id="company-email" label="Email Address *">
+            <input id="company-email" name="email" type="email" autoComplete="email" placeholder="entim@gmail.com" className={input} />
+          </Field>
+        </div>
+
+        {/* Save time / create-account prompt */}
+        <div className="rounded-option border border-line bg-[rgba(196,188,176,0.6)] px-3.5 py-3.5">
+          <p className="text-sm font-medium text-brand">
+            Save time on your next order
+          </p>
+          <p className="text-sm text-[rgba(61,52,40,0.8)]">
+            Create an account to save your company details for faster checkout.{" "}
+            <Link href="/sign-up" className="font-medium underline hover:text-brand">
+              Create an account
+            </Link>
+          </p>
+        </div>
+
+        <button
+          type="submit"
+          className="h-10 w-full rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+        >
+          Continue to Delivery
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function Field({
+  id,
+  label: text,
+  children,
+}: {
+  id: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <label htmlFor={id} className={label}>
+        {text}
+      </label>
+      {children}
+    </div>
+  );
+}
