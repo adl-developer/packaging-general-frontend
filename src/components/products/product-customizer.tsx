@@ -11,6 +11,8 @@ import {
   quantityTier,
   type Product,
 } from "@/lib/products";
+import { motion, useReducedMotion } from "motion/react";
+import { SPRING_TAP } from "@/lib/motion";
 
 /**
  * Product customizer — Figma frame 404:1371. A single scrollable "Customize
@@ -234,6 +236,7 @@ function OptionCard({
   meta?: string;
   trailing?: React.ReactNode;
 }) {
+  const reduce = useReducedMotion();
   return (
     <button
       type="button"
@@ -241,7 +244,7 @@ function OptionCard({
       aria-checked={selected}
       onClick={onSelect}
       className={cn(
-        "flex items-center gap-4 rounded-option border p-4 text-left transition-colors",
+        "flex items-center gap-4 rounded-option border p-4 text-left transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.99]",
         selected
           ? "border-line bg-[rgba(196,188,176,0.3)]"
           : "border-input hover:border-brand/40",
@@ -253,7 +256,14 @@ function OptionCard({
           selected ? "border-brand" : "border-input",
         )}
       >
-        {selected && <span className="size-2 rounded-full bg-brand" />}
+        {selected && (
+          <motion.span
+            className="size-2 rounded-full bg-brand"
+            initial={reduce ? false : { scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={reduce ? { duration: 0 } : SPRING_TAP}
+          />
+        )}
       </span>
       <span className="flex flex-1 flex-col gap-0.5">
         <span className="text-sm font-medium text-brand">{title}</span>
@@ -261,7 +271,15 @@ function OptionCard({
         {meta && <span className="text-sm text-muted">{meta}</span>}
       </span>
       {trailing}
-      {selected && <Check className="size-5 shrink-0 text-brand" aria-hidden />}
+      {selected && (
+        <motion.span
+          initial={reduce ? false : { scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={reduce ? { duration: 0 } : SPRING_TAP}
+        >
+          <Check className="size-5 shrink-0 text-brand" aria-hidden />
+        </motion.span>
+      )}
     </button>
   );
 }
