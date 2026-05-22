@@ -1,17 +1,15 @@
 "use client";
 
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 
 // Enter transition on auth route changes (sign-in <-> sign-up). Opacity only.
+// Reduced motion is handled globally by <MotionConfig reducedMotion="user">.
 export default function AuthTemplate({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const reduce = useReducedMotion();
-  if (reduce) return <>{children}</>;
-
   return (
     <motion.div
       initial={{ opacity: 0 }}

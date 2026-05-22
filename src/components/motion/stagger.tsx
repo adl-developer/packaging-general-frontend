@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { staggerContainer, staggerItem } from "@/lib/motion";
 
 interface DivProps {
@@ -9,11 +9,13 @@ interface DivProps {
   className?: string;
 }
 
-/** Grid/list container: reveals (once in view) and staggers its StaggerItems. */
+/**
+ * Grid/list container: reveals (once in view) and staggers its StaggerItems.
+ * Reduced motion is handled globally by <MotionConfig reducedMotion="user"> in
+ * the root layout (disables the transform rise, keeps the opacity fade). Do NOT
+ * branch the tree on useReducedMotion — it causes SSR hydration mismatches.
+ */
 export function Stagger({ children, className }: DivProps) {
-  const reduce = useReducedMotion();
-  if (reduce) return <div className={className}>{children}</div>;
-
   return (
     <motion.div
       className={className}
@@ -29,9 +31,6 @@ export function Stagger({ children, className }: DivProps) {
 
 /** One staggered child. Inherits hidden/visible from the parent Stagger. */
 export function StaggerItem({ children, className }: DivProps) {
-  const reduce = useReducedMotion();
-  if (reduce) return <div className={className}>{children}</div>;
-
   return (
     <motion.div className={className} variants={staggerItem}>
       {children}

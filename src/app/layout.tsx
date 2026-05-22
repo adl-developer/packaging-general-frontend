@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { MotionConfig } from "motion/react";
 import "./globals.css";
 
 const inter = Inter({
@@ -55,7 +56,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} h-full`}>
-      <body className="min-h-full bg-background text-brand">{children}</body>
+      <body className="min-h-full bg-background text-brand">
+        {/* reducedMotion="user": disables transform/layout animations for users
+            who prefer reduced motion, while keeping opacity fades. Centralized
+            here so motion components never branch their render tree on the
+            client-only preference (which would cause SSR hydration mismatches). */}
+        <MotionConfig reducedMotion="user">{children}</MotionConfig>
+      </body>
     </html>
   );
 }

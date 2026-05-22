@@ -11,7 +11,7 @@ import {
   quantityTier,
   type Product,
 } from "@/lib/products";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
 
 /**
@@ -236,7 +236,6 @@ function OptionCard({
   meta?: string;
   trailing?: React.ReactNode;
 }) {
-  const reduce = useReducedMotion();
   return (
     <button
       type="button"
@@ -259,9 +258,9 @@ function OptionCard({
         {selected && (
           <motion.span
             className="size-2 rounded-full bg-brand"
-            initial={reduce ? false : { scale: 0 }}
+            initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            transition={reduce ? { duration: 0 } : SPRING_TAP}
+            transition={SPRING_TAP}
           />
         )}
       </span>
@@ -273,9 +272,9 @@ function OptionCard({
       {trailing}
       {selected && (
         <motion.span
-          initial={reduce ? false : { scale: 0, opacity: 0 }}
+          initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          transition={reduce ? { duration: 0 } : SPRING_TAP}
+          transition={SPRING_TAP}
         >
           <Check className="size-5 shrink-0 text-brand" aria-hidden />
         </motion.span>

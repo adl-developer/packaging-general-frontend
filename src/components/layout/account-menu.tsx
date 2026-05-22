@@ -12,7 +12,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 
 export interface AccountUser {
@@ -35,7 +35,6 @@ const menuItem =
 export function AccountMenu({ user }: { user?: AccountUser }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
-  const reduce = useReducedMotion();
 
   React.useEffect(() => {
     if (!open) return;
@@ -73,9 +72,9 @@ export function AccountMenu({ user }: { user?: AccountUser }) {
           <motion.div
             role="menu"
             className="absolute right-0 top-[calc(100%+8px)] w-56 origin-top-right rounded-button border border-line bg-surface p-1 shadow-header"
-            initial={reduce ? false : { opacity: 0, scale: 0.96, y: -4 }}
+            initial={{ opacity: 0, scale: 0.96, y: -4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -4 }}
+            exit={{ opacity: 0, scale: 0.96, y: -4 }}
             transition={{ duration: DURATION.fast, ease: EASE_PREMIUM }}
           >
           {user ? (

@@ -1,18 +1,17 @@
 "use client";
 
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 
 // Enter transition on every shop route change. Opacity only — a transform here
 // would break position:sticky inside pages (e.g. the customizer progress bar).
+// Reduced motion: <MotionConfig reducedMotion="user"> keeps opacity, so this
+// gentle fade still plays (acceptable) without any movement.
 export default function ShopTemplate({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const reduce = useReducedMotion();
-  if (reduce) return <>{children}</>;
-
   return (
     <motion.div
       initial={{ opacity: 0 }}

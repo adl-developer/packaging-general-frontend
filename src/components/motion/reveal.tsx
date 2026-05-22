@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { DURATION, EASE_PREMIUM, REVEAL_DISTANCE } from "@/lib/motion";
 
 interface RevealProps {
@@ -12,13 +12,13 @@ interface RevealProps {
 }
 
 /**
- * Fades + rises its children when scrolled into view (once). Respects
- * prefers-reduced-motion by rendering the final state instantly.
+ * Fades + rises its children when scrolled into view (once). Reduced motion is
+ * handled globally by <MotionConfig reducedMotion="user"> in the root layout,
+ * which disables the transform (rise) while keeping the opacity fade. Do NOT
+ * branch the rendered tree on useReducedMotion here — the server can't know the
+ * preference, so a structural branch causes SSR hydration mismatches.
  */
 export function Reveal({ children, className, fade = true }: RevealProps) {
-  const reduce = useReducedMotion();
-  if (reduce) return <div className={className}>{children}</div>;
-
   return (
     <motion.div
       className={className}
