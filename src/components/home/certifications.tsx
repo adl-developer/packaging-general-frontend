@@ -5,6 +5,7 @@ import {
   Leaf,
   type LucideIcon,
 } from "lucide-react";
+import { Reveal } from "@/components/motion/reveal";
 
 const RUST = "#964022";
 const MUTED = "#7a7575";
@@ -58,7 +59,7 @@ export function Certifications() {
   return (
     <section className="bg-background">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="rounded-card bg-surface p-8">
+        <Reveal className="rounded-card bg-surface p-8">
           <h2 className="mb-8 text-center text-sm font-semibold tracking-tight text-brand">
             Quality &amp; Compliance Certifications
           </h2>
@@ -80,7 +81,7 @@ export function Certifications() {
               </li>
             ))}
           </ul>
-        </div>
+        </Reveal>
       </div>
     </section>
   );

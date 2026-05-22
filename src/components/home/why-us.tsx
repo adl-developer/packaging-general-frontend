@@ -1,6 +1,8 @@
 import Image from "next/image";
 import { Receipt, Shield, Truck, type LucideIcon } from "lucide-react";
 import { SectionHeading } from "./section-heading";
+import { Reveal } from "@/components/motion/reveal";
+import { Stagger, StaggerItem } from "@/components/motion/stagger";
 
 const features: {
   icon: LucideIcon;
@@ -28,12 +30,12 @@ const features: {
 export function WhyUs() {
   return (
     <section className="bg-taupe text-dark-foreground">
-      <div className="mx-auto max-w-7xl px-4 py-12 text-center sm:px-6 lg:px-8">
+      <Reveal className="mx-auto max-w-7xl px-4 py-12 text-center sm:px-6 lg:px-8">
         <SectionHeading>Why Packaging General?</SectionHeading>
         <p className="mt-2 text-base leading-6 tracking-tight text-white/80">
           Built for Africa&apos;s growing businesses
         </p>
-      </div>
+      </Reveal>
 
       {/* Full-width photo band with a 60% black overlay holding the features */}
       <div className="relative isolate w-full overflow-hidden">
@@ -46,9 +48,9 @@ export function WhyUs() {
           aria-hidden
         />
         <div className="absolute inset-0 -z-10 bg-black/60" aria-hidden />
-        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 px-4 py-10 sm:grid-cols-3">
+        <Stagger className="mx-auto grid max-w-5xl grid-cols-1 gap-8 px-4 py-10 sm:grid-cols-3">
           {features.map(({ icon: Icon, title, description }) => (
-            <div
+            <StaggerItem
               key={title}
               className="flex flex-col items-center gap-4 p-6 text-center"
             >
@@ -61,9 +63,9 @@ export function WhyUs() {
                 </h3>
                 <p className="text-sm leading-5 text-white/80">{description}</p>
               </div>
-            </div>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       </div>
     </section>
   );
