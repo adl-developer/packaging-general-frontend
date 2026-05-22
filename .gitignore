@@ -46,3 +46,6 @@ dev-server.log
 
 # secrets
 *.figma-token
+
+# dev server logs
+*.log
