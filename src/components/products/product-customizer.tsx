@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   CARTON_MATERIALS,
@@ -17,11 +17,13 @@ import {
  * Product" card with four sections (Select Size, Choose Material, Printing
  * Options, Order Quantity + notes) and Keep Shopping / Buy Now actions.
  * Selected option cards use a taupe tint (rgba(196,188,176,0.3)) + line border.
- * The sticky header shows a progress bar that fills as selections are made.
+ * The sticky "Step N of 5" progress reflects scroll position through the form.
  *
  * TODO(medusa): persist the configured line item to the cart; pull options
  * from product variants; compute live pricing.
  */
+const SECTION_COUNT = 5;
+
 export function ProductCustomizer({ product }: { product: Product }) {
   const router = useRouter();
   const [size, setSize] = React.useState(product.sizes[0]?.id ?? "");
@@ -29,13 +31,27 @@ export function ProductCustomizer({ product }: { product: Product }) {
   const [printing, setPrinting] = React.useState(CARTON_PRINTING[0]?.id ?? "");
   const [quantity, setQuantity] = React.useState(product.moq);
 
-  // Progress: 4 selectable sections complete → step 5 (review/buy).
-  const completed =
-    (size ? 1 : 0) +
-    (material ? 1 : 0) +
-    (printing ? 1 : 0) +
-    (quantity >= product.moq ? 1 : 0);
-  const step = Math.min(completed + 1, 5);
+  // "Step N of 5" tracks the furthest section scrolled past the sticky header.
+  const sectionsRef = React.useRef<Array<HTMLElement | null>>([]);
+  const [step, setStep] = React.useState(1);
+
+  React.useEffect(() => {
+    const onScroll = () => {
+      const offset = 200; // height of the two stacked sticky headers
+      let current = 1;
+      sectionsRef.current.forEach((el, i) => {
+        if (el && el.getBoundingClientRect().top <= offset) current = i + 1;
+      });
+      setStep(Math.min(current, SECTION_COUNT));
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const setSectionRef = (i: number) => (el: HTMLElement | null) => {
+    sectionsRef.current[i] = el;
+  };
 
   return (
     <div className="mx-auto w-full max-w-7xl">
@@ -50,12 +66,12 @@ export function ProductCustomizer({ product }: { product: Product }) {
               <ArrowLeft className="size-4" aria-hidden />
               Back
             </Link>
-            <span className="text-sm text-muted">Step {step} of 5</span>
+            <span className="text-sm text-muted">Step {step} of {SECTION_COUNT}</span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#f3f4f6]">
             <div
               className="h-full rounded-full bg-brand transition-all"
-              style={{ width: `${(step / 5) * 100}%` }}
+              style={{ width: `${(step / SECTION_COUNT) * 100}%` }}
             />
           </div>
         </div>
@@ -83,7 +99,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
 
           <div className="flex flex-col gap-10 p-6">
             {/* 1. Select Size */}
-            <Section title="1. Select Size">
+            <Section title="1. Select Size" info sectionRef={setSectionRef(0)}>
               {product.sizes.map((s) => (
                 <OptionCard
                   key={s.id}
@@ -97,7 +113,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
             </Section>
 
             {/* 2. Choose Material */}
-            <Section title="2. Choose Material">
+            <Section title="2. Choose Material" sectionRef={setSectionRef(1)}>
               {CARTON_MATERIALS.map((m) => (
                 <OptionCard
                   key={m.id}
@@ -110,7 +126,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
             </Section>
 
             {/* 3. Printing Options */}
-            <Section title="3. Printing Options">
+            <Section title="3. Printing Options" sectionRef={setSectionRef(2)}>
               {CARTON_PRINTING.map((p) => (
                 <OptionCard
                   key={p.id}
@@ -124,7 +140,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
             </Section>
 
             {/* 4. Order Quantity */}
-            <Section title="4. Order Quantity">
+            <Section title="4. Order Quantity" sectionRef={setSectionRef(3)}>
               <div className="flex flex-col gap-3">
                 <input
                   type="number"
@@ -155,8 +171,11 @@ export function ProductCustomizer({ product }: { product: Product }) {
               </div>
             </Section>
 
-            {/* Actions */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            {/* 5. Review / actions */}
+            <div
+              ref={setSectionRef(4)}
+              className="flex flex-col gap-3 sm:flex-row sm:justify-end"
+            >
               <Link
                 href="/products"
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30"
@@ -180,15 +199,20 @@ export function ProductCustomizer({ product }: { product: Product }) {
 
 function Section({
   title,
+  info,
+  sectionRef,
   children,
 }: {
   title: string;
+  info?: boolean;
+  sectionRef?: (el: HTMLElement | null) => void;
   children: React.ReactNode;
 }) {
   return (
-    <fieldset className="flex flex-col gap-4">
-      <legend className="mb-4 text-base font-semibold leading-6 tracking-tight text-brand">
+    <fieldset ref={sectionRef} className="flex flex-col gap-4">
+      <legend className="mb-4 flex items-center gap-2 text-base font-semibold leading-6 tracking-tight text-brand">
         {title}
+        {info && <Info className="size-4 text-muted" aria-hidden />}
       </legend>
       <div className="flex flex-col gap-4">{children}</div>
     </fieldset>
@@ -243,8 +267,8 @@ function OptionCard({
 }
 
 /**
- * Simplified isometric box diagram with L/W/H labels (Figma shows a wireframe
- * box). Parses "300 × 200 × 150 mm" into the three edge labels.
+ * Filled isometric box illustration with L/W/H labels (Figma frame 404:1371).
+ * Parses "300 × 200 × 150 mm" into the three edge labels.
  */
 function BoxDiagram({ dimensions }: { dimensions: string }) {
   const [l, w, h] = dimensions
@@ -252,15 +276,16 @@ function BoxDiagram({ dimensions }: { dimensions: string }) {
     .split("×")
     .map((s) => s.trim());
   return (
-    <span className="relative hidden h-12 w-16 shrink-0 sm:block" aria-hidden>
-      <svg viewBox="0 0 64 48" className="size-full" fill="none">
-        <path d="M12 14 L32 6 L52 14 L32 22 Z" stroke="#964022" strokeWidth="1.2" />
-        <path d="M12 14 L12 36 L32 44 L32 22 Z" stroke="#964022" strokeWidth="1.2" />
-        <path d="M52 14 L52 36 L32 44 L32 22 Z" stroke="#964022" strokeWidth="1.2" />
+    <span className="relative hidden h-14 w-20 shrink-0 sm:block" aria-hidden>
+      <svg viewBox="0 0 80 56" className="size-full" fill="none">
+        {/* top, left, right faces (light → dark tan) */}
+        <path d="M16 18 L40 8 L64 18 L40 28 Z" fill="#e8d5c4" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
+        <path d="M16 18 L16 40 L40 50 L40 28 Z" fill="#d4b59a" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
+        <path d="M64 18 L64 40 L40 50 L40 28 Z" fill="#c19f82" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
       </svg>
-      <span className="absolute -left-1 top-1 text-[8px] font-bold text-rust">{l}</span>
-      <span className="absolute -bottom-1 right-3 text-[8px] font-bold text-rust">{w}</span>
-      <span className="absolute -right-1 top-3 text-[8px] font-bold text-rust">{h}</span>
+      <span className="absolute left-0 top-3 text-[8px] font-bold leading-none text-rust">{h}</span>
+      <span className="absolute bottom-1 left-6 text-[8px] font-bold leading-none text-rust">{w}</span>
+      <span className="absolute bottom-3 right-0 text-[8px] font-bold leading-none text-rust">{l}</span>
     </span>
   );
 }

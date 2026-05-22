@@ -1,6 +1,10 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+/** Opt-in hover affordance for interactive cards (e.g. clickable grid cards). */
+export const cardHoverClass =
+  "transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-header";
+
 /** Surface card — bg-surface, 1px line border, 20px radius (Figma "Card"). */
 export function Card({
   className,

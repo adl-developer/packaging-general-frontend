@@ -49,7 +49,7 @@ export function SiteHeader({ cartCount = 0 }: { cartCount?: number }) {
                 <Badge className="absolute -right-2 -top-2">{cartCount}</Badge>
               )}
             </Link>
-            <AccountMenu />
+            <AccountMenu user={{ name: "emmanuel", email: "emmanuel@example.com" }} />
           </nav>
         </div>
       </div>
