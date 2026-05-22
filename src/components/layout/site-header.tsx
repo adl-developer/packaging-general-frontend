@@ -49,7 +49,8 @@ export function SiteHeader({ cartCount = 0 }: { cartCount?: number }) {
                 <Badge className="absolute -right-2 -top-2">{cartCount}</Badge>
               )}
             </Link>
-            <AccountMenu user={{ name: "emmanuel", email: "emmanuel@example.com" }} />
+            {/* TODO(medusa): pass the signed-in user to show the logged-in menu. */}
+            <AccountMenu />
           </nav>
         </div>
       </div>
