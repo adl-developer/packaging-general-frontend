@@ -4,6 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { motion } from "motion/react";
+import { SPRING_SOFT } from "@/lib/motion";
 
 /**
  * Tabbed auth card — exact spec from Figma "Sign In" (458:14565) and
@@ -55,13 +57,20 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cn(
-                "h-8 rounded-button px-3 text-sm font-medium transition-colors",
-                tab === t
-                  ? "bg-background text-brand shadow-sm"
-                  : "text-muted hover:text-brand",
+                "relative h-8 rounded-button px-3 text-sm font-medium transition-colors",
+                tab === t ? "text-brand" : "text-muted hover:text-brand",
               )}
             >
-              {t === "signin" ? "Sign In" : "Sign Up"}
+              {tab === t && (
+                <motion.span
+                  layoutId="authTabPill"
+                  transition={SPRING_SOFT}
+                  className="absolute inset-0 rounded-button bg-background shadow-sm"
+                />
+              )}
+              <span className="relative">
+                {t === "signin" ? "Sign In" : "Sign Up"}
+              </span>
             </button>
           ))}
         </div>

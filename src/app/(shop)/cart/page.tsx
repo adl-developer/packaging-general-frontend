@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
+import { motion, AnimatePresence } from "motion/react";
+import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 
 // TODO(medusa): replace with the live Medusa cart.
 interface CartItem {
@@ -48,7 +50,12 @@ const INITIAL_ITEMS: CartItem[] = [
 function EmptyCart() {
   return (
     <div className="mx-auto flex max-w-7xl flex-col px-4 py-16 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 rounded-card border border-line bg-surface px-6 py-16 text-center">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
+        className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 rounded-card border border-line bg-surface px-6 py-16 text-center"
+      >
         <span className="grid size-16 place-items-center rounded-full bg-[#c4bcb0]">
           <ShoppingBag className="size-7 text-[#5b554c]" aria-hidden />
         </span>
@@ -64,7 +71,7 @@ function EmptyCart() {
         >
           Browse Products
         </Link>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -170,9 +177,20 @@ export default function CartPage() {
       </div>
 
       <div className="flex flex-col gap-4">
-        {items.map((item) => (
-          <CartLine key={item.id} item={item} onRemove={remove} />
-        ))}
+        <AnimatePresence mode="popLayout" initial={false}>
+          {items.map((item) => (
+            <motion.div
+              key={item.id}
+              layout
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
+            >
+              <CartLine item={item} onRemove={remove} />
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
       {/* Cross-sell. TODO(medusa): recommended products. */}

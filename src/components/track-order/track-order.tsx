@@ -12,6 +12,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatGhs } from "@/lib/format";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  DURATION,
+  EASE_PREMIUM,
+  SPRING_SOFT,
+  staggerContainer,
+  staggerItem,
+} from "@/lib/motion";
 
 /**
  * Track Order — Figma frames: search (469:17227), found/timeline
@@ -160,8 +168,31 @@ export function TrackOrder() {
         </form>
       </section>
 
-      {notFound && <NotFoundAlert query={notFound} />}
-      {result && <OrderResult order={result} />}
+      <AnimatePresence mode="wait">
+        {notFound && (
+          <motion.div
+            key="not-found"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
+          >
+            <NotFoundAlert query={notFound} />
+          </motion.div>
+        )}
+        {result && (
+          <motion.div
+            key="result"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
+            className="flex flex-col gap-8"
+          >
+            <OrderResult order={result} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -196,20 +227,34 @@ function OrderResult({ order }: { order: TrackedOrder }) {
               </h2>
               <p className="text-base text-muted">{order.placedOn}</p>
             </div>
-            <span className="inline-flex items-center gap-2 rounded-full border-2 border-[rgba(150,64,34,0.3)] bg-[rgba(150,64,34,0.1)] px-3 py-2 text-base font-medium text-rust">
+            <motion.span
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={SPRING_SOFT}
+              className="inline-flex items-center gap-2 rounded-full border-2 border-[rgba(150,64,34,0.3)] bg-[rgba(150,64,34,0.1)] px-3 py-2 text-base font-medium text-rust"
+            >
               <CheckCircle2 className="size-5" aria-hidden />
               {order.status}
-            </span>
+            </motion.span>
           </div>
 
-          <ol className="relative flex flex-col gap-6 px-6 pt-2">
+          <motion.ol
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+            className="relative flex flex-col gap-6 px-6 pt-2"
+          >
             {/* Vertical connector */}
             <span
               className="absolute left-[calc(1.5rem+23px)] top-6 bottom-6 w-0.5 bg-[#e2e1e0]"
               aria-hidden
             />
             {order.steps.map((step) => (
-              <li key={step.title} className="relative flex items-start gap-4">
+              <motion.li
+                variants={staggerItem}
+                key={step.title}
+                className="relative flex items-start gap-4"
+              >
                 <span
                   className={cn(
                     "z-10 grid size-12 shrink-0 place-items-center rounded-full border-2",
@@ -229,9 +274,9 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                   )}
                   <p className="text-sm text-muted">{step.detail}</p>
                 </div>
-              </li>
+              </motion.li>
             ))}
-          </ol>
+          </motion.ol>
         </div>
       </section>
 
