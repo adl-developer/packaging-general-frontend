@@ -4,6 +4,14 @@ import * as React from "react";
 import Link from "next/link";
 import { CheckCircle2, Eye, EyeOff, ShieldCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  DURATION,
+  EASE_PREMIUM,
+  SPRING_SOFT,
+  staggerContainer,
+  staggerItem,
+} from "@/lib/motion";
 
 /**
  * Order Confirmed + Create-Your-Account modal (Figma frames 424:3548 confirmed
@@ -32,9 +40,14 @@ export function OrderConfirmation() {
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-2xl flex-col items-center gap-6 rounded-card border border-line bg-surface p-8 text-center">
-        <span className="grid size-28 place-items-center rounded-full bg-[#dcfce7]">
+        <motion.span
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={SPRING_SOFT}
+          className="grid size-28 place-items-center rounded-full bg-[#dcfce7]"
+        >
           <CheckCircle2 className="size-14 text-[#16a34a]" aria-hidden />
-        </span>
+        </motion.span>
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-semibold leading-9 tracking-tight text-brand">
             Order Confirmed!
@@ -51,14 +64,23 @@ export function OrderConfirmation() {
           <h2 className="text-lg font-medium leading-7 tracking-tight text-brand">
             What&apos;s Next?
           </h2>
-          <ul className="mt-4 flex flex-col gap-2">
+          <motion.ul
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+            className="mt-4 flex flex-col gap-2"
+          >
             {WHATS_NEXT.map((item) => (
-              <li key={item} className="flex items-start gap-2 text-sm text-muted">
+              <motion.li
+                variants={staggerItem}
+                key={item}
+                className="flex items-start gap-2 text-sm text-muted"
+              >
                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-rust" aria-hidden />
                 {item}
-              </li>
+              </motion.li>
             ))}
-          </ul>
+          </motion.ul>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -77,7 +99,11 @@ export function OrderConfirmation() {
         </div>
       </div>
 
-      {showModal && <CreateAccountModal onClose={() => setShowModal(false)} />}
+      <AnimatePresence>
+        {showModal && (
+          <CreateAccountModal key="modal" onClose={() => setShowModal(false)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -101,13 +127,23 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: DURATION.fast }}
       className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-account-title"
     >
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col gap-4 overflow-y-auto rounded-option border border-line bg-background p-6">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
+        className="flex max-h-[90vh] w-full max-w-md flex-col gap-4 overflow-y-auto rounded-option border border-line bg-background p-6"
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[rgba(150,64,34,0.1)]">
@@ -211,8 +247,8 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
             You can track your order anytime using just your order number
           </p>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

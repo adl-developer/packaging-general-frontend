@@ -4,6 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, MapPin, Navigation } from "lucide-react";
+import { motion } from "motion/react";
+import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 
 /**
  * Checkout — Delivery step (Figma frame 424:2869). Single centered 672px card:
@@ -31,7 +33,10 @@ export function DeliveryForm() {
         Back to Cart
       </Link>
 
-      <form
+      <motion.form
+        initial={{ y: 12 }}
+        animate={{ y: 0 }}
+        transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
         onSubmit={(e) => {
           e.preventDefault();
           router.push("/checkout/payment");
@@ -133,7 +138,7 @@ export function DeliveryForm() {
         >
           Continue to Payment
         </button>
-      </form>
+      </motion.form>
     </div>
   );
 }

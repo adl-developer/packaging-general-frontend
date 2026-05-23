@@ -4,6 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Building2 } from "lucide-react";
+import { motion } from "motion/react";
+import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 
 /**
  * Checkout — Company Information step (Figma frame 424:2868, step 1 of the
@@ -30,7 +32,10 @@ export function CompanyInfoForm() {
         Back to Cart
       </Link>
 
-      <form
+      <motion.form
+        initial={{ y: 12 }}
+        animate={{ y: 0 }}
+        transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
         onSubmit={(e) => {
           e.preventDefault();
           router.push("/checkout/delivery");
@@ -83,7 +88,7 @@ export function CompanyInfoForm() {
         >
           Continue to Delivery
         </button>
-      </form>
+      </motion.form>
     </div>
   );
 }
