@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Smartphone, CreditCard, ChevronDown } from "lucide-react";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ function PaymentOption({
  * medusa-payment-paystack provider and redirect to the authorization URL.
  */
 export function PaymentMethod({ total }: { total: number }) {
+  const router = useRouter();
   const [method, setMethod] = React.useState<Method>("mobile_money");
 
   return (
@@ -98,7 +100,12 @@ export function PaymentMethod({ total }: { total: number }) {
         </p>
       )}
 
-      <Button variant="primary" fullWidth size="lg">
+      <Button
+        variant="primary"
+        fullWidth
+        size="lg"
+        onClick={() => router.push("/checkout/confirmation")}
+      >
         Pay {formatGhs(total)}
       </Button>
     </div>
