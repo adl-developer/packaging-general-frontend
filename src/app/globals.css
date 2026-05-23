@@ -54,6 +54,9 @@
 }
 
 html {
+  /* PG is a single light theme. Declare it so browsers (Chrome/Edge "Auto Dark
+     Mode for Web Contents") don't auto-invert the page into a black background. */
+  color-scheme: light;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
