@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { ProductCard } from "@/components/products/product-card";
-import { products } from "@/lib/products";
+import { listProducts } from "@/lib/products";
 import { Reveal } from "@/components/motion/reveal";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
 
@@ -13,7 +13,8 @@ export const metadata: Metadata = {
   alternates: { canonical: "/products" },
 };
 
-export default function ProductsPage() {
+export default async function ProductsPage() {
+  const products = await listProducts();
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
       <div>
@@ -36,13 +37,21 @@ export default function ProductsPage() {
         </p>
       </Reveal>
 
-      <Stagger className="grid grid-cols-1 gap-8 sm:grid-cols-2">
-        {products.map((p) => (
-          <StaggerItem key={p.id} className="h-full">
-            <ProductCard product={p} />
-          </StaggerItem>
-        ))}
-      </Stagger>
+      {products.length === 0 ? (
+        <div className="rounded-card border border-line bg-surface px-6 py-16 text-center">
+          <p className="text-base text-muted">
+            No products available right now. Please check back soon.
+          </p>
+        </div>
+      ) : (
+        <Stagger className="grid grid-cols-1 gap-8 sm:grid-cols-2">
+          {products.map((p) => (
+            <StaggerItem key={p.id} className="h-full">
+              <ProductCard product={p} />
+            </StaggerItem>
+          ))}
+        </Stagger>
+      )}
     </div>
   );
 }

@@ -2,15 +2,16 @@ import Link from "next/link";
 import { ImageIcon, Package } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
-import type { Product } from "@/lib/products";
+import type { ProductSummary } from "@/lib/products";
 import { cardHoverClass } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 /**
- * Browse/catalog product card — exact specs from Figma frame 389:928 (REST API).
- * TODO(medusa): real products + images replace the placeholder.
+ * Browse/catalog product card — exact specs from Figma frame 389:928.
+ * Fed by the live Medusa catalog (`listProducts()`). Image placeholder remains
+ * until product images are added in the backend.
  */
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({ product }: { product: ProductSummary }) {
   return (
     <div
       className={cn(

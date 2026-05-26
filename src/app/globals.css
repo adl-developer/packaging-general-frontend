@@ -51,6 +51,20 @@
   /* Header elevation */
   --shadow-header: 0px 1px 1.5px rgba(0, 0, 0, 0.1),
     0px 1px 1px rgba(0, 0, 0, 0.1);
+
+  /* Hero filmstrip: constant-velocity infinite scroll. The track renders two
+     identical halves and slides exactly one half-width (-50%), so the loop
+     resets on an identical frame and reads as seamless/infinite. `linear`
+     timing keeps the speed constant (no pulsing at the loop boundary). */
+  --animate-marquee: marquee 50s linear infinite;
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
 }
 
 html {

@@ -20,6 +20,7 @@ import {
   staggerContainer,
   staggerItem,
 } from "@/lib/motion";
+import { InvoiceDialog, type InvoiceData } from "./invoice-dialog";
 
 /**
  * Track Order — Figma frames: search (469:17227), found/timeline
@@ -101,10 +102,65 @@ const SAMPLE_ORDER: TrackedOrder = {
 
 const cardClass = "rounded-card border-2 border-[#e2e1e0] bg-surface";
 
+/** Build a sample invoice payload from a tracked order. The breakdown numbers
+ *  the invoice needs (subtotal / platform fee / delivery fee / VAT / NHIL /
+ *  GETFund) aren't in TrackedOrder yet, so we re-derive them from the line
+ *  unit price for now. TODO(medusa): replace with the real invoice payload. */
+function buildInvoice(order: TrackedOrder): InvoiceData {
+  const subtotal = order.pricing.itemPrice;
+  const platformFee = 0.63;
+  const deliveryFee = 0;
+  const totalBeforeTax = subtotal + platformFee + deliveryFee;
+  const vat = +(totalBeforeTax * 0.15).toFixed(2);
+  const nhil = +(totalBeforeTax * 0.025).toFixed(2);
+  const getfund = +(totalBeforeTax * 0.025).toFixed(2);
+  const itemTotal = +(totalBeforeTax + vat + nhil + getfund).toFixed(2);
+  return {
+    orderNumber: order.number,
+    invoiceDate: order.placedOn.replace(/^Placed on /, ""),
+    billTo: {
+      name: order.customer.name,
+      email: order.customer.email,
+      phone: order.customer.phone,
+      address: order.address,
+    },
+    line: {
+      name: order.pricing.itemName,
+      specs: `${order.product.size} • ${order.product.material} • ${order.product.printing}`,
+      quantity: order.pricing.itemQty,
+      subtotal,
+      platformFee,
+      deliveryFee,
+      totalBeforeTax,
+      vat,
+      nhil,
+      getfund,
+      itemTotal,
+    },
+    totalAmount: itemTotal,
+    eVat: {
+      sdcId: "ES00001001",
+      receiptNumber: "1001-6Z1B-N51S",
+      internalData: "VYFZW-WZSQ-LHQY-GRNG-YE3W-SJEZ-WP",
+      receiptCounter: "ReceiptCounter3",
+      mrc: ":00:0C:29:0D:90:D0",
+      dateTime: "2026/05/12 05:03:16",
+      lineItemCount: "1",
+    },
+    qrPayload: `pg-invoice:${order.number}`,
+  };
+}
+
 export function TrackOrder() {
   const [query, setQuery] = React.useState("");
   const [result, setResult] = React.useState<TrackedOrder | null>(null);
   const [notFound, setNotFound] = React.useState<string | null>(null);
+  const [invoiceOpen, setInvoiceOpen] = React.useState(false);
+
+  const invoiceData = React.useMemo(
+    () => buildInvoice(result ?? SAMPLE_ORDER),
+    [result],
+  );
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -121,19 +177,22 @@ export function TrackOrder() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:gap-8 sm:px-6 sm:py-8 lg:px-8">
       {/* Search card */}
       <section className={cardClass}>
-        <div className="flex flex-col gap-1 p-6">
+        <div className="flex flex-col gap-1 p-4 sm:p-6">
           <h1 className="flex items-center gap-2 text-base font-medium tracking-tight text-brand">
             <Search className="size-5 text-rust" aria-hidden />
             Track Your Order
           </h1>
-          <p className="text-base text-muted">
+          <p className="text-sm text-muted sm:text-base">
             Enter your order number to view the current status of your delivery
           </p>
         </div>
-        <form className="flex flex-col gap-2 px-6 pb-6" onSubmit={onSubmit}>
+        <form
+          className="flex flex-col gap-2 px-4 pb-4 sm:px-6 sm:pb-6"
+          onSubmit={onSubmit}
+        >
           <label htmlFor="order-number" className="text-sm font-medium text-brand">
             Order Number
           </label>
@@ -143,19 +202,20 @@ export function TrackOrder() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="e.g., PG-2026-001"
-              className="h-9 flex-1 rounded-button border border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-brand focus-visible:outline-none"
+              className="w-full flex-1 rounded-full border border-line bg-surface px-5 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15 sm:py-2.5 sm:text-sm sm:leading-5"
             />
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
               <button
                 type="submit"
-                className="inline-flex h-9 items-center gap-2 rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust"
+                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust sm:w-auto"
               >
                 <Search className="size-4" aria-hidden />
                 Track Order
               </button>
               <button
                 type="button"
-                className="inline-flex h-9 items-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+                onClick={() => setInvoiceOpen(true)}
+                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30 sm:w-auto"
               >
                 <Download className="size-4" aria-hidden />
                 View Invoice
@@ -193,19 +253,25 @@ export function TrackOrder() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <InvoiceDialog
+        open={invoiceOpen}
+        invoice={invoiceData}
+        onClose={() => setInvoiceOpen(false)}
+      />
     </div>
   );
 }
 
 function NotFoundAlert({ query }: { query: string }) {
   return (
-    <section className="flex items-start gap-3 rounded-card border-2 border-[rgba(202,53,0,0.3)] bg-[rgba(202,53,0,0.06)] p-6">
+    <section className="flex items-start gap-3 rounded-card border-2 border-[rgba(202,53,0,0.3)] bg-[rgba(202,53,0,0.06)] p-4 sm:p-6">
       <AlertCircle className="mt-0.5 size-5 shrink-0 text-[#ca3500]" aria-hidden />
-      <div className="flex flex-col gap-1">
+      <div className="flex min-w-0 flex-col gap-1">
         <h2 className="text-lg font-semibold leading-7 tracking-tight text-[#7e2a0c]">
           Order Not Found
         </h2>
-        <p className="text-sm leading-5 text-[#ca3500]">
+        <p className="break-words text-sm leading-5 text-[#ca3500]">
           We couldn&apos;t find an order with the number &quot;{query}&quot;.
           Please check the order number and try again.
         </p>
@@ -219,21 +285,21 @@ function OrderResult({ order }: { order: TrackedOrder }) {
     <>
       {/* Status timeline */}
       <section className={cardClass}>
-        <div className="flex flex-col gap-4 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-4 p-4 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="flex flex-col gap-1">
               <h2 className="text-base font-medium tracking-tight text-brand">
                 Order {order.number}
               </h2>
-              <p className="text-base text-muted">{order.placedOn}</p>
+              <p className="text-sm text-muted sm:text-base">{order.placedOn}</p>
             </div>
             <motion.span
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={SPRING_SOFT}
-              className="inline-flex items-center gap-2 rounded-full border-2 border-[rgba(150,64,34,0.3)] bg-[rgba(150,64,34,0.1)] px-3 py-2 text-base font-medium text-rust"
+              className="inline-flex w-fit items-center gap-2 rounded-full border-2 border-[rgba(150,64,34,0.3)] bg-[rgba(150,64,34,0.1)] px-3 py-1.5 text-sm font-medium text-rust sm:py-2 sm:text-base"
             >
-              <CheckCircle2 className="size-5" aria-hidden />
+              <CheckCircle2 className="size-4 sm:size-5" aria-hidden />
               {order.status}
             </motion.span>
           </div>
@@ -242,11 +308,13 @@ function OrderResult({ order }: { order: TrackedOrder }) {
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
-            className="relative flex flex-col gap-6 px-6 pt-2"
+            className="relative flex flex-col gap-6 pt-2 sm:px-6"
           >
-            {/* Vertical connector */}
+            {/* Vertical connector — left edge sits at center of the 48px icon
+                (size-12). Mobile: 24px (no extra inset). Desktop: 24px + the
+                sm:px-6 inset (1.5rem). */}
             <span
-              className="absolute left-[calc(1.5rem+23px)] top-6 bottom-6 w-0.5 bg-[#e2e1e0]"
+              className="absolute left-[23px] top-6 bottom-6 w-0.5 bg-[#e2e1e0] sm:left-[calc(1.5rem+23px)]"
               aria-hidden
             />
             {order.steps.map((step) => (
@@ -265,7 +333,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                 >
                   <step.Icon className="size-6" />
                 </span>
-                <div className="flex flex-col gap-0.5 pt-1">
+                <div className="flex min-w-0 flex-col gap-0.5 pt-1">
                   <p className="text-base font-semibold tracking-tight text-brand">
                     {step.title}
                   </p>
@@ -282,12 +350,12 @@ function OrderResult({ order }: { order: TrackedOrder }) {
 
       {/* Order details */}
       <section className={cn(cardClass, "overflow-hidden")}>
-        <div className="border-b-2 border-[#e2e1e0] bg-mist px-6 py-5">
+        <div className="border-b-2 border-[#e2e1e0] bg-mist px-4 py-4 sm:px-6 sm:py-5">
           <h2 className="text-base font-medium tracking-tight text-brand">
             Order Details
           </h2>
         </div>
-        <div className="flex flex-col gap-6 p-6">
+        <div className="flex flex-col gap-6 p-4 sm:p-6">
           <DetailGrid
             rows={[
               ["Name:", order.customer.name],
@@ -314,9 +382,9 @@ function OrderResult({ order }: { order: TrackedOrder }) {
 
           <DetailBlock title="Pricing Summary">
             <div className="rounded-option border border-[rgba(150,64,34,0.2)] bg-[rgba(150,64,34,0.05)] p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-base font-medium tracking-tight text-brand">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="break-words text-base font-medium tracking-tight text-brand">
                     {order.pricing.itemName}
                   </p>
                   <p className="text-sm text-muted">{order.pricing.itemQty}</p>
@@ -363,9 +431,9 @@ function DetailGrid({ rows }: { rows: [string, string][] }) {
   return (
     <dl className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
       {rows.map(([label, value]) => (
-        <div key={label} className="flex gap-2 text-sm">
+        <div key={label} className="flex min-w-0 flex-wrap gap-x-2 text-sm">
           <dt className="text-muted">{label}</dt>
-          <dd className="font-medium text-brand">{value}</dd>
+          <dd className="min-w-0 break-words font-medium text-brand">{value}</dd>
         </div>
       ))}
     </dl>

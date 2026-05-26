@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, Info } from "lucide-react";
+import { ArrowLeft, Check, Info, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   CARTON_MATERIALS,
@@ -178,16 +178,29 @@ export function ProductCustomizer({ product }: { product: Product }) {
               ref={setSectionRef(4)}
               className="flex flex-col gap-3 sm:flex-row sm:justify-end"
             >
+              {/* Button order differs by breakpoint (Figma 404:1371):
+                  mobile = Add to Cart → Buy Now → Keep Shopping (primary first);
+                  desktop = Keep Shopping → Add to Cart → Buy Now (left-to-right). */}
               <Link
                 href="/products"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+                className="order-3 inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 sm:order-1"
               >
                 Keep Shopping
               </Link>
               <button
                 type="button"
+                onClick={() => {
+                  // TODO(medusa): add configured line item to cart, keep user on page.
+                }}
+                className="order-1 inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:order-2"
+              >
+                <ShoppingCart className="size-4" aria-hidden />
+                Add to Cart
+              </button>
+              <button
+                type="button"
                 onClick={() => router.push("/cart")}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                className="order-2 inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:order-3"
               >
                 Buy Now
               </button>

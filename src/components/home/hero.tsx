@@ -3,8 +3,12 @@ import Image from "next/image";
 import { buttonVariants } from "@/components/ui/button";
 import { Reveal } from "@/components/motion/reveal";
 
-// Full-bleed filmstrip: the 3 photos repeated to 9 cells (Figma: 320×256
-// each, white mat border 16px top/bottom, 8px left/right), bleeding both edges.
+// Full-bleed filmstrip (Figma: 320×256 each, white mat border 16px top/bottom,
+// 8px left/right), scrolling infinitely. Each cell is 336px wide (320 + 8px
+// border per side). One "half" repeats the 3 photos 4× (12 cells ≈ 4032px) so
+// it spans even ultra-wide viewports without gaps; the track renders the half
+// twice and animate-marquee slides it by exactly one half-width for a seamless
+// loop. See --animate-marquee / @keyframes marquee in globals.css.
 const photos = [
   { src: "/home/worker-assembling.jpg", alt: "Worker assembling packaging boxes" },
   { src: "/home/workers-facility.jpg", alt: "Workers in a packaging facility" },
@@ -13,7 +17,8 @@ const photos = [
     alt: "Warehouse worker quality-checking packages",
   },
 ];
-const galleryImages = [...photos, ...photos, ...photos];
+const marqueeHalf = [...photos, ...photos, ...photos, ...photos];
+const galleryImages = [...marqueeHalf, ...marqueeHalf];
 
 export function Hero() {
   return (
@@ -28,16 +33,17 @@ export function Hero() {
               "West Africa's first digital-first packaging platform. We simplify how SMEs discover, customize, and order quality packaging with transparent pricing and trusted suppliers."
             }
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
+          {/* Mobile (Figma 452:8306): both CTAs full-width, stacked vertically. */}
+          <div className="flex w-full max-w-md flex-col gap-3 sm:w-auto sm:max-w-none sm:flex-row sm:items-center sm:justify-center">
             <Link
               href="/products"
-              className={buttonVariants({ variant: "primary", size: "lg" })}
+              className={buttonVariants({ variant: "primary", size: "lg", fullWidth: true, className: "sm:w-auto" })}
             >
               Shop now
             </Link>
             <Link
               href="/track-order"
-              className={buttonVariants({ variant: "outline", size: "lg" })}
+              className={buttonVariants({ variant: "outline", size: "lg", fullWidth: true, className: "sm:w-auto" })}
             >
               Track Order
             </Link>
@@ -46,9 +52,11 @@ export function Hero() {
 
       </div>
 
-      {/* Full-bleed filmstrip with white matting (matches Figma). */}
-      <div className="overflow-hidden pb-16">
-        <div className="flex justify-center">
+      {/* Full-bleed infinite filmstrip with white matting (matches Figma).
+          Decorative motion, so the strip is hidden from assistive tech and the
+          duplicated images carry empty alt text. Pauses on hover. */}
+      <div aria-hidden className="group overflow-hidden pb-16">
+        <div className="flex w-max animate-marquee will-change-transform group-hover:[animation-play-state:paused]">
           {galleryImages.map((img, i) => (
             <div
               key={i}
@@ -56,7 +64,7 @@ export function Hero() {
             >
               <Image
                 src={img.src}
-                alt={img.alt}
+                alt=""
                 fill
                 sizes="320px"
                 className="object-cover"

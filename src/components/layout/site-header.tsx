@@ -35,7 +35,8 @@ export function SiteHeader({ cartCount = 0 }: { cartCount?: number }) {
               <span className="text-lg font-bold leading-7 tracking-tight text-brand">
                 Packaging General
               </span>
-              <span className="text-xs leading-4 text-muted">
+              {/* Subtitle is desktop-only — mobile Figma hides it for space. */}
+              <span className="hidden text-xs leading-4 text-muted sm:inline">
                 Digital-First Packaging
               </span>
             </span>

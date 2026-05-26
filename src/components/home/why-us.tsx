@@ -37,8 +37,9 @@ export function WhyUs() {
         </p>
       </Reveal>
 
-      {/* Full-width photo band with a 60% black overlay holding the features */}
-      <div className="relative isolate w-full overflow-hidden">
+      {/* Full-width photo band with a 60% black overlay holding the features.
+          User preference: keep the photo bg on mobile too (same as desktop). */}
+      <div className="relative isolate w-full overflow-hidden bg-dark">
         <Image
           src="/home/worker-assembling.jpg"
           alt=""

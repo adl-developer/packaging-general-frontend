@@ -1,6 +1,10 @@
-// TODO(medusa): replace with the live Medusa catalog. Shared by /products
-// (browse) and /products/[slug] (detail/customizer). Cards 3-4 + size options
-// are placeholder data pending the Medusa product model.
+// Browse (/products) is wired to the live Medusa catalog via `listProducts()`.
+// The static `products`/`getProduct` data below still backs the detail page
+// (/products/[slug]) customizer (sizes-with-dimensions, materials, printing
+// setup fees) until those are modelled in the backend. See `listProducts`.
+
+import type { HttpTypes } from "@medusajs/types";
+import { sdk } from "@/lib/medusa";
 
 export interface SizeOption {
   id: string;
@@ -73,7 +77,7 @@ export function quantityTier(qty: number): string {
 export const products: Product[] = [
   {
     id: "1",
-    slug: "standard-shipping-carton",
+    slug: "shipping-carton",
     category: "Shipping Carton",
     name: "Standard Shipping Carton",
     description: "Durable single-wall carton for general shipping needs",
@@ -84,7 +88,7 @@ export const products: Product[] = [
   },
   {
     id: "2",
-    slug: "premium-mailer-box",
+    slug: "mailer-box",
     category: "Mailer Box",
     name: "Premium Mailer Box",
     description: "Custom-designed mailer box for e-commerce brands",
@@ -95,7 +99,7 @@ export const products: Product[] = [
   },
   {
     id: "3",
-    slug: "folding-carton-fmcg",
+    slug: "folding-carton",
     category: "Folding Carton (FMCG)",
     name: "Folding Carton",
     description: "Retail-ready packaging for food and consumer goods",
@@ -119,4 +123,81 @@ export const products: Product[] = [
 
 export function getProduct(slug: string): Product | undefined {
   return products.find((p) => p.slug === slug);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Live Medusa catalog (browse). Maps Store API products → browse-card shape.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Subset of fields the browse card needs (from the live catalog). */
+export interface ProductSummary {
+  id: string;
+  slug: string;
+  category: string;
+  name: string;
+  description: string;
+  startingPrice: number;
+  moq: number;
+  features: string[];
+}
+
+let cachedRegionId: string | undefined;
+
+/** Ghana region id — needed so the Store API returns GHS calculated prices. */
+async function getRegionId(): Promise<string | undefined> {
+  if (cachedRegionId) return cachedRegionId;
+  const { regions } = await sdk.store.region.list();
+  cachedRegionId =
+    (regions.find((r) => r.currency_code === "ghs") ?? regions[0])?.id;
+  return cachedRegionId;
+}
+
+function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
+  const prices = (p.variants ?? [])
+    .map((v) => v.calculated_price?.calculated_amount)
+    .filter((n): n is number => typeof n === "number");
+  const meta = (p.metadata ?? {}) as Record<string, unknown>;
+  return {
+    id: p.id,
+    slug: p.handle ?? p.id,
+    category: p.categories?.[0]?.name ?? "Packaging",
+    name: p.title,
+    description: p.description ?? "",
+    startingPrice: prices.length ? Math.min(...prices) : 0,
+    moq: typeof meta.moq === "number" ? meta.moq : Number(meta.moq) || 0,
+    features: Array.isArray(meta.features) ? (meta.features as string[]) : [],
+  };
+}
+
+/** ProductSummary projection of the static `products` array — the Figma
+ *  sample products. Used as a fallback when the Medusa backend is offline so
+ *  the browse page still renders meaningful content. */
+const SAMPLE_PRODUCTS: ProductSummary[] = products.map((p) => ({
+  id: p.id,
+  slug: p.slug,
+  category: p.category,
+  name: p.name,
+  description: p.description,
+  startingPrice: p.startingPrice,
+  moq: p.moq,
+  features: p.features,
+}));
+
+/** Fetch the live catalog for the browse grid. Falls back to the static sample
+ *  products (Figma Browse frame) if the backend is unreachable, so /products
+ *  is never empty in dev or when Medusa is down. */
+export async function listProducts(): Promise<ProductSummary[]> {
+  try {
+    const region_id = await getRegionId();
+    const { products: live } = await sdk.store.product.list({
+      region_id,
+      fields:
+        "id,title,handle,description,metadata,*categories,*variants.calculated_price",
+      limit: 100,
+    });
+    return live.length ? live.map(toSummary) : SAMPLE_PRODUCTS;
+  } catch (err) {
+    console.error("[listProducts] Medusa unreachable; using sample products:", err);
+    return SAMPLE_PRODUCTS;
+  }
 }

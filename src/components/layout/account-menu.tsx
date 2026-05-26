@@ -7,6 +7,7 @@ import {
   LogIn,
   LogOut,
   MapPin,
+  Menu,
   Package,
   User,
   UserPlus,
@@ -61,8 +62,10 @@ export function AccountMenu({ user }: { user?: AccountUser }) {
       >
         <User className="size-4" aria-hidden />
         <span className="hidden sm:inline">Account</span>
+        {/* Mobile: hamburger reinforces "menu". Desktop: chevron indicates dropdown. */}
+        <Menu className="size-4 sm:hidden" aria-hidden />
         <ChevronDown
-          className={cn("size-3 transition-transform", open && "rotate-180")}
+          className={cn("hidden size-3 transition-transform sm:inline-block", open && "rotate-180")}
           aria-hidden
         />
       </button>
