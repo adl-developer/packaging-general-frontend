@@ -156,11 +156,25 @@ export function TrackOrder() {
   const [result, setResult] = React.useState<TrackedOrder | null>(null);
   const [notFound, setNotFound] = React.useState<string | null>(null);
   const [invoiceOpen, setInvoiceOpen] = React.useState(false);
+  const resultAnchorRef = React.useRef<HTMLDivElement | null>(null);
 
   const invoiceData = React.useMemo(
     () => buildInvoice(result ?? SAMPLE_ORDER),
     [result],
   );
+
+  // Scroll the result/not-found section into view after a successful submit.
+  // Respects reduced-motion via `behavior: "smooth"` (browsers honor the pref).
+  React.useEffect(() => {
+    if (!result && !notFound) return;
+    const id = window.requestAnimationFrame(() => {
+      resultAnchorRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [result, notFound]);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -227,6 +241,14 @@ export function TrackOrder() {
           </p>
         </form>
       </section>
+
+      {/* Scroll target — sits above the result so smooth scroll lands at the
+          top of the result block (offset for the sticky site header). */}
+      <div
+        ref={resultAnchorRef}
+        aria-hidden
+        className="scroll-mt-[140px] sm:scroll-mt-[160px]"
+      />
 
       <AnimatePresence mode="wait">
         {notFound && (
