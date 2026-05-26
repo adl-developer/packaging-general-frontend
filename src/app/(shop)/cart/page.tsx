@@ -17,6 +17,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
 import { motion, AnimatePresence } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
+import { notifyCartAdd } from "@/lib/cart-events";
 
 // TODO(medusa): replace with the live Medusa cart.
 interface CartItem {
@@ -383,6 +384,7 @@ export default function CartPage() {
     setItems((xs) => xs.map((x) => (x.id === id ? { ...x, quantity: n } : x)));
 
   const addCrossSell = (c: CrossSellItem) => {
+    notifyCartAdd();
     setItems((xs) => {
       if (xs.some((x) => x.id === `cs-${c.id}`)) return xs;
       return [

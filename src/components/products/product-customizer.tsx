@@ -13,6 +13,7 @@ import {
 } from "@/lib/products";
 import { motion } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
+import { notifyCartAdd } from "@/lib/cart-events";
 
 /**
  * Product customizer — Figma frame 404:1371. A single scrollable "Customize
@@ -190,6 +191,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
               <button
                 type="button"
                 onClick={() => {
+                  notifyCartAdd();
                   // TODO(medusa): add configured line item to cart, keep user on page.
                 }}
                 className="order-1 inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:order-2"
@@ -199,7 +201,10 @@ export function ProductCustomizer({ product }: { product: Product }) {
               </button>
               <button
                 type="button"
-                onClick={() => router.push("/cart")}
+                onClick={() => {
+                  notifyCartAdd();
+                  router.push("/cart");
+                }}
                 className="order-2 inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:order-3"
               >
                 Buy Now

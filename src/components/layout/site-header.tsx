@@ -1,20 +1,15 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ShoppingCart } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { PromoBar } from "./promo-bar";
 import { AccountMenu } from "./account-menu";
-import { cn } from "@/lib/utils";
-
-const navButton =
-  "inline-flex h-8 items-center gap-2 rounded-button border border-line bg-background px-3 text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
+import { CartLink } from "./cart-link";
 
 /**
  * Global site header: brand lockup + Cart/Account, with the promo bar
- * stacked beneath it (matching the Figma). The whole block is sticky.
- * cartCount will be fed from the Medusa cart once the backend is wired.
+ * stacked beneath it (matching the Figma). The whole block is sticky. The
+ * cart count + bump animation come from useCartPulse via <CartLink/>.
  */
-export function SiteHeader({ cartCount = 0 }: { cartCount?: number }) {
+export function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 shadow-header">
       <div className="border-b border-line bg-surface">
@@ -43,13 +38,7 @@ export function SiteHeader({ cartCount = 0 }: { cartCount?: number }) {
           </Link>
 
           <nav className="flex items-center gap-2">
-            <Link href="/cart" className={cn(navButton, "relative")}>
-              <ShoppingCart className="size-4" aria-hidden />
-              <span className="hidden sm:inline">Cart</span>
-              {cartCount > 0 && (
-                <Badge className="absolute -right-2 -top-2">{cartCount}</Badge>
-              )}
-            </Link>
+            <CartLink />
             {/* TODO(medusa): pass the signed-in user to show the logged-in menu. */}
             <AccountMenu />
           </nav>
