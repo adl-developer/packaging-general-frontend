@@ -16,7 +16,7 @@ import {
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
 import { motion, AnimatePresence } from "motion/react";
-import { DURATION, EASE_PREMIUM } from "@/lib/motion";
+import { DURATION, EASE_PREMIUM, SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd } from "@/lib/cart-events";
 
 // TODO(medusa): replace with the live Medusa cart.
@@ -219,22 +219,30 @@ function QtyStepper({
         aria-label={`Decrease ${label}`}
         onClick={() => onChange(Math.max(min, qty - 1))}
         disabled={qty <= min}
-        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-colors hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-40"
+        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color,transform] duration-200 hover:bg-line/30 active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
       >
         <Minus className="size-4" aria-hidden />
       </button>
       <span
-        className="min-w-[2ch] text-center text-base font-medium tabular-nums text-brand"
+        className="min-w-[2ch] overflow-hidden text-center text-base font-medium tabular-nums text-brand"
         aria-live="polite"
         aria-label={`${label} quantity`}
       >
-        {qty}
+        <motion.span
+          key={qty}
+          initial={{ scale: 0.7, opacity: 0.6 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={SPRING_TAP}
+          className="inline-block"
+        >
+          {qty}
+        </motion.span>
       </span>
       <button
         type="button"
         aria-label={`Increase ${label}`}
         onClick={() => onChange(qty + 1)}
-        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-colors hover:bg-line/30"
+        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color,transform] duration-200 hover:bg-line/30 active:scale-[0.92]"
       >
         <Plus className="size-4" aria-hidden />
       </button>
@@ -277,7 +285,7 @@ function CartLine({
               <button
                 type="button"
                 aria-label="Edit item"
-                className="grid size-8 place-items-center rounded-button text-muted transition-colors hover:bg-line/30"
+                className="grid size-8 place-items-center rounded-button text-muted transition-[color,background-color,transform] duration-200 hover:bg-line/30 active:scale-[0.92]"
               >
                 <Pencil className="size-4" aria-hidden />
               </button>
@@ -285,7 +293,7 @@ function CartLine({
                 type="button"
                 aria-label="Remove item"
                 onClick={() => onRemove(item.id)}
-                className="grid size-8 place-items-center rounded-button text-plum transition-colors hover:bg-plum/10"
+                className="grid size-8 place-items-center rounded-button text-plum transition-[color,background-color,transform] duration-200 hover:bg-plum/10 active:scale-[0.92]"
               >
                 <Trash2 className="size-4" aria-hidden />
               </button>
@@ -350,22 +358,36 @@ function CrossSellCard({
             </p>
             <p className="text-xs text-muted">{item.unitLabel}</p>
           </div>
-          {added ? (
-            <span className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-green-100 px-3 text-xs font-medium text-green-700">
-              <Check className="size-4" aria-hidden />
-              Added
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={onAdd}
-              aria-label={`Add ${item.name} to cart`}
-              className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
-            >
-              <ShoppingCart className="size-4" aria-hidden />
-              Add to Cart
-            </button>
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {added ? (
+              <motion.span
+                key="added"
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.92 }}
+                transition={SPRING_TAP}
+                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-green-100 px-3 text-xs font-medium text-green-700"
+              >
+                <Check className="size-4" aria-hidden />
+                Added
+              </motion.span>
+            ) : (
+              <motion.button
+                key="add"
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.92 }}
+                transition={SPRING_TAP}
+                type="button"
+                onClick={onAdd}
+                aria-label={`Add ${item.name} to cart`}
+                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-[color,background-color,transform] duration-200 hover:bg-brand/90 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+              >
+                <ShoppingCart className="size-4" aria-hidden />
+                Add to Cart
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
@@ -481,8 +503,11 @@ export default function CartPage() {
         <p className="mt-1 text-sm text-muted">
           Add these items to your order and save on delivery fees
         </p>
+        {/* Mobile: horizontal-scroll strip of small cards (user pref). Desktop:
+            2-column grid of horizontal cards (matches the Figma desktop frame
+            where two suggestions sit side-by-side per row). */}
         <div
-          className="-mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-col sm:overflow-visible sm:px-0 sm:pb-0"
+          className="-mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0"
           role="list"
         >
           {CROSSSELL.map((c) => (

@@ -38,11 +38,11 @@ export default async function ProductsPage() {
       </Reveal>
 
       {products.length === 0 ? (
-        <div className="rounded-card border border-line bg-surface px-6 py-16 text-center">
+        <Reveal className="rounded-card border border-line bg-surface px-6 py-16 text-center">
           <p className="text-base text-muted">
             No products available right now. Please check back soon.
           </p>
-        </div>
+        </Reveal>
       ) : (
         <Stagger className="grid grid-cols-1 gap-8 sm:grid-cols-2">
           {products.map((p) => (
