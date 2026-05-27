@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import {
   Card,
@@ -13,23 +14,50 @@ import {
   type OrderLineItem,
 } from "@/components/checkout/order-summary";
 import { PaymentMethod } from "@/components/checkout/payment-method";
+import { getCart } from "@/lib/actions/cart";
 
 export const metadata: Metadata = {
   title: "Payment",
-  // Checkout is a private, transactional step — keep it out of search indexes.
   robots: { index: false, follow: false },
 };
 
-// TODO(medusa): replace this sample data with the live cart from Medusa.
-const items: OrderLineItem[] = [
-  { id: "1", name: "Standard Shipping Carton", units: 50, price: 263.62 },
-  { id: "2", name: "Packaging Tape - Brown", units: 1, price: 15.75 },
-];
-const subtotal = 279.37;
-const total = 279.37;
-const deliveryAddress = "123 Test Location, Spintex Rd., Accra";
+// Read live cart data on each request (cart is per-cookie, can't be cached).
+export const dynamic = "force-dynamic";
 
-export default function CheckoutPage() {
+function formatAddress(addr: NonNullable<Awaited<ReturnType<typeof getCart>>>["shipping_address"]): string {
+  if (!addr) return "";
+  return [addr.address_1, addr.city, addr.country_code?.toUpperCase()]
+    .filter(Boolean)
+    .join(", ");
+}
+
+interface SearchParams {
+  error?: string;
+}
+
+export default async function PaymentPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const cart = await getCart();
+  if (!cart || !cart.items?.length) redirect("/cart");
+  if (!cart.shipping_address?.address_1 || !cart.shipping_methods?.length) {
+    redirect("/checkout/delivery");
+  }
+
+  const { error } = await searchParams;
+
+  const items: OrderLineItem[] = (cart.items ?? []).map((line) => ({
+    id: line.id,
+    name: line.product_title ?? line.title ?? "Item",
+    units: line.quantity,
+    price: line.total ?? line.subtotal ?? 0,
+  }));
+  const subtotal = cart.item_total ?? cart.subtotal ?? 0;
+  const total = cart.total ?? 0;
+  const deliveryAddress = formatAddress(cart.shipping_address);
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <Link
@@ -46,7 +74,6 @@ export default function CheckoutPage() {
           subtotal={subtotal}
           total={total}
           deliveryAddress={deliveryAddress}
-          discountCode="PGEASTERT"
         />
 
         <Card className="flex flex-col gap-6">
@@ -55,7 +82,7 @@ export default function CheckoutPage() {
             <CardDescription>Choose how you&apos;d like to pay</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
-            <PaymentMethod total={total} />
+            <PaymentMethod total={total} initialError={error} />
           </CardContent>
         </Card>
       </div>

@@ -3,24 +3,48 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Building2 } from "lucide-react";
+import { ArrowLeft, Building2, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
+import { saveContactInfo } from "@/lib/actions/checkout";
 
 /**
  * Checkout — Company Information step (Figma frame 424:2868, step 1 of the
- * flow: Cart → Company Info → Delivery → Payment). Single centered 672px card:
- * Company Name, Contact Person, Phone, Email, plus a "save time / create an
- * account" prompt. Back → Cart, Continue → Delivery.
- *
- * TODO(medusa): persist company details to the cart / customer metadata.
+ * flow: Cart → Company Info → Delivery → Payment). Persists the company
+ * name + contact person into cart.metadata and the email onto cart.email.
  */
-const label = "text-sm font-medium leading-none text-brand";
-const input =
+const labelCls = "text-sm font-medium leading-none text-brand";
+const inputCls =
   "h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-brand focus-visible:outline-none";
 
 export function CompanyInfoForm() {
   const router = useRouter();
+  const [isPending, startTransition] = React.useTransition();
+  const [error, setError] = React.useState<string | null>(null);
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const data = new FormData(e.currentTarget);
+    const payload = {
+      companyName: String(data.get("companyName") ?? "").trim(),
+      contactPerson: String(data.get("contactPerson") ?? "").trim(),
+      phone: String(data.get("phone") ?? "").trim(),
+      email: String(data.get("email") ?? "").trim(),
+    };
+    if (!payload.companyName || !payload.contactPerson || !payload.phone || !payload.email) {
+      setError("Please fill in every field before continuing.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await saveContactInfo(payload);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      router.push("/checkout/delivery");
+    });
+  }
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -36,10 +60,7 @@ export function CompanyInfoForm() {
         initial={{ y: 12 }}
         animate={{ y: 0 }}
         transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
-        onSubmit={(e) => {
-          e.preventDefault();
-          router.push("/checkout/delivery");
-        }}
+        onSubmit={onSubmit}
         className="mx-auto flex max-w-2xl flex-col gap-6 rounded-card border border-line bg-surface p-6"
       >
         <div className="flex items-start gap-3">
@@ -56,20 +77,25 @@ export function CompanyInfoForm() {
 
         <div className="flex flex-col gap-4">
           <Field id="company-name" label="Company Name *">
-            <input id="company-name" name="companyName" type="text" autoComplete="organization" placeholder="ABC Co." className={input} />
+            <input id="company-name" name="companyName" type="text" autoComplete="organization" placeholder="ABC Co." className={inputCls} required />
           </Field>
           <Field id="contact-person" label="Contact Person Name *">
-            <input id="contact-person" name="contactPerson" type="text" autoComplete="name" placeholder="Emmanuel Ntim" className={input} />
+            <input id="contact-person" name="contactPerson" type="text" autoComplete="name" placeholder="Emmanuel Ntim" className={inputCls} required />
           </Field>
           <Field id="company-phone" label="Phone Number *">
-            <input id="company-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 123 456 890" className={input} />
+            <input id="company-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 123 456 890" className={inputCls} required />
           </Field>
           <Field id="company-email" label="Email Address *">
-            <input id="company-email" name="email" type="email" autoComplete="email" placeholder="entim@gmail.com" className={input} />
+            <input id="company-email" name="email" type="email" autoComplete="email" placeholder="entim@gmail.com" className={inputCls} required />
           </Field>
         </div>
 
-        {/* Save time / create-account prompt */}
+        {error && (
+          <p role="alert" className="rounded-button bg-[rgba(231,0,11,0.08)] px-3 py-2 text-sm font-medium text-[#7e2a0c]">
+            {error}
+          </p>
+        )}
+
         <div className="rounded-option border border-line bg-[rgba(196,188,176,0.6)] px-3.5 py-3.5">
           <p className="text-sm font-medium text-brand">
             Save time on your next order
@@ -84,9 +110,11 @@ export function CompanyInfoForm() {
 
         <button
           type="submit"
-          className="h-10 w-full rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+          disabled={isPending}
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          Continue to Delivery
+          {isPending && <Loader2 className="size-4 animate-spin" aria-hidden />}
+          {isPending ? "Saving…" : "Continue to Delivery"}
         </button>
       </motion.form>
     </div>
@@ -104,7 +132,7 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className={label}>
+      <label htmlFor={id} className={labelCls}>
         {text}
       </label>
       {children}

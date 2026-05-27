@@ -3,21 +3,35 @@
 import * as React from "react";
 
 /**
- * Lightweight session-local cart pulse — a CustomEvent bus that lets every
- * Add-to-Cart button trigger a visual bump on the header cart icon, without a
- * cart-state provider yet. SSR-safe (count is 0 on the server; client picks up
- * subsequent events).
+ * Cart pulse bus — a CustomEvent channel that keeps the header cart badge in
+ * sync with the rest of the app.
  *
- * TODO(medusa): once the live Medusa cart store is wired, replace useCartPulse
- * with the real cart-count hook; the header icon animates the same way on
- * count change.
+ * Two events:
+ *  - "cart:add"  → increment by qty (used when we don't know the new total,
+ *                  e.g. cross-sell adds).
+ *  - "cart:set"  → set the count absolutely (preferred — fired by the /cart
+ *                  page after remove/edit/empty and by the customizer with
+ *                  the cart returned from addLineItem, so the badge mirrors
+ *                  the real Medusa cart line-item count).
+ *
+ * Both events bump `lastBumpAt` so the icon re-plays its scale/rotate
+ * keyframes. SSR-safe (count is 0 on the server; client picks up events).
  */
-const EVENT = "cart:add";
+const ADD_EVENT = "cart:add";
+const SET_EVENT = "cart:set";
 
-/** Fire a cart-add event so the header CartLink can animate. */
+/** Fire a relative add (badge increments by qty). */
 export function notifyCartAdd(detail?: { qty?: number }) {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(EVENT, { detail }));
+  window.dispatchEvent(new CustomEvent(ADD_EVENT, { detail }));
+}
+
+/** Fire an absolute count — preferred when you know the real cart total. */
+export function notifyCartCount(count: number) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(SET_EVENT, { detail: { count } }),
+  );
 }
 
 interface CartPulse {
@@ -26,7 +40,7 @@ interface CartPulse {
   lastBumpAt: number;
 }
 
-/** Session-local cart pulse. */
+/** Header cart pulse — listens for both relative adds and absolute sets. */
 export function useCartPulse(): CartPulse {
   const [pulse, setPulse] = React.useState<CartPulse>({
     count: 0,
@@ -34,16 +48,28 @@ export function useCartPulse(): CartPulse {
   });
 
   React.useEffect(() => {
-    function onAdd(e: Event) {
+    const onAdd = (e: Event) => {
       const ce = e as CustomEvent<{ qty?: number } | undefined>;
       const qty = ce.detail?.qty ?? 1;
       setPulse((p) => ({
-        count: p.count + qty,
+        count: Math.max(0, p.count + qty),
         lastBumpAt: p.lastBumpAt + 1,
       }));
-    }
-    window.addEventListener(EVENT, onAdd as EventListener);
-    return () => window.removeEventListener(EVENT, onAdd as EventListener);
+    };
+    const onSet = (e: Event) => {
+      const ce = e as CustomEvent<{ count?: number } | undefined>;
+      const next = Number(ce.detail?.count ?? 0);
+      setPulse((p) => ({
+        count: Math.max(0, Number.isFinite(next) ? next : 0),
+        lastBumpAt: p.lastBumpAt + 1,
+      }));
+    };
+    window.addEventListener(ADD_EVENT, onAdd as EventListener);
+    window.addEventListener(SET_EVENT, onSet as EventListener);
+    return () => {
+      window.removeEventListener(ADD_EVENT, onAdd as EventListener);
+      window.removeEventListener(SET_EVENT, onSet as EventListener);
+    };
   }, []);
 
   return pulse;

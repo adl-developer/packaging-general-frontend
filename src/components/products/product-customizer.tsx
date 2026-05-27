@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, Info, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Check, Info, Loader2, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   CARTON_MATERIALS,
@@ -11,9 +11,10 @@ import {
   quantityTier,
   type Product,
 } from "@/lib/products";
+import { addLineItem } from "@/lib/actions/cart";
 import { motion } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
-import { notifyCartAdd } from "@/lib/cart-events";
+import { notifyCartCount } from "@/lib/cart-events";
 
 /**
  * Product customizer — Figma frame 404:1371. A single scrollable "Customize
@@ -33,6 +34,28 @@ export function ProductCustomizer({ product }: { product: Product }) {
   const [material, setMaterial] = React.useState(CARTON_MATERIALS[0]?.id ?? "");
   const [printing, setPrinting] = React.useState(CARTON_PRINTING[0]?.id ?? "");
   const [quantity, setQuantity] = React.useState(product.moq);
+  const [isPending, startTransition] = React.useTransition();
+  const [error, setError] = React.useState<string | null>(null);
+
+  const addToCart = (onSuccess?: () => void) => {
+    if (!size) {
+      setError("Please select a size before adding to cart.");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        const cart = await addLineItem(size, quantity);
+        // Sync the header badge to the real line-item count from the server
+        // (line items may merge when the same variant is added twice).
+        notifyCartCount(cart?.items?.length ?? 0);
+        onSuccess?.();
+      } catch (err) {
+        console.error("[customizer] add to cart failed:", err);
+        setError("Couldn't add to cart. Please try again.");
+      }
+    });
+  };
 
   // "Step N of 5" tracks the furthest section scrolled past the sticky header.
   const sectionsRef = React.useRef<Array<HTMLElement | null>>([]);
@@ -190,26 +213,34 @@ export function ProductCustomizer({ product }: { product: Product }) {
               </Link>
               <button
                 type="button"
-                onClick={() => {
-                  notifyCartAdd();
-                  // TODO(medusa): add configured line item to cart, keep user on page.
-                }}
-                className="order-1 inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:order-2"
+                onClick={() => addToCart()}
+                disabled={isPending || !size}
+                className="order-1 inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2"
               >
-                <ShoppingCart className="size-4" aria-hidden />
+                {isPending ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <ShoppingCart className="size-4" aria-hidden />
+                )}
                 Add to Cart
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  notifyCartAdd();
-                  router.push("/cart");
-                }}
-                className="order-2 inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:order-3"
+                onClick={() => addToCart(() => router.push("/cart"))}
+                disabled={isPending || !size}
+                className="order-2 inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3"
               >
                 Buy Now
               </button>
             </div>
+            {error && (
+              <p
+                role="alert"
+                className="text-sm font-medium text-destructive"
+              >
+                {error}
+              </p>
+            )}
           </div>
         </div>
       </div>

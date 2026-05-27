@@ -25,8 +25,6 @@ import {
  * TODO(medusa): take the real order number + details; wire Create Account to the
  * customer-create API and link the order.
  */
-const ORDER_NUMBER = "PG-47245176";
-
 const WHATS_NEXT = [
   "You'll receive an email confirmation shortly",
   "We'll start processing your order within 24 hours",
@@ -34,7 +32,19 @@ const WHATS_NEXT = [
   "Estimated delivery: 5-7 business days",
 ];
 
-export function OrderConfirmation() {
+interface OrderConfirmationProps {
+  orderNumber: string;
+  email?: string;
+  company?: string;
+  contactPerson?: string;
+}
+
+export function OrderConfirmation({
+  orderNumber,
+  email,
+  company,
+  contactPerson,
+}: OrderConfirmationProps) {
   const [showModal, setShowModal] = React.useState(true);
 
   return (
@@ -57,7 +67,7 @@ export function OrderConfirmation() {
           </p>
         </div>
         <p className="text-2xl font-semibold tracking-tight text-brand">
-          Order #{ORDER_NUMBER}
+          Order #{orderNumber}
         </p>
 
         <div className="w-full rounded-option bg-line/60 p-6 text-left">
@@ -101,14 +111,33 @@ export function OrderConfirmation() {
 
       <AnimatePresence>
         {showModal && (
-          <CreateAccountModal key="modal" onClose={() => setShowModal(false)} />
+          <CreateAccountModal
+            key="modal"
+            orderNumber={orderNumber}
+            email={email}
+            company={company}
+            contactPerson={contactPerson}
+            onClose={() => setShowModal(false)}
+          />
         )}
       </AnimatePresence>
     </div>
   );
 }
 
-function CreateAccountModal({ onClose }: { onClose: () => void }) {
+function CreateAccountModal({
+  orderNumber,
+  email,
+  company,
+  contactPerson,
+  onClose,
+}: {
+  orderNumber: string;
+  email?: string;
+  company?: string;
+  contactPerson?: string;
+  onClose: () => void;
+}) {
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
@@ -191,9 +220,9 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
 
         {/* Prefilled order details (read-only) */}
         <dl className="flex flex-col gap-3">
-          <ReadOnlyField label="Company Name" value="ABC Co." />
-          <ReadOnlyField label="Contact Name" value="Emmanuel Ntim" />
-          <ReadOnlyField label="Email" value="entim@gmail.com" />
+          {company && <ReadOnlyField label="Company Name" value={company} />}
+          {contactPerson && <ReadOnlyField label="Contact Name" value={contactPerson} />}
+          {email && <ReadOnlyField label="Email" value={email} />}
         </dl>
 
         <form className="flex flex-col gap-4" onSubmit={onSubmit}>
@@ -223,7 +252,7 @@ function CreateAccountModal({ onClose }: { onClose: () => void }) {
 
           <div className="rounded-option border border-[rgba(150,64,34,0.2)] bg-[rgba(150,64,34,0.05)] px-3 py-2.5">
             <p className="text-xs font-bold text-rust">
-              Order #{ORDER_NUMBER} will be linked to your account
+              Order #{orderNumber} will be linked to your account
             </p>
           </div>
 

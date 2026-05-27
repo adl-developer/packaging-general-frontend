@@ -1,14 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
-import { Smartphone, CreditCard, ChevronDown } from "lucide-react";
+import { Smartphone, CreditCard, ChevronDown, Loader2 } from "lucide-react";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
+import { initiatePaystack } from "@/lib/actions/checkout";
 
 type Method = "mobile_money" | "card";
 
@@ -50,13 +50,34 @@ function PaymentOption({
 }
 
 /**
- * Payment method chooser (Figma: Mobile Money + Card).
- * TODO(medusa/paystack): on Pay, create the payment session via the
- * medusa-payment-paystack provider and redirect to the authorization URL.
+ * Payment method chooser. The Mobile Money / Card toggle is presentational —
+ * Paystack's hosted page lets the user pick between channels (MoMo, card,
+ * USSD, bank) regardless. Pressing Pay initiates a Paystack payment session
+ * and redirects to the authorization URL; on return Paystack hits
+ * /checkout/callback?reference=… which completes the cart.
  */
-export function PaymentMethod({ total }: { total: number }) {
-  const router = useRouter();
+export function PaymentMethod({
+  total,
+  initialError,
+}: {
+  total: number;
+  initialError?: string;
+}) {
   const [method, setMethod] = React.useState<Method>("mobile_money");
+  const [isPending, startTransition] = React.useTransition();
+  const [error, setError] = React.useState<string | null>(initialError ?? null);
+
+  function onPay() {
+    setError(null);
+    startTransition(async () => {
+      const result = await initiatePaystack();
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      window.location.href = result.authorizationUrl;
+    });
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -101,6 +122,10 @@ export function PaymentMethod({ total }: { total: number }) {
             <div className="flex flex-col gap-2">
               <Label htmlFor="momo-number">Mobile Money Number</Label>
               <Input id="momo-number" inputMode="tel" placeholder="24 123 4567" />
+              <p className="text-xs text-muted">
+                You&apos;ll authorize the payment on Paystack and confirm the prompt
+                on this phone.
+              </p>
             </div>
           </motion.div>
         ) : (
@@ -118,13 +143,27 @@ export function PaymentMethod({ total }: { total: number }) {
         )}
       </AnimatePresence>
 
+      {error && (
+        <p role="alert" className="rounded-button bg-[rgba(231,0,11,0.08)] px-3 py-2 text-sm font-medium text-[#7e2a0c]">
+          {error}
+        </p>
+      )}
+
       <Button
         variant="primary"
         fullWidth
         size="lg"
-        onClick={() => router.push("/checkout/confirmation")}
+        onClick={onPay}
+        disabled={isPending}
       >
-        Pay {formatGhs(total)}
+        {isPending ? (
+          <span className="inline-flex items-center gap-2">
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+            Redirecting to Paystack…
+          </span>
+        ) : (
+          <>Pay {formatGhs(total)}</>
+        )}
       </Button>
     </div>
   );
