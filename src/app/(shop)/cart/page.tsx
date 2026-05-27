@@ -27,6 +27,11 @@ interface CartItem {
   unitPrice: number;
   taxRate: number; // applied to unitPrice * qty for the displayed total
   quantity: number;
+  /** Product slug — when present, Edit links to /products/<slug> so the user
+   *  can re-pick size / material / printing / quantity. Cross-sell items
+   *  added directly from the cart strip don't have a product page so this
+   *  stays undefined and the Edit button is hidden. */
+  productSlug?: string;
 }
 
 // Cross-sell suggestions (Figma cart frame 404:1984 + mobile 452:9255).
@@ -74,6 +79,7 @@ const INITIAL_ITEMS: CartItem[] = [
     unitPrice: 5.27,
     taxRate: 0.2,
     quantity: 50,
+    productSlug: "shipping-carton",
   },
   {
     id: "2",
@@ -282,13 +288,15 @@ function CartLine({
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                aria-label="Edit item"
-                className="grid size-8 place-items-center rounded-button text-muted transition-[color,background-color,transform] duration-200 hover:bg-line/30 active:scale-[0.92]"
-              >
-                <Pencil className="size-4" aria-hidden />
-              </button>
+              {item.productSlug && (
+                <Link
+                  href={`/products/${item.productSlug}`}
+                  aria-label={`Edit ${item.name} — change size, material, printing or quantity`}
+                  className="grid size-8 place-items-center rounded-button text-muted transition-[color,background-color,transform] duration-200 hover:bg-line/30 hover:text-brand active:scale-[0.92]"
+                >
+                  <Pencil className="size-4" aria-hidden />
+                </Link>
+              )}
               <button
                 type="button"
                 aria-label="Remove item"
@@ -342,7 +350,7 @@ function CrossSellCard({
   onAdd: () => void;
 }) {
   return (
-    <div className="flex h-full w-60 shrink-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:w-auto sm:shrink sm:flex-row sm:items-center sm:gap-4">
+    <div className="flex h-full w-60 shrink-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:w-auto sm:shrink sm:flex-row sm:items-start sm:gap-4">
       <div className="grid h-32 w-full shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#f3f4f6] to-[#e5e7eb] sm:size-24">
         <Box className="size-10 text-muted" aria-hidden />
       </div>
@@ -351,7 +359,10 @@ function CrossSellCard({
           {item.name}
         </h3>
         <p className="line-clamp-2 text-sm text-muted">{item.description}</p>
-        <div className="mt-2 flex flex-col gap-2">
+        {/* Mobile (user pref): price on top, Add-to-Cart full-width below.
+            Desktop: price on bottom-left, Add-to-Cart on the same row pinned
+            to the far right. */}
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div>
             <p className="text-lg font-bold tracking-tight text-brand">
               {formatGhs(item.pricePerUnit)}
@@ -366,7 +377,7 @@ function CrossSellCard({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.92 }}
                 transition={SPRING_TAP}
-                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-green-100 px-3 text-xs font-medium text-green-700"
+                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-green-100 px-3 text-xs font-medium text-green-700 sm:w-auto sm:px-4"
               >
                 <Check className="size-4" aria-hidden />
                 Added
@@ -381,7 +392,7 @@ function CrossSellCard({
                 type="button"
                 onClick={onAdd}
                 aria-label={`Add ${item.name} to cart`}
-                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-[color,background-color,transform] duration-200 hover:bg-brand/90 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-[color,background-color,transform] duration-200 hover:bg-brand/90 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:w-auto sm:px-4"
               >
                 <ShoppingCart className="size-4" aria-hidden />
                 Add to Cart

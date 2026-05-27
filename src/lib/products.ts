@@ -169,6 +169,54 @@ function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
   };
 }
 
+/** Fetch a single product by handle (slug) for the detail page. Returns null
+ *  on miss or backend error. Materials, printing options, and quantity tiers
+ *  are still driven by the shared constants above — those move to the backend
+ *  in a follow-up. */
+export async function getProductBySlug(slug: string): Promise<Product | null> {
+  try {
+    const region_id = await getRegionId();
+    const { products: live } = await sdk.store.product.list({
+      region_id,
+      handle: slug,
+      fields:
+        "id,title,handle,description,metadata,*categories,*variants,variants.calculated_price",
+      limit: 1,
+    });
+    const p = live[0];
+    if (!p) return null;
+    return toFullProduct(p);
+  } catch (err) {
+    console.error(`[getProductBySlug] failed for "${slug}":`, err);
+    return null;
+  }
+}
+
+function toFullProduct(p: HttpTypes.StoreProduct): Product {
+  const summary = toSummary(p);
+  // Map variants → SizeOption[] (smallest first). Dimensions come from each
+  // variant's length/width/height (mm); the label shows cm for readability.
+  type Sized = SizeOption & { _len: number };
+  const sizes: SizeOption[] = (p.variants ?? [])
+    .map((v): Sized | null => {
+      const L = Number(v.length ?? 0);
+      const W = Number(v.width ?? 0);
+      const H = Number(v.height ?? 0);
+      if (!L || !W || !H) return null;
+      return {
+        id: v.id,
+        label: `${v.title ?? "Size"} (${L / 10}×${W / 10}×${H / 10}cm)`,
+        dimensions: `${L} × ${W} × ${H} mm`,
+        _len: L,
+      };
+    })
+    .filter((s): s is Sized => s !== null)
+    .sort((a, b) => a._len - b._len)
+    .map(({ _len: _, ...rest }) => rest);
+
+  return { ...summary, sizes };
+}
+
 /** ProductSummary projection of the static `products` array — the Figma
  *  sample products. Used as a fallback when the Medusa backend is offline so
  *  the browse page still renders meaningful content. */
@@ -192,7 +240,7 @@ export async function listProducts(): Promise<ProductSummary[]> {
     const { products: live } = await sdk.store.product.list({
       region_id,
       fields:
-        "id,title,handle,description,metadata,*categories,*variants.calculated_price",
+        "id,title,handle,description,metadata,*categories,*variants,variants.calculated_price",
       limit: 100,
     });
     return live.length ? live.map(toSummary) : SAMPLE_PRODUCTS;
