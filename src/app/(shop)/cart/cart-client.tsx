@@ -30,7 +30,7 @@ export interface CartItem {
   name: string;
   specs: string[];
   unitPrice: number;
-  /** Effective tax rate applied to the line subtotal for the displayed total
+  /** Effective tax rate applied to the line subtotal for the displayed total..
    *  (Ghana VAT+NHIL+GETFund+COVID ≈ 21.9% — matches the backend tax region). */
   taxRate: number;
   quantity: number;
