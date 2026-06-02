@@ -1,7 +1,6 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk } from "@/lib/medusa";
@@ -27,8 +26,17 @@ async function readCartId(): Promise<string | undefined> {
 }
 
 async function clearCartCookie() {
-  const store = await cookies();
-  store.delete(CART_COOKIE);
+  // Cookie mutation is only legal in a Route Handler / Server Action, never in
+  // a Server Component render. Wrapped so a render-context caller can't turn a
+  // SUCCESSFUL order into a thrown error (getCart() clears completed carts on
+  // next access anyway). The callback is a Route Handler, so this normally runs
+  // in a writable context — this is belt-and-suspenders.
+  try {
+    const store = await cookies();
+    store.delete(CART_COOKIE);
+  } catch {
+    /* read-only context — cleanup deferred to getCart() */
+  }
 }
 
 /** Persist company name, contact person, phone and email onto the cart. We
@@ -185,15 +193,4 @@ export async function completeCheckout(): Promise<
     console.error("[checkout] completeCheckout failed:", err);
     return { ok: false, cartId, error: "We couldn't place your order. Please try again." };
   }
-}
-
-/** Convenience server action used as a form action by the callback page after a
- *  successful Paystack redirect. Wraps completeCheckout + redirect so we can
- *  call it from a <form action={...}> with no client JS. */
-export async function completeCheckoutAndRedirect() {
-  const result = await completeCheckout();
-  if (!result.ok) {
-    redirect(`/checkout/payment?error=${encodeURIComponent(result.error)}`);
-  }
-  redirect(`/checkout/confirmation?order=${result.orderId}`);
 }
