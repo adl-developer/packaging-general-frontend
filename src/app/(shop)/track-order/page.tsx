@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   alternates: { canonical: "/track-order" },
 };
 
-export default function TrackOrderPage() {
-  return <TrackOrder />;
+export default async function TrackOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ order?: string; email?: string }>;
+}) {
+  const { order, email } = await searchParams;
+  return <TrackOrder initialQuery={order} initialEmail={email} />;
 }

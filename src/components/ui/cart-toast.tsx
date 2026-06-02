@@ -47,15 +47,15 @@ export function CartToast() {
         {visible && (
           <motion.div
             key={pulse}
-            initial={{ opacity: 0, y: -12, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+            initial={{ opacity: 0, x: 40, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 40, scale: 0.95 }}
             transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
-            className="pointer-events-auto inline-flex items-center gap-2.5 rounded-card border border-line/60 bg-white py-3 pl-3 pr-5 text-sm font-medium text-brand shadow-lg"
+            className="pointer-events-auto inline-flex items-center gap-2.5 rounded-button border border-line/60 bg-white py-3 pl-3 pr-5 text-sm font-medium text-brand shadow-lg"
             role="status"
           >
             <CheckCircle2
-              className="size-5 fill-green-500 text-white"
+              className="size-5 fill-brand text-white"
               aria-hidden
             />
             Added to cart!

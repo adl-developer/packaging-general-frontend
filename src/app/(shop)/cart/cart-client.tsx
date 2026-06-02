@@ -18,7 +18,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
 import { motion, AnimatePresence } from "motion/react";
 import { DURATION, EASE_PREMIUM, SPRING_TAP } from "@/lib/motion";
-import { notifyCartCount } from "@/lib/cart-events";
+import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
 import {
   emptyCart as emptyCartAction,
   removeLineItem,
@@ -427,8 +427,10 @@ export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
     // Visual-only for now — these aren't in the catalog yet. Local state +
     // header badge sync via the items.length effect above, but not persisted
     // to the Medusa cart.
+    let inserted = false;
     setItems((xs) => {
       if (xs.some((x) => x.id === `cs-${c.id}`)) return xs;
+      inserted = true;
       return [
         ...xs,
         {
@@ -442,6 +444,7 @@ export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
       ];
     });
     setAddedCrossSell((prev) => new Set(prev).add(c.id));
+    if (inserted) notifyCartAdd({ qty: 1 });
   };
 
   const doEmptyCart = () => {
@@ -554,22 +557,44 @@ export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
         </div>
       </div>
 
-      <div className="rounded-card border border-line bg-surface p-6">
+      {/* Order Summary — narrower card centered on desktop per Figma; on
+          mobile spans the full width like the other cart sections. Includes
+          per-line breakdown, total, both checkout actions, and the promo
+          code box. */}
+      <div className="mx-auto flex w-full flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:max-w-xl sm:p-6">
         <div className="flex flex-col gap-1">
           <h2 className="text-base font-medium tracking-tight text-brand">
             Order Summary
           </h2>
-          <p className="text-base text-muted">
+          <p className="text-sm text-muted">
             {items.length} item{items.length === 1 ? "" : "s"}
           </p>
         </div>
-        <div className="mt-4 flex items-center justify-between border-t border-line pt-4">
-          <span className="text-base font-semibold tracking-tight text-brand">
-            Total
-          </span>
-          <span className="text-base font-semibold tracking-tight text-brand">
-            {formatGhs(total)}
-          </span>
+        <ul className="flex flex-col gap-1.5">
+          {items.map((item) => (
+            <li
+              key={item.id}
+              className="flex items-baseline justify-between gap-3 text-sm"
+            >
+              <span className="truncate text-muted">{item.name}</span>
+              <span className="shrink-0 font-medium text-brand tabular-nums">
+                {formatGhs(lineTotal(item))}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <div className="flex flex-col gap-1 border-t border-line pt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-base font-semibold tracking-tight text-brand">
+              Total
+            </span>
+            <span className="text-base font-semibold tracking-tight text-brand tabular-nums">
+              {formatGhs(total)}
+            </span>
+          </div>
+          <p className="text-xs text-muted">
+            Includes VAT, NHIL, and all applicable fees
+          </p>
         </div>
         <Link
           href="/checkout"
@@ -577,11 +602,31 @@ export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
             variant: "primary",
             size: "lg",
             fullWidth: true,
-            className: "mt-4",
+            className: "mt-1",
           })}
         >
           Proceed to Checkout
         </Link>
+        <Link
+          href="/products"
+          className={buttonVariants({
+            variant: "outline",
+            size: "lg",
+            fullWidth: true,
+          })}
+        >
+          Keep Shopping
+        </Link>
+        {/* Promo / discount-code prompt — surfaces the active campaign code so
+            users notice it before checkout. TODO(medusa): pull active promo
+            from a `promotions` query instead of hard-coding. */}
+        <div className="mt-1 rounded-option border border-line bg-surface px-4 py-3">
+          <p className="text-xs text-muted">Use code</p>
+          <p className="text-base font-bold tracking-wider text-brand">
+            PGEASTER10
+          </p>
+          <p className="text-xs text-muted">at checkout for 10% off!</p>
+        </div>
       </div>
 
       <ConfirmDialog

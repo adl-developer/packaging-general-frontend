@@ -6,12 +6,14 @@ import {
   CheckCircle2,
   Download,
   Factory,
+  Loader2,
   PackageCheck,
   Search,
   Truck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatGhs } from "@/lib/format";
+import { lookupOrder, type OrderLookupResult } from "@/lib/actions/orders";
 import { motion, AnimatePresence } from "motion/react";
 import {
   DURATION,
@@ -151,17 +153,120 @@ function buildInvoice(order: TrackedOrder): InvoiceData {
   };
 }
 
-export function TrackOrder() {
-  const [query, setQuery] = React.useState("");
+const trackDateFmt = new Intl.DateTimeFormat("en-GH", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+const STEP_META: { title: string; detail: string; Icon: TimelineStep["Icon"] }[] =
+  [
+    {
+      title: "Order Received",
+      detail: "Your order has been received and is being reviewed",
+      Icon: CheckCircle2,
+    },
+    {
+      title: "In Production",
+      detail: "Your order is being produced",
+      Icon: Factory,
+    },
+    {
+      title: "Ready for Delivery",
+      detail: "Your order is ready and awaiting dispatch",
+      Icon: Truck,
+    },
+    {
+      title: "Delivered",
+      detail: "Your order has been delivered",
+      Icon: PackageCheck,
+    },
+  ];
+
+/** Map the real backend lookup result onto the TrackedOrder UI shape. */
+function mapToTracked(o: OrderLookupResult): TrackedOrder {
+  const firstItem = o.items[0];
+  const totalQty = o.items.reduce((n, i) => n + i.quantity, 0);
+  const steps: TimelineStep[] = STEP_META.map((m, idx) => ({
+    title: m.title,
+    detail:
+      idx === o.current_step ? m.detail : idx < o.current_step ? "Completed" : "Pending",
+    state: idx === o.current_step ? "current" : "pending",
+    Icon: m.Icon,
+  }));
+  return {
+    number: o.number,
+    placedOn: o.placed_on
+      ? `Placed on ${trackDateFmt.format(new Date(o.placed_on))}`
+      : "",
+    status: STEP_META[o.current_step]?.title ?? "Order Received",
+    steps,
+    customer: {
+      name: o.customer.name || "—",
+      phone: o.customer.phone || "—",
+      email: o.customer.email,
+    },
+    product: {
+      name: firstItem?.title ?? "Your order",
+      size: o.items.length > 1 ? `${o.items.length} products` : "—",
+      material: "—",
+      printing: "—",
+      quantity: `${totalQty} ${totalQty === 1 ? "unit" : "units"}`,
+    },
+    address: o.address || "—",
+    pricing: {
+      itemName: firstItem?.title ?? "Order",
+      itemQty: `${totalQty} ${totalQty === 1 ? "unit" : "units"}`,
+      itemPrice: o.totals.item_total,
+      fees: o.totals.shipping_total,
+      taxes: o.totals.tax_total,
+      total: o.totals.total,
+    },
+  };
+}
+
+export function TrackOrder({
+  initialQuery,
+  initialEmail,
+}: {
+  initialQuery?: string;
+  initialEmail?: string;
+}) {
+  const [query, setQuery] = React.useState(initialQuery ?? "");
+  const [email, setEmail] = React.useState(initialEmail ?? "");
   const [result, setResult] = React.useState<TrackedOrder | null>(null);
   const [notFound, setNotFound] = React.useState<string | null>(null);
   const [invoiceOpen, setInvoiceOpen] = React.useState(false);
+  const [pending, startTransition] = React.useTransition();
   const resultAnchorRef = React.useRef<HTMLDivElement | null>(null);
 
   const invoiceData = React.useMemo(
     () => buildInvoice(result ?? SAMPLE_ORDER),
     [result],
   );
+
+  const runLookup = React.useCallback(
+    (orderNumber: string, emailValue: string) => {
+      startTransition(async () => {
+        const found = await lookupOrder(orderNumber, emailValue);
+        if (found) {
+          setResult(mapToTracked(found));
+          setNotFound(null);
+        } else {
+          setResult(null);
+          setNotFound(orderNumber);
+        }
+      });
+    },
+    [],
+  );
+
+  // Auto-run when arriving with ?order=…&email=… (e.g. the "My Orders" link).
+  React.useEffect(() => {
+    const o = (initialQuery ?? "").trim();
+    const e = (initialEmail ?? "").trim();
+    if (o && e) runLookup(o, e);
+  }, [initialQuery, initialEmail, runLookup]);
 
   // Scroll the result/not-found section into view after a successful submit.
   // Respects reduced-motion via `behavior: "smooth"` (browsers honor the pref).
@@ -178,16 +283,10 @@ export function TrackOrder() {
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const value = query.trim();
-    if (!value) return;
-    // TODO(medusa): real lookup. Demo: any "PG-…" number resolves to the sample.
-    if (/^PG-/i.test(value)) {
-      setResult({ ...SAMPLE_ORDER, number: value.toUpperCase() });
-      setNotFound(null);
-    } else {
-      setResult(null);
-      setNotFound(value);
-    }
+    const orderNumber = query.trim();
+    const emailValue = email.trim();
+    if (!orderNumber || !emailValue) return;
+    runLookup(orderNumber, emailValue);
   }
 
   return (
@@ -200,41 +299,64 @@ export function TrackOrder() {
             Track Your Order
           </h1>
           <p className="text-sm text-muted sm:text-base">
-            Enter your order number to view the current status of your delivery
+            Enter your order number and the email you used to view the current
+            status of your delivery
           </p>
         </div>
         <form
-          className="flex flex-col gap-2 px-4 pb-4 sm:px-6 sm:pb-6"
+          className="flex flex-col gap-3 px-4 pb-4 sm:px-6 sm:pb-6"
           onSubmit={onSubmit}
         >
-          <label htmlFor="order-number" className="text-sm font-medium text-brand">
-            Order Number
-          </label>
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="order-number"
+              className="text-sm font-medium text-brand"
+            >
+              Order Number
+            </label>
             <input
               id="order-number"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="e.g., PG-2026-001"
-              className="w-full flex-1 rounded-full border border-line bg-surface px-5 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15 sm:py-2.5 sm:text-sm sm:leading-5"
+              className="w-full rounded-button border border-line bg-surface px-4 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15 sm:py-2.5 sm:text-sm sm:leading-5"
             />
-            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
-              <button
-                type="submit"
-                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust sm:w-auto"
-              >
+          </div>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="order-email" className="text-sm font-medium text-brand">
+              Email Address
+            </label>
+            <input
+              id="order-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              autoComplete="email"
+              className="w-full rounded-button border border-line bg-surface px-4 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15 sm:py-2.5 sm:text-sm sm:leading-5"
+            />
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+            <button
+              type="submit"
+              disabled={pending}
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust disabled:opacity-60 sm:w-auto"
+            >
+              {pending ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              ) : (
                 <Search className="size-4" aria-hidden />
-                Track Order
-              </button>
-              <button
-                type="button"
-                onClick={() => setInvoiceOpen(true)}
-                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30 sm:w-auto"
-              >
-                <Download className="size-4" aria-hidden />
-                View Invoice
-              </button>
-            </div>
+              )}
+              Track Order
+            </button>
+            <button
+              type="button"
+              onClick={() => setInvoiceOpen(true)}
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30 sm:w-auto"
+            >
+              <Download className="size-4" aria-hidden />
+              View Invoice
+            </button>
           </div>
           <p className="text-xs text-muted">
             You can find your order number in the confirmation email or SMS

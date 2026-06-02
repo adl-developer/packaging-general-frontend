@@ -14,7 +14,7 @@ import {
 import { addLineItem } from "@/lib/actions/cart";
 import { motion } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
-import { notifyCartCount } from "@/lib/cart-events";
+import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
 
 /**
  * Product customizer — Figma frame 404:1371. A single scrollable "Customize
@@ -49,6 +49,10 @@ export function ProductCustomizer({ product }: { product: Product }) {
         // Sync the header badge to the real line-item count from the server
         // (line items may merge when the same variant is added twice).
         notifyCartCount(cart?.items?.length ?? 0);
+        // Trigger the global "Added to cart!" toast (CartToast listens for
+        // cart:add; cart:set is set-by-the-page and fires on remove too, so
+        // we explicitly fire :add here to keep toast/badge events separable).
+        notifyCartAdd({ qty: quantity });
         onSuccess?.();
       } catch (err) {
         console.error("[customizer] add to cart failed:", err);

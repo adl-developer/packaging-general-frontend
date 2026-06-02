@@ -2,10 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
+import { useActionState } from "react";
+import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { SPRING_SOFT } from "@/lib/motion";
+import { authenticate, type AuthState } from "@/lib/actions/auth";
 
 /**
  * Tabbed auth card — exact spec from Figma "Sign In" (458:14565) and
@@ -26,9 +28,15 @@ const fieldInput =
 const socialButton =
   "flex h-11 w-full items-center justify-center gap-2 rounded-button border border-line bg-background text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
 
+const initialAuthState: AuthState = { error: null };
+
 export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
   const [tab, setTab] = React.useState<Tab>(defaultTab);
   const [showPassword, setShowPassword] = React.useState(false);
+  const [state, formAction, pending] = useActionState(
+    authenticate,
+    initialAuthState,
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-[448px] flex-col gap-8 px-4 pt-8">
@@ -95,7 +103,8 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
           <Divider label="Or continue with email" />
 
           {/* Email + password form */}
-          <form className="flex flex-col gap-4" onSubmit={(e) => e.preventDefault()}>
+          <form action={formAction} className="flex flex-col gap-4">
+            <input type="hidden" name="mode" value={tab} />
             {tab === "signup" && (
               <Field id="name" label="Full Name">
                 <input
@@ -168,10 +177,23 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
               </>
             )}
 
+            {state.error && (
+              <p
+                role="alert"
+                aria-live="polite"
+                className="flex items-start gap-2 rounded-button border border-rust/30 bg-rust/10 px-3 py-2 text-sm text-rust"
+              >
+                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+                <span>{state.error}</span>
+              </p>
+            )}
+
             <button
               type="submit"
-              className="h-11 w-full rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+              disabled={pending}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:opacity-60"
             >
+              {pending && <Loader2 className="size-4 animate-spin" aria-hidden />}
               {tab === "signin" ? "Sign In" : "Create Account"}
             </button>
           </form>
