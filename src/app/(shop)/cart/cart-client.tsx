@@ -205,7 +205,7 @@ function QtyStepper({
         aria-label={`Decrease ${label}`}
         onClick={() => onChange(Math.max(min, qty - 1))}
         disabled={disabled || qty <= min}
-        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color,transform] duration-200 hover:bg-line/30 active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
+        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color] duration-200 hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Minus className="size-4" aria-hidden />
       </button>
@@ -229,7 +229,7 @@ function QtyStepper({
         aria-label={`Increase ${label}`}
         onClick={() => onChange(qty + 1)}
         disabled={disabled}
-        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color,transform] duration-200 hover:bg-line/30 active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-40"
+        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color] duration-200 hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Plus className="size-4" aria-hidden />
       </button>
@@ -273,7 +273,7 @@ function CartLine({
                 <Link
                   href={`/products/${item.productSlug}`}
                   aria-label={`Edit ${item.name} — change size, material, printing or quantity`}
-                  className="grid size-8 place-items-center rounded-button text-muted transition-[color,background-color,transform] duration-200 hover:bg-line/30 hover:text-brand active:scale-[0.92]"
+                  className="grid size-8 place-items-center rounded-button text-muted transition-[color,background-color] duration-200 hover:bg-line/30 hover:text-brand"
                 >
                   <Pencil className="size-4" aria-hidden />
                 </Link>
@@ -283,7 +283,7 @@ function CartLine({
                 aria-label="Remove item"
                 onClick={() => onRemove(item.id)}
                 disabled={pending}
-                className="grid size-8 place-items-center rounded-button text-plum transition-[color,background-color,transform] duration-200 hover:bg-plum/10 active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-40"
+                className="grid size-8 place-items-center rounded-button text-plum transition-[color,background-color] duration-200 hover:bg-plum/10 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Trash2 className="size-4" aria-hidden />
               </button>
@@ -369,7 +369,7 @@ function CrossSellCard({
                 type="button"
                 onClick={onAdd}
                 aria-label={`Add ${item.name} to cart`}
-                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-[color,background-color,transform] duration-200 hover:bg-brand/90 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:w-auto sm:px-4"
+                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-[color,background-color] duration-200 hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:w-auto sm:px-4"
               >
                 <ShoppingCart className="size-4" aria-hidden />
                 Add to Cart

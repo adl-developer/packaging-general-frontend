@@ -34,8 +34,7 @@ export function buttonVariants({
 } = {}) {
   return cn(
     "inline-flex items-center justify-center rounded-button font-medium",
-    "transition-[color,background-color,transform] duration-200 ease-out",
-    "hover:-translate-y-px active:translate-y-0 active:scale-[0.98]",
+    "transition-[color,background-color] duration-200 ease-out",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40",
     "disabled:pointer-events-none disabled:opacity-50",
     variantStyles[variant],

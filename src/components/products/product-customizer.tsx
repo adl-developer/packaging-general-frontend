@@ -211,13 +211,13 @@ export function ProductCustomizer({ product }: { product: Product }) {
                   desktop = Keep Shopping → Add to Cart → Buy Now (left-to-right). */}
               <Link
                 href="/products"
-                className="order-3 inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 sm:order-1"
+                className="order-3 inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 sm:order-1 sm:mr-auto"
               >
                 Keep Shopping
               </Link>
               <button
                 type="button"
-                onClick={() => addToCart()}
+                onClick={() => addToCart(() => router.push("/cart"))}
                 disabled={isPending || !size}
                 className="order-1 inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2"
               >
@@ -296,7 +296,7 @@ function OptionCard({
       aria-checked={selected}
       onClick={onSelect}
       className={cn(
-        "flex items-center gap-4 rounded-option border p-4 text-left transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.99]",
+        "flex items-center gap-4 rounded-option border p-4 text-left transition-[color,background-color,border-color] duration-200",
         selected
           ? "border-line bg-[rgba(196,188,176,0.3)]"
           : "border-input hover:border-brand/40",

@@ -34,7 +34,7 @@ function PaymentOption({
       aria-checked={selected}
       onClick={onSelect}
       className={cn(
-        "flex w-full items-center gap-3 rounded-option border-2 p-4 text-left transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.99]",
+        "flex w-full items-center gap-3 rounded-option border-2 p-4 text-left transition-[color,background-color,border-color] duration-200",
         selected
           ? "border-brand bg-brand/5"
           : "border-brand/50 hover:border-brand",

@@ -82,6 +82,22 @@ body {
   letter-spacing: -0.011em; /* matches the Figma's slight negative tracking */
 }
 
+/* Pointer cursor on all interactive controls. Tailwind v4 ships Preflight
+   without the legacy `button { cursor: pointer }` reset, so we restore it. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"],
+[role="menuitem"],
+summary,
+label[for] {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 /* Accessibility: honor the OS "reduce motion" setting for all CSS motion. */
 @media (prefers-reduced-motion: reduce) {
   *,
