@@ -14,7 +14,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       aria-invalid={invalid || undefined}
       className={cn(
         "h-9 w-full rounded-button border-2 bg-surface px-3 text-sm text-brand",
-        "placeholder:text-muted focus-visible:outline-none focus-visible:border-brand/50",
+        "placeholder:text-muted focus-visible:outline-none focus-visible:border-accent",
         invalid ? "border-destructive-border" : "border-input",
         className,
       )}

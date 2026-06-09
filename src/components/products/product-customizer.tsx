@@ -177,7 +177,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
                   min={product.moq}
                   value={quantity}
                   onChange={(e) => setQuantity(Number(e.target.value) || 0)}
-                  className="h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand focus-visible:border-brand focus-visible:outline-none"
+                  className="h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand focus-visible:border-accent focus-visible:outline-none"
                 />
                 <div className="rounded-option border border-line bg-[rgba(196,188,176,0.3)] px-3.5 py-3">
                   <p className="text-sm font-medium text-brand">
@@ -195,7 +195,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
                     id="notes"
                     rows={2}
                     placeholder="Any special requirements or instructions..."
-                    className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-brand focus-visible:outline-none"
+                    className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none"
                   />
                 </div>
               </div>

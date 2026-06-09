@@ -24,7 +24,7 @@ type Tab = "signin" | "signup";
 
 const fieldLabel = "text-sm font-medium leading-none tracking-tight text-brand";
 const fieldInput =
-  "h-11 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-brand focus-visible:outline-none";
+  "h-11 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none";
 const socialButton =
   "flex h-11 w-full items-center justify-center gap-2 rounded-button border border-line bg-background text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
 

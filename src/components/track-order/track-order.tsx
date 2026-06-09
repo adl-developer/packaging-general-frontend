@@ -319,7 +319,7 @@ export function TrackOrder({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="e.g., PG-2026-001"
-              className="w-full rounded-button border border-line bg-surface px-4 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15 sm:py-2.5 sm:text-sm sm:leading-5"
+              className="w-full rounded-button border border-line bg-surface px-4 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 sm:py-2.5 sm:text-sm sm:leading-5"
             />
           </div>
           <div className="flex flex-col gap-2">
@@ -333,7 +333,7 @@ export function TrackOrder({
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
               autoComplete="email"
-              className="w-full rounded-button border border-line bg-surface px-4 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15 sm:py-2.5 sm:text-sm sm:leading-5"
+              className="w-full rounded-button border border-line bg-surface px-4 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 sm:py-2.5 sm:text-sm sm:leading-5"
             />
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">

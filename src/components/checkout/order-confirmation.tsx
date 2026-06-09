@@ -322,7 +322,7 @@ function PasswordField({
           placeholder="••••••••"
           className={cn(
             "h-11 w-full rounded-button border-2 bg-surface px-3 pr-11 text-sm text-brand placeholder:text-muted focus-visible:outline-none",
-            invalid ? "border-[#e7000b] focus-visible:border-[#e7000b]" : "border-input focus-visible:border-brand",
+            invalid ? "border-[#e7000b] focus-visible:border-[#e7000b]" : "border-input focus-visible:border-accent",
           )}
         />
         <button

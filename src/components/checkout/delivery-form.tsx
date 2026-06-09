@@ -16,7 +16,7 @@ import { saveDeliveryAddress } from "@/lib/actions/checkout";
  */
 const labelCls = "text-sm font-medium leading-none text-brand";
 const inputCls =
-  "h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-brand focus-visible:outline-none";
+  "h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none";
 
 export function DeliveryForm() {
   const router = useRouter();
@@ -149,7 +149,7 @@ export function DeliveryForm() {
               name="instructions"
               rows={2}
               placeholder="e.g., Behind Shell Fuel Station, ask for Mr. Mensah"
-              className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-brand focus-visible:outline-none"
+              className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none"
             />
           </Field>
         </div>
