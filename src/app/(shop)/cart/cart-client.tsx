@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Box,
-  Check,
   Loader2,
   Minus,
   Pencil,
@@ -20,57 +19,16 @@ import { motion, AnimatePresence } from "motion/react";
 import { DURATION, EASE_PREMIUM, SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
 import {
+  addLineItem,
   emptyCart as emptyCartAction,
   removeLineItem,
   updateLineItemQuantity,
 } from "@/lib/actions/cart";
+import { mapLineItem, TAX_RATE, type CartItem } from "./map-cart";
+import type { CrossSellProduct } from "@/lib/products";
+import type { ActivePromotion } from "@/lib/promotions";
 
-export interface CartItem {
-  id: string;
-  name: string;
-  specs: string[];
-  unitPrice: number;
-  /** Effective tax rate applied to the line subtotal for the displayed total..
-   *  (Ghana VAT+NHIL+GETFund+COVID ≈ 21.9% — matches the backend tax region). */
-  taxRate: number;
-  quantity: number;
-  productSlug?: string;
-}
-
-// Cross-sell (Figma 404:1984 + mobile 452:9255). Visual-only for now —
-// these items aren't seeded in Medusa, so the Add button only updates local
-// state. Wire to live cart once these are added to the catalog.
-interface CrossSellItem {
-  id: string;
-  name: string;
-  description: string;
-  pricePerUnit: number;
-  unitLabel: string;
-}
-
-const CROSSSELL: CrossSellItem[] = [
-  {
-    id: "tape-brown",
-    name: "Packaging Tape - Brown",
-    description: "Heavy-duty 48mm × 66m brown packaging tape",
-    pricePerUnit: 12.5,
-    unitLabel: "per roll",
-  },
-  {
-    id: "tape-clear",
-    name: "Packaging Tape - Clear",
-    description: "Heavy-duty 48mm × 66m clear packaging tape",
-    pricePerUnit: 15.0,
-    unitLabel: "per roll",
-  },
-  {
-    id: "bubble-wrap",
-    name: "Bubble Wrap",
-    description: "Protective bubble wrap, 50cm × 10m roll",
-    pricePerUnit: 22.0,
-    unitLabel: "per roll",
-  },
-];
+export type { CartItem } from "./map-cart";
 
 const lineSubtotal = (item: CartItem) => item.unitPrice * item.quantity;
 const lineTotal = (item: CartItem) =>
@@ -322,11 +280,9 @@ function CartLine({
 
 function CrossSellCard({
   item,
-  added,
   onAdd,
 }: {
-  item: CrossSellItem;
-  added: boolean;
+  item: CrossSellProduct;
   onAdd: () => void;
 }) {
   return (
@@ -346,47 +302,33 @@ function CrossSellCard({
             </p>
             <p className="text-xs text-muted">{item.unitLabel}</p>
           </div>
-          <AnimatePresence mode="wait" initial={false}>
-            {added ? (
-              <motion.span
-                key="added"
-                initial={{ opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.92 }}
-                transition={SPRING_TAP}
-                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-green-100 px-3 text-xs font-medium text-green-700 sm:w-auto sm:px-4"
-              >
-                <Check className="size-4" aria-hidden />
-                Added
-              </motion.span>
-            ) : (
-              <motion.button
-                key="add"
-                initial={{ opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.92 }}
-                transition={SPRING_TAP}
-                type="button"
-                onClick={onAdd}
-                aria-label={`Add ${item.name} to cart`}
-                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-[color,background-color] duration-200 hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:w-auto sm:px-4"
-              >
-                <ShoppingCart className="size-4" aria-hidden />
-                Add to Cart
-              </motion.button>
-            )}
-          </AnimatePresence>
+          <motion.button
+            type="button"
+            onClick={onAdd}
+            whileTap={{ scale: 0.97 }}
+            transition={SPRING_TAP}
+            aria-label={`Add ${item.name} to cart`}
+            className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-[color,background-color] duration-200 hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:w-auto sm:px-4"
+          >
+            <ShoppingCart className="size-4" aria-hidden />
+            Add to Cart
+          </motion.button>
         </div>
       </div>
     </div>
   );
 }
 
-export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
+export function CartClient({
+  initialItems,
+  crossSell,
+  promo,
+}: {
+  initialItems: CartItem[];
+  crossSell: CrossSellProduct[];
+  promo: ActivePromotion | null;
+}) {
   const [items, setItems] = React.useState<CartItem[]>(initialItems);
-  const [addedCrossSell, setAddedCrossSell] = React.useState<Set<string>>(
-    new Set(),
-  );
   const [confirmEmpty, setConfirmEmpty] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
 
@@ -423,33 +365,47 @@ export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
     });
   };
 
-  const addCrossSell = (c: CrossSellItem) => {
-    // Visual-only for now — these aren't in the catalog yet. Local state +
-    // header badge sync via the items.length effect above, but not persisted
-    // to the Medusa cart.
-    let inserted = false;
-    setItems((xs) => {
-      if (xs.some((x) => x.id === `cs-${c.id}`)) return xs;
-      inserted = true;
-      return [
-        ...xs,
-        {
-          id: `cs-${c.id}`,
-          name: c.name,
-          specs: [c.description],
-          unitPrice: c.pricePerUnit,
-          taxRate: 0.219,
-          quantity: 1,
-        },
-      ];
+  // A cross-sell product whose variant is already a cart line is hidden from
+  // the recommended section — derived from the live cart, so it stays hidden
+  // across reloads and reappears if the line is removed.
+  const inCart = (c: CrossSellProduct) =>
+    items.some((x) => x.variantId === c.variantId);
+  const visibleCrossSell = crossSell.filter((c) => !inCart(c));
+
+  // Optimistic insert → real Medusa line via addLineItem → replace local
+  // state with the server cart (temp id becomes the real li_… id, so the
+  // line's remove/qty controls work immediately). Revert on failure.
+  const addCrossSell = (c: CrossSellProduct) => {
+    if (inCart(c)) return;
+    const tempId = `cs-${c.id}`;
+    setItems((xs) => [
+      ...xs,
+      {
+        id: tempId,
+        variantId: c.variantId,
+        name: c.name,
+        specs: [],
+        unitPrice: c.pricePerUnit,
+        taxRate: TAX_RATE,
+        quantity: 1,
+        productSlug: c.slug,
+      },
+    ]);
+    notifyCartAdd({ qty: 1 });
+    startTransition(async () => {
+      const cart = await addLineItem(c.variantId, 1);
+      if (cart) {
+        setItems((cart.items ?? []).map(mapLineItem));
+      } else {
+        // Server rejected the add — drop the optimistic line (the
+        // items.length effect re-syncs the badge).
+        setItems((xs) => xs.filter((x) => x.id !== tempId));
+      }
     });
-    setAddedCrossSell((prev) => new Set(prev).add(c.id));
-    if (inserted) notifyCartAdd({ qty: 1 });
   };
 
   const doEmptyCart = () => {
     setItems([]);
-    setAddedCrossSell(new Set());
     setConfirmEmpty(false);
     startTransition(async () => {
       await emptyCartAction();
@@ -530,32 +486,35 @@ export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
         </AnimatePresence>
       </div>
 
-      <div className="rounded-card border border-line bg-surface p-4 sm:p-6">
-        <h2 className="text-lg font-medium tracking-tight text-brand">
-          People who usually order your order also order...
-        </h2>
-        <p className="mt-1 text-sm text-muted">
-          Add these items to your order and save on delivery fees
-        </p>
-        <div
-          className="-mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0"
-          role="list"
-        >
-          {CROSSSELL.map((c) => (
-            <div
-              key={c.id}
-              role="listitem"
-              className="snap-start sm:snap-align-none"
-            >
-              <CrossSellCard
-                item={c}
-                added={addedCrossSell.has(c.id)}
-                onAdd={() => addCrossSell(c)}
-              />
-            </div>
-          ))}
+      {visibleCrossSell.length > 0 && (
+        <div className="rounded-card border border-line bg-surface p-4 sm:p-6">
+          <h2 className="text-lg font-medium tracking-tight text-brand">
+            People who usually order your order also order...
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            Add these items to your order and save on delivery fees
+          </p>
+          <div
+            className="-mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0"
+            role="list"
+          >
+            <AnimatePresence mode="popLayout" initial={false}>
+              {visibleCrossSell.map((c) => (
+                <motion.div
+                  key={c.id}
+                  layout
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
+                  role="listitem"
+                  className="snap-start sm:snap-align-none"
+                >
+                  <CrossSellCard item={c} onAdd={() => addCrossSell(c)} />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Order Summary — narrower card centered on desktop per Figma; on
           mobile spans the full width like the other cart sections. Includes
@@ -617,16 +576,22 @@ export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
         >
           Keep Shopping
         </Link>
-        {/* Promo / discount-code prompt — surfaces the active campaign code so
-            users notice it before checkout. TODO(medusa): pull active promo
-            from a `promotions` query instead of hard-coding. */}
-        <div className="mt-1 rounded-option border border-line bg-surface px-4 py-3">
-          <p className="text-xs text-muted">Use code</p>
-          <p className="text-base font-bold tracking-wider text-brand">
-            PGEASTER10
-          </p>
-          <p className="text-xs text-muted">at checkout for 10% off!</p>
-        </div>
+        {/* Promo / discount-code prompt — the live active promotion from
+            Medusa (GET /store/active-promotion). Hidden when none is active. */}
+        {promo && (
+          <div className="mt-1 rounded-option border border-line bg-surface px-4 py-3">
+            <p className="text-xs text-muted">Use code</p>
+            <p className="text-base font-bold tracking-wider text-brand">
+              {promo.code}
+            </p>
+            <p className="text-xs text-muted">
+              at checkout for{" "}
+              {promo.valueType === "percentage"
+                ? `${promo.value}% off!`
+                : `${formatGhs(promo.value)} off!`}
+            </p>
+          </div>
+        )}
       </div>
 
       <ConfirmDialog

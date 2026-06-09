@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useActionState } from "react";
-import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { SPRING_SOFT } from "@/lib/motion";
@@ -18,7 +18,8 @@ import { authenticate, type AuthState } from "@/lib/actions/auth";
  * Company Name, Phone Number (Ghana +233 prefix) — both verified against the
  * cached Figma nodes.
  *
- * TODO(medusa): wire submit handlers to the Medusa customer/auth endpoints.
+ * Submits through the `authenticate` server action (Medusa emailpass auth);
+ * the hidden `mode` field tells the action which tab is active.
  */
 type Tab = "signin" | "signup";
 
@@ -30,7 +31,13 @@ const socialButton =
 
 const initialAuthState: AuthState = { error: null };
 
-export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
+export function AuthCard({
+  defaultTab = "signin",
+  notice,
+}: {
+  defaultTab?: Tab;
+  notice?: string;
+}) {
   const [tab, setTab] = React.useState<Tab>(defaultTab);
   const [showPassword, setShowPassword] = React.useState(false);
   const [state, formAction, pending] = useActionState(
@@ -49,6 +56,16 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
           Sign in to your account or create a new one
         </p>
       </div>
+
+      {notice && (
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-button border border-[#bbe5c8] bg-[#dcfce7] px-3 py-2 text-sm text-[#166534]"
+        >
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>{notice}</span>
+        </p>
+      )}
 
       {/* Tabs */}
       <div className="flex flex-col gap-10">
@@ -113,6 +130,7 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
                   type="text"
                   autoComplete="name"
                   placeholder="Ama Mensah"
+                  required
                   className={fieldInput}
                 />
               </Field>
@@ -125,6 +143,7 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
                 type="email"
                 autoComplete="email"
                 placeholder="you@company.com"
+                required
                 className={fieldInput}
               />
             </Field>
@@ -137,6 +156,8 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
                   type={showPassword ? "text" : "password"}
                   autoComplete={tab === "signin" ? "current-password" : "new-password"}
                   placeholder="••••••••"
+                  required
+                  minLength={tab === "signup" ? 8 : undefined}
                   className={cn(fieldInput, "pr-11")}
                 />
                 <PasswordToggle
@@ -145,6 +166,17 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
                 />
               </div>
             </Field>
+
+            {tab === "signin" && (
+              <div className="-mt-1 flex justify-end">
+                <Link
+                  href="/forgot-password"
+                  className="text-sm font-medium text-brand underline-offset-2 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            )}
 
             {tab === "signup" && (
               <>

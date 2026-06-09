@@ -40,10 +40,12 @@ interface CartPulse {
   lastBumpAt: number;
 }
 
-/** Header cart pulse — listens for both relative adds and absolute sets. */
-export function useCartPulse(): CartPulse {
+/** Header cart pulse — listens for both relative adds and absolute sets.
+ *  `initialCount` seeds the badge with the real Medusa line count (fetched
+ *  server-side in the header) so it's correct on first paint, not 0. */
+export function useCartPulse(initialCount = 0): CartPulse {
   const [pulse, setPulse] = React.useState<CartPulse>({
-    count: 0,
+    count: initialCount,
     lastBumpAt: 0,
   });
 

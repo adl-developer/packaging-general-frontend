@@ -12,12 +12,21 @@ import { saveContactInfo } from "@/lib/actions/checkout";
  * Checkout — Company Information step (Figma frame 424:2868, step 1 of the
  * flow: Cart → Company Info → Delivery → Payment). Persists the company
  * name + contact person into cart.metadata and the email onto cart.email.
+ * `initial` prefills from the cart / the signed-in customer's profile
+ * (see getCheckoutPrefill).
  */
 const labelCls = "text-sm font-medium leading-none text-brand";
 const inputCls =
   "h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none";
 
-export function CompanyInfoForm() {
+export interface CompanyInfoInitial {
+  companyName: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+}
+
+export function CompanyInfoForm({ initial }: { initial?: CompanyInfoInitial }) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -77,16 +86,16 @@ export function CompanyInfoForm() {
 
         <div className="flex flex-col gap-4">
           <Field id="company-name" label="Company Name *">
-            <input id="company-name" name="companyName" type="text" autoComplete="organization" placeholder="ABC Co." className={inputCls} required />
+            <input id="company-name" name="companyName" type="text" autoComplete="organization" placeholder="ABC Co." defaultValue={initial?.companyName} className={inputCls} required />
           </Field>
           <Field id="contact-person" label="Contact Person Name *">
-            <input id="contact-person" name="contactPerson" type="text" autoComplete="name" placeholder="Emmanuel Ntim" className={inputCls} required />
+            <input id="contact-person" name="contactPerson" type="text" autoComplete="name" placeholder="Emmanuel Ntim" defaultValue={initial?.contactPerson} className={inputCls} required />
           </Field>
           <Field id="company-phone" label="Phone Number *">
-            <input id="company-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 123 456 890" className={inputCls} required />
+            <input id="company-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 123 456 890" defaultValue={initial?.phone} className={inputCls} required />
           </Field>
           <Field id="company-email" label="Email Address *">
-            <input id="company-email" name="email" type="email" autoComplete="email" placeholder="entim@gmail.com" className={inputCls} required />
+            <input id="company-email" name="email" type="email" autoComplete="email" placeholder="entim@gmail.com" defaultValue={initial?.email} className={inputCls} required />
           </Field>
         </div>
 

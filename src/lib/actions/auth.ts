@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk, createAuthClient, authHeaders } from "@/lib/medusa";
+import { AUTH_COOKIE, getAuthToken } from "@/lib/auth-token";
 
 /**
  * Customer authentication for the storefront.
@@ -19,7 +20,6 @@ import { sdk, createAuthClient, authHeaders } from "@/lib/medusa";
  *   store.customer.create (with that JWT) → creates the customer record
  *   login → returns the real auth JWT (persisted in the cookie)
  */
-const AUTH_COOKIE = "_medusa_jwt";
 const CART_COOKIE = "pg_cart_id";
 const AUTH_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
@@ -32,11 +32,6 @@ const AUTH_COOKIE_OPTS = {
 };
 
 export type AuthState = { error: string | null };
-
-export async function getAuthToken(): Promise<string | undefined> {
-  const store = await cookies();
-  return store.get(AUTH_COOKIE)?.value;
-}
 
 async function setAuthToken(token: string) {
   const store = await cookies();
@@ -65,8 +60,15 @@ export async function getCustomer(): Promise<HttpTypes.StoreCustomer | null> {
       authHeaders(token)
     );
     return customer;
-  } catch {
-    await clearAuthToken();
+  } catch (err) {
+    // Only drop the cookie when the backend actually rejects the token (or the
+    // customer record is gone). A transient network/5xx failure must NOT log
+    // the user out — keep the cookie and treat them as signed out for this
+    // request only.
+    const status = (err as { status?: number })?.status;
+    if (status === 401 || status === 403 || status === 404) {
+      await clearAuthToken();
+    }
     return null;
   }
 }
@@ -116,9 +118,10 @@ export async function authenticate(
     }
     const [firstName, ...rest] = fullName.split(/\s+/);
     const lastName = rest.join(" ");
-    const phone = phoneLocal
-      ? `+233${phoneLocal.replace(/[^0-9]/g, "")}`
-      : undefined;
+    // Ghanaian numbers are usually entered with a leading 0 (e.g. 024 123
+    // 4567) — strip it before prefixing the country code.
+    const phoneDigits = phoneLocal.replace(/[^0-9]/g, "").replace(/^0+/, "");
+    const phone = phoneDigits ? `+233${phoneDigits}` : undefined;
 
     let token: string;
     try {
@@ -127,9 +130,34 @@ export async function authenticate(
         password,
       });
     } catch {
-      return fieldError(
-        "Could not create the account. This email may already be registered — try signing in."
-      );
+      // The auth identity already exists. The ONLY case signup may continue is
+      // a half-completed earlier attempt (identity created, customer record
+      // never saved) — log in to check. A complete account must get the
+      // "already registered" error, never a silent sign-in.
+      try {
+        const recovered = await authClient.auth.login("customer", "emailpass", {
+          email,
+          password,
+        });
+        if (typeof recovered !== "string") {
+          return fieldError(
+            "This email is already registered — try signing in instead."
+          );
+        }
+        const existing = await sdk.store.customer
+          .retrieve({}, authHeaders(recovered))
+          .catch(() => null);
+        if (existing) {
+          return fieldError(
+            "This email is already registered — try signing in instead."
+          );
+        }
+        token = recovered;
+      } catch {
+        return fieldError(
+          "This email is already registered — try signing in instead."
+        );
+      }
     }
 
     try {
@@ -145,7 +173,14 @@ export async function authenticate(
         authHeaders(token)
       );
     } catch {
-      return fieldError("Could not save your details. Please try again.");
+      // The customer record may already exist for this identity (recovered
+      // signup above) — only fail if it really isn't there.
+      const existing = await sdk.store.customer
+        .retrieve({}, authHeaders(token))
+        .catch(() => null);
+      if (!existing) {
+        return fieldError("Could not save your details. Please try again.");
+      }
     }
 
     // Exchange the registration token for a real auth session token.
@@ -195,4 +230,110 @@ export async function logout() {
   await clearAuthToken();
   revalidatePath("/", "layout");
   redirect("/");
+}
+
+/* ─── Password reset ─── */
+
+export type ResetState = { ok: boolean; error: string | null };
+
+const RESET_INVALID =
+  "This reset link is invalid or has expired. Please request a new one.";
+
+/**
+ * Step 1 — request a reset link. Medusa's reset-password route returns 201
+ * whether or not the email exists (anti-enumeration), so the success path is
+ * identical for every email and reveals nothing. A thrown error is therefore a
+ * real transport/rate-limit problem, not "no such account".
+ */
+export async function requestPasswordReset(
+  _prev: ResetState,
+  formData: FormData
+): Promise<ResetState> {
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  if (!email) return { ok: false, error: "Please enter your email address." };
+
+  try {
+    await createAuthClient().auth.resetPassword("customer", "emailpass", {
+      identifier: email,
+    });
+    return { ok: true, error: null };
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status === 429) {
+      return {
+        ok: false,
+        error: "Too many requests. Please wait a few minutes and try again.",
+      };
+    }
+    console.error("[auth] requestPasswordReset failed:", err);
+    return {
+      ok: false,
+      error: "We couldn't send the reset link right now. Please try again.",
+    };
+  }
+}
+
+/**
+ * Step 2 — set a new password using the token from the email link. On success
+ * the customer is auto-logged-in (mirrors signup/signin) and sent to their
+ * orders; if auto-login somehow fails, they're sent to sign in with the new
+ * password.
+ */
+export async function resetPassword(
+  _prev: ResetState,
+  formData: FormData
+): Promise<ResetState> {
+  const token = String(formData.get("token") || "");
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const password = String(formData.get("password") || "");
+  const confirm = String(formData.get("confirm") || "");
+
+  if (!token || !email) return { ok: false, error: RESET_INVALID };
+  if (password.length < 8) {
+    return { ok: false, error: "Password must be at least 8 characters." };
+  }
+  if (password !== confirm) {
+    return { ok: false, error: "Passwords don't match." };
+  }
+
+  const authClient = createAuthClient();
+  try {
+    await authClient.auth.updateProvider(
+      "customer",
+      "emailpass",
+      { email, password },
+      token
+    );
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status === 401 || status === 400 || status === 404) {
+      return { ok: false, error: RESET_INVALID };
+    }
+    console.error("[auth] resetPassword failed:", err);
+    return {
+      ok: false,
+      error: "We couldn't reset your password. Please try again.",
+    };
+  }
+
+  // Best-effort auto-login with the new password.
+  let authToken: string | null = null;
+  try {
+    const result = await authClient.auth.login("customer", "emailpass", {
+      email,
+      password,
+    });
+    if (typeof result === "string") authToken = result;
+  } catch {
+    /* fall through to manual sign-in */
+  }
+
+  // redirect() throws NEXT_REDIRECT, so it must live outside any try/catch.
+  if (authToken) {
+    await setAuthToken(authToken);
+    await transferGuestCart(authToken);
+    revalidatePath("/", "layout");
+    redirect("/account/orders");
+  }
+  redirect("/sign-in?reset=success");
 }

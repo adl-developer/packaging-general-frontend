@@ -12,13 +12,22 @@ import { saveDeliveryAddress } from "@/lib/actions/checkout";
  * Checkout — Delivery step (Figma frame 424:2869). Persists the shipping +
  * billing address to the cart and auto-selects the first available shipping
  * option (currently Standard Delivery only). The map preview is decorative;
- * a real geocoder/map provider lands later.
+ * a real geocoder/map provider lands later. `initial` prefills from the cart /
+ * the signed-in customer's saved address (see getCheckoutPrefill).
  */
 const labelCls = "text-sm font-medium leading-none text-brand";
 const inputCls =
   "h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none";
 
-export function DeliveryForm() {
+export interface DeliveryInitial {
+  contactName: string;
+  phone: string;
+  email: string;
+  address: string;
+  instructions: string;
+}
+
+export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -81,15 +90,15 @@ export function DeliveryForm() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field id="contact-name" label="Contact Name *">
-              <input id="contact-name" name="contactName" type="text" autoComplete="name" placeholder="Emmanuel Ntim" className={inputCls} required />
+              <input id="contact-name" name="contactName" type="text" autoComplete="name" placeholder="Emmanuel Ntim" defaultValue={initial?.contactName} className={inputCls} required />
             </Field>
             <Field id="contact-phone" label="Phone Number *">
-              <input id="contact-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 123 456 890" className={inputCls} required />
+              <input id="contact-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 123 456 890" defaultValue={initial?.phone} className={inputCls} required />
             </Field>
           </div>
 
           <Field id="contact-email" label="Email Address *">
-            <input id="contact-email" name="email" type="email" autoComplete="email" placeholder="entim@gmail.com" className={inputCls} required />
+            <input id="contact-email" name="email" type="email" autoComplete="email" placeholder="entim@gmail.com" defaultValue={initial?.email} className={inputCls} required />
           </Field>
         </fieldset>
 
@@ -103,6 +112,7 @@ export function DeliveryForm() {
               type="text"
               autoComplete="street-address"
               placeholder="Enter your street address, area, or landmark"
+              defaultValue={initial?.address}
               className={inputCls}
               required
             />
@@ -149,6 +159,7 @@ export function DeliveryForm() {
               name="instructions"
               rows={2}
               placeholder="e.g., Behind Shell Fuel Station, ask for Mr. Mensah"
+              defaultValue={initial?.instructions}
               className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none"
             />
           </Field>

@@ -2,7 +2,7 @@
 
 import type { HttpTypes } from "@medusajs/types";
 import { sdk, authHeaders } from "@/lib/medusa";
-import { getAuthToken } from "@/lib/actions/auth";
+import { getAuthToken } from "@/lib/auth-token";
 
 /**
  * Customer order history. All store order endpoints require the customer JWT —
@@ -58,23 +58,77 @@ export interface OrderLookupResult {
   };
 }
 
+export type OrderLookupOutcome =
+  | { status: "found"; order: OrderLookupResult }
+  | { status: "not_found" }
+  | { status: "error" };
+
 /**
  * Public guest order tracking. Looks up an order by number + email via the
- * custom backend route. Returns null on any miss (bad number / wrong email) —
- * the backend returns a generic 404 so order numbers can't be enumerated.
+ * custom backend route. A 404 (bad number / wrong email — the backend returns
+ * a generic 404 so order numbers can't be enumerated) maps to "not_found";
+ * anything else (network, 5xx) maps to "error" so the UI can say "try again"
+ * instead of wrongly telling the customer their order doesn't exist.
  */
 export async function lookupOrder(
   orderNumber: string,
   email: string
-): Promise<OrderLookupResult | null> {
+): Promise<OrderLookupOutcome> {
   try {
     const { order } = await sdk.client.fetch<{ order: OrderLookupResult }>(
       "/store/order-lookup",
       { method: "GET", query: { order_number: orderNumber, email } }
     );
-    return order;
-  } catch {
-    return null;
+    return { status: "found", order };
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status === 404 || status === 400) return { status: "not_found" };
+    console.error("[orders] lookup failed:", err);
+    return { status: "error" };
+  }
+}
+
+/**
+ * Ask the backend to email the order's invoice to the email it was placed
+ * with (POST /store/order-lookup/email — same shared-secret rule as the
+ * lookup; the backend only ever mails the order's own address).
+ */
+export async function emailInvoice(
+  orderNumber: string,
+  email: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await sdk.client.fetch("/store/order-lookup/email", {
+      method: "POST",
+      body: { order_number: orderNumber, email },
+    });
+    return { ok: true };
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status === 503) {
+      return {
+        ok: false,
+        error:
+          "Invoice emails are temporarily unavailable. Please try again later.",
+      };
+    }
+    if (status === 404 || status === 400) {
+      return {
+        ok: false,
+        error: "We couldn't match that order. Please run the lookup again.",
+      };
+    }
+    if (status === 429) {
+      return {
+        ok: false,
+        error: "Too many attempts. Please wait a few minutes and try again.",
+      };
+    }
+    console.error("[orders] emailInvoice failed:", err);
+    return {
+      ok: false,
+      error: "We couldn't send the invoice email. Please try again.",
+    };
   }
 }
 

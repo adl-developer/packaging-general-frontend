@@ -10,6 +10,7 @@ import {
   PackageCheck,
   Search,
   Truck,
+  XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatGhs } from "@/lib/format";
@@ -29,9 +30,12 @@ import { InvoiceDialog, type InvoiceData } from "./invoice-dialog";
  * (424:3550), not-found alert (452:12370). Card border #e2e1e0, rust accent
  * (#964022) primary, lavender (#b8a8d9) for the current timeline step.
  *
- * TODO(medusa): replace SAMPLE_ORDER + the lookup with the real order API.
+ * Wired to the real GET /store/order-lookup backend route (order number +
+ * email). The invoice is derived from the looked-up order's totals; its E-VAT
+ * receipt fields stay blank until real GRA e-invoicing data exists on the
+ * backend.
  */
-type StepState = "current" | "pending";
+type StepState = "completed" | "current" | "pending";
 
 interface TimelineStep {
   title: string;
@@ -44,6 +48,7 @@ interface TrackedOrder {
   number: string;
   placedOn: string;
   status: string;
+  canceled: boolean;
   steps: TimelineStep[];
   customer: { name: string; phone: string; email: string };
   product: {
@@ -64,59 +69,30 @@ interface TrackedOrder {
   };
 }
 
-const SAMPLE_ORDER: TrackedOrder = {
-  number: "PG-52889553",
-  placedOn: "Placed on 12 May 2026",
-  status: "Order Received",
-  steps: [
-    {
-      title: "Order Received",
-      detail: "Your order has been received and is being reviewed",
-      state: "current",
-      Icon: CheckCircle2,
-    },
-    { title: "In Production", detail: "Production will start soon", state: "pending", Icon: Factory },
-    { title: "Ready for Delivery", detail: "Pending", state: "pending", Icon: Truck },
-    { title: "Delivered", detail: "Pending", state: "pending", Icon: PackageCheck },
-  ],
-  customer: {
-    name: "Emmanuel Ntim",
-    phone: "+233 45678912",
-    email: "entim@gmail.com",
-  },
-  product: {
-    name: "Packaging Tape - Brown",
-    size: "Standard",
-    material: "Standard",
-    printing: "No Printing",
-    quantity: "1 units",
-  },
-  address: "123 Test Location, Spintex Rd, Accra",
-  pricing: {
-    itemName: "Packaging Tape - Brown",
-    itemQty: "1 units",
-    itemPrice: 12.5,
-    fees: 0.63,
-    taxes: 2.63,
-    total: 15.75,
-  },
-};
-
 const cardClass = "rounded-card border-2 border-[#e2e1e0] bg-surface";
 
-/** Build a sample invoice payload from a tracked order. The breakdown numbers
- *  the invoice needs (subtotal / platform fee / delivery fee / VAT / NHIL /
- *  GETFund) aren't in TrackedOrder yet, so we re-derive them from the line
- *  unit price for now. TODO(medusa): replace with the real invoice payload. */
+/** Build the invoice payload from a looked-up order's REAL totals: subtotal,
+ *  delivery and total come straight from the order; the single tax_total is
+ *  split across the Ghana levy lines proportionally (VAT 15 / NHIL 2.5 /
+ *  GETFund 2.5 of the 20-point bundle) so the lines always sum to the actual
+ *  amount charged. E-VAT receipt fields stay blank until the backend issues
+ *  real GRA e-invoicing data. */
 function buildInvoice(order: TrackedOrder): InvoiceData {
   const subtotal = order.pricing.itemPrice;
-  const platformFee = 0.63;
-  const deliveryFee = 0;
-  const totalBeforeTax = subtotal + platformFee + deliveryFee;
-  const vat = +(totalBeforeTax * 0.15).toFixed(2);
-  const nhil = +(totalBeforeTax * 0.025).toFixed(2);
-  const getfund = +(totalBeforeTax * 0.025).toFixed(2);
-  const itemTotal = +(totalBeforeTax + vat + nhil + getfund).toFixed(2);
+  const deliveryFee = order.pricing.fees;
+  const taxes = order.pricing.taxes;
+  const total = order.pricing.total;
+  const totalBeforeTax = +(total - taxes).toFixed(2);
+  const vat = +((taxes * 15) / 20).toFixed(2);
+  const nhil = +((taxes * 2.5) / 20).toFixed(2);
+  const getfund = +(taxes - vat - nhil).toFixed(2);
+  const specs = [
+    order.product.size,
+    order.product.material,
+    order.product.printing,
+  ]
+    .filter((s) => s && s !== "—")
+    .join(" • ");
   return {
     orderNumber: order.number,
     invoiceDate: order.placedOn.replace(/^Placed on /, ""),
@@ -128,26 +104,26 @@ function buildInvoice(order: TrackedOrder): InvoiceData {
     },
     line: {
       name: order.pricing.itemName,
-      specs: `${order.product.size} • ${order.product.material} • ${order.product.printing}`,
+      specs,
       quantity: order.pricing.itemQty,
       subtotal,
-      platformFee,
+      platformFee: 0,
       deliveryFee,
       totalBeforeTax,
       vat,
       nhil,
       getfund,
-      itemTotal,
+      itemTotal: total,
     },
-    totalAmount: itemTotal,
+    totalAmount: total,
     eVat: {
-      sdcId: "ES00001001",
-      receiptNumber: "1001-6Z1B-N51S",
-      internalData: "VYFZW-WZSQ-LHQY-GRNG-YE3W-SJEZ-WP",
-      receiptCounter: "ReceiptCounter3",
-      mrc: ":00:0C:29:0D:90:D0",
-      dateTime: "2026/05/12 05:03:16",
-      lineItemCount: "1",
+      sdcId: "—",
+      receiptNumber: "—",
+      internalData: "—",
+      receiptCounter: "—",
+      mrc: "—",
+      dateTime: "—",
+      lineItemCount: "—",
     },
     qrPayload: `pg-invoice:${order.number}`,
   };
@@ -185,13 +161,19 @@ const STEP_META: { title: string; detail: string; Icon: TimelineStep["Icon"] }[]
 
 /** Map the real backend lookup result onto the TrackedOrder UI shape. */
 function mapToTracked(o: OrderLookupResult): TrackedOrder {
+  const canceled = o.status === "canceled";
   const firstItem = o.items[0];
   const totalQty = o.items.reduce((n, i) => n + i.quantity, 0);
   const steps: TimelineStep[] = STEP_META.map((m, idx) => ({
     title: m.title,
     detail:
       idx === o.current_step ? m.detail : idx < o.current_step ? "Completed" : "Pending",
-    state: idx === o.current_step ? "current" : "pending",
+    state:
+      idx < o.current_step
+        ? "completed"
+        : idx === o.current_step
+          ? "current"
+          : "pending",
     Icon: m.Icon,
   }));
   return {
@@ -199,7 +181,10 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
     placedOn: o.placed_on
       ? `Placed on ${trackDateFmt.format(new Date(o.placed_on))}`
       : "",
-    status: STEP_META[o.current_step]?.title ?? "Order Received",
+    status: canceled
+      ? "Order Canceled"
+      : (STEP_META[o.current_step]?.title ?? "Order Received"),
+    canceled,
     steps,
     customer: {
       name: o.customer.name || "—",
@@ -236,25 +221,33 @@ export function TrackOrder({
   const [email, setEmail] = React.useState(initialEmail ?? "");
   const [result, setResult] = React.useState<TrackedOrder | null>(null);
   const [notFound, setNotFound] = React.useState<string | null>(null);
+  const [lookupError, setLookupError] = React.useState(false);
   const [invoiceOpen, setInvoiceOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
   const resultAnchorRef = React.useRef<HTMLDivElement | null>(null);
 
+  // Only a real, looked-up order has an invoice — never fabricate one.
   const invoiceData = React.useMemo(
-    () => buildInvoice(result ?? SAMPLE_ORDER),
+    () => (result ? buildInvoice(result) : null),
     [result],
   );
 
   const runLookup = React.useCallback(
     (orderNumber: string, emailValue: string) => {
       startTransition(async () => {
-        const found = await lookupOrder(orderNumber, emailValue);
-        if (found) {
-          setResult(mapToTracked(found));
+        const outcome = await lookupOrder(orderNumber, emailValue);
+        if (outcome.status === "found") {
+          setResult(mapToTracked(outcome.order));
           setNotFound(null);
-        } else {
+          setLookupError(false);
+        } else if (outcome.status === "not_found") {
           setResult(null);
           setNotFound(orderNumber);
+          setLookupError(false);
+        } else {
+          setResult(null);
+          setNotFound(null);
+          setLookupError(true);
         }
       });
     },
@@ -271,7 +264,7 @@ export function TrackOrder({
   // Scroll the result/not-found section into view after a successful submit.
   // Respects reduced-motion via `behavior: "smooth"` (browsers honor the pref).
   React.useEffect(() => {
-    if (!result && !notFound) return;
+    if (!result && !notFound && !lookupError) return;
     const id = window.requestAnimationFrame(() => {
       resultAnchorRef.current?.scrollIntoView({
         behavior: "smooth",
@@ -279,7 +272,7 @@ export function TrackOrder({
       });
     });
     return () => window.cancelAnimationFrame(id);
-  }, [result, notFound]);
+  }, [result, notFound, lookupError]);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -352,7 +345,9 @@ export function TrackOrder({
             <button
               type="button"
               onClick={() => setInvoiceOpen(true)}
-              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30 sm:w-auto"
+              disabled={!result}
+              title={result ? undefined : "Track an order first to view its invoice"}
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-background sm:w-auto"
             >
               <Download className="size-4" aria-hidden />
               View Invoice
@@ -373,6 +368,17 @@ export function TrackOrder({
       />
 
       <AnimatePresence mode="wait">
+        {lookupError && (
+          <motion.div
+            key="lookup-error"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
+          >
+            <LookupErrorAlert />
+          </motion.div>
+        )}
         {notFound && (
           <motion.div
             key="not-found"
@@ -404,6 +410,26 @@ export function TrackOrder({
         onClose={() => setInvoiceOpen(false)}
       />
     </div>
+  );
+}
+
+function LookupErrorAlert() {
+  return (
+    <section
+      role="alert"
+      className="flex items-start gap-3 rounded-card border-2 border-[rgba(202,53,0,0.3)] bg-[rgba(202,53,0,0.06)] p-4 sm:p-6"
+    >
+      <AlertCircle className="mt-0.5 size-5 shrink-0 text-[#ca3500]" aria-hidden />
+      <div className="flex min-w-0 flex-col gap-1">
+        <h2 className="text-lg font-semibold leading-7 tracking-tight text-[#7e2a0c]">
+          Something Went Wrong
+        </h2>
+        <p className="text-sm leading-5 text-[#ca3500]">
+          We couldn&apos;t look up your order right now. Please check your
+          connection and try again in a moment.
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -441,54 +467,77 @@ function OrderResult({ order }: { order: TrackedOrder }) {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={SPRING_SOFT}
-              className="inline-flex w-fit items-center gap-2 rounded-full border-2 border-[rgba(150,64,34,0.3)] bg-[rgba(150,64,34,0.1)] px-3 py-1.5 text-sm font-medium text-rust sm:py-2 sm:text-base"
+              className={cn(
+                "inline-flex w-fit items-center gap-2 rounded-full border-2 px-3 py-1.5 text-sm font-medium sm:py-2 sm:text-base",
+                order.canceled
+                  ? "border-[rgba(231,0,11,0.25)] bg-[rgba(231,0,11,0.06)] text-[#e7000b]"
+                  : "border-[rgba(150,64,34,0.3)] bg-[rgba(150,64,34,0.1)] text-rust",
+              )}
             >
-              <CheckCircle2 className="size-4 sm:size-5" aria-hidden />
+              {order.canceled ? (
+                <XCircle className="size-4 sm:size-5" aria-hidden />
+              ) : (
+                <CheckCircle2 className="size-4 sm:size-5" aria-hidden />
+              )}
               {order.status}
             </motion.span>
           </div>
 
-          <motion.ol
-            variants={staggerContainer}
-            initial="hidden"
-            animate="visible"
-            className="relative flex flex-col gap-6 pt-2 sm:px-6"
-          >
-            {/* Vertical connector — left edge sits at center of the 48px icon
-                (size-12). Mobile: 24px (no extra inset). Desktop: 24px + the
-                sm:px-6 inset (1.5rem). */}
-            <span
-              className="absolute left-[23px] top-6 bottom-6 w-0.5 bg-[#e2e1e0] sm:left-[calc(1.5rem+23px)]"
-              aria-hidden
-            />
-            {order.steps.map((step) => (
-              <motion.li
-                variants={staggerItem}
-                key={step.title}
-                className="relative flex items-start gap-4"
-              >
-                <span
-                  className={cn(
-                    "z-10 grid size-12 shrink-0 place-items-center rounded-full border-2",
-                    step.state === "current"
-                      ? "border-accent bg-[rgba(184,168,217,0.1)] text-accent"
-                      : "border-input bg-[#f3f4f6] text-[#99a1af]",
-                  )}
+          {order.canceled ? (
+            <div className="flex items-start gap-3 rounded-option border-2 border-[rgba(231,0,11,0.25)] bg-[rgba(231,0,11,0.06)] p-4 sm:p-5">
+              <XCircle className="mt-0.5 size-5 shrink-0 text-[#e7000b]" aria-hidden />
+              <div className="flex min-w-0 flex-col gap-1">
+                <p className="text-base font-semibold tracking-tight text-brand">
+                  This order has been canceled
+                </p>
+                <p className="text-sm leading-5 text-muted">
+                  If you were charged, your refund is on its way. Questions?
+                  Contact us and quote order {order.number}.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <motion.ol
+              variants={staggerContainer}
+              initial="hidden"
+              animate="visible"
+              className="relative flex flex-col gap-6 pt-2 sm:px-6"
+            >
+              {/* Vertical connector — left edge sits at center of the 48px icon
+                  (size-12). Mobile: 24px (no extra inset). Desktop: 24px + the
+                  sm:px-6 inset (1.5rem). */}
+              <span
+                className="absolute left-[23px] top-6 bottom-6 w-0.5 bg-[#e2e1e0] sm:left-[calc(1.5rem+23px)]"
+                aria-hidden
+              />
+              {order.steps.map((step) => (
+                <motion.li
+                  variants={staggerItem}
+                  key={step.title}
+                  className="relative flex items-start gap-4"
                 >
-                  <step.Icon className="size-6" />
-                </span>
-                <div className="flex min-w-0 flex-col gap-0.5 pt-1">
-                  <p className="text-base font-semibold tracking-tight text-brand">
-                    {step.title}
-                  </p>
-                  {step.state === "current" && (
-                    <p className="text-sm text-muted">12 May, 05:28</p>
-                  )}
-                  <p className="text-sm text-muted">{step.detail}</p>
-                </div>
-              </motion.li>
-            ))}
-          </motion.ol>
+                  <span
+                    className={cn(
+                      "z-10 grid size-12 shrink-0 place-items-center rounded-full border-2",
+                      step.state === "completed"
+                        ? "border-accent bg-accent text-white"
+                        : step.state === "current"
+                          ? "border-accent bg-[rgba(184,168,217,0.1)] text-accent"
+                          : "border-input bg-[#f3f4f6] text-[#99a1af]",
+                    )}
+                  >
+                    <step.Icon className="size-6" />
+                  </span>
+                  <div className="flex min-w-0 flex-col gap-0.5 pt-1">
+                    <p className="text-base font-semibold tracking-tight text-brand">
+                      {step.title}
+                    </p>
+                    <p className="text-sm text-muted">{step.detail}</p>
+                  </div>
+                </motion.li>
+              ))}
+            </motion.ol>
+          )}
         </div>
       </section>
 

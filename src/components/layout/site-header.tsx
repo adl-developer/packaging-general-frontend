@@ -4,6 +4,7 @@ import { PromoBar } from "./promo-bar";
 import { AccountMenu, type AccountUser } from "./account-menu";
 import { CartLink } from "./cart-link";
 import { getCustomer } from "@/lib/actions/auth";
+import { getCartLineCount } from "@/lib/actions/cart";
 
 /**
  * Global site header: brand lockup + Cart/Account, with the promo bar
@@ -14,7 +15,10 @@ import { getCustomer } from "@/lib/actions/auth";
  * the logged-in variant (name/email + My Orders/Logout) when authenticated.
  */
 export async function SiteHeader() {
-  const customer = await getCustomer();
+  const [customer, cartCount] = await Promise.all([
+    getCustomer(),
+    getCartLineCount(),
+  ]);
   const user: AccountUser | undefined = customer
     ? {
         name:
@@ -52,7 +56,7 @@ export async function SiteHeader() {
           </Link>
 
           <nav className="flex items-center gap-2">
-            <CartLink />
+            <CartLink initialCount={cartCount} />
             <AccountMenu user={user} />
           </nav>
         </div>

@@ -197,7 +197,7 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
   // Map variants → SizeOption[] (smallest first). Dimensions come from each
   // variant's length/width/height (mm); the label shows cm for readability.
   type Sized = SizeOption & { _len: number };
-  const sizes: SizeOption[] = (p.variants ?? [])
+  let sizes: SizeOption[] = (p.variants ?? [])
     .map((v): Sized | null => {
       const L = Number(v.length ?? 0);
       const W = Number(v.width ?? 0);
@@ -214,7 +214,76 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
     .sort((a, b) => a._len - b._len)
     .map(({ _len: _, ...rest }) => rest);
 
+  // Accessories (tape, bubble wrap) have a single variant with no box
+  // dimensions — fall back to dimension-less options so the detail page can
+  // still add the variant to the cart. TODO: dedicated non-carton detail view.
+  if (!sizes.length) {
+    sizes = (p.variants ?? []).map((v) => ({
+      id: v.id,
+      label: v.title ?? "Standard",
+      dimensions: "",
+    }));
+  }
+
   return { ...summary, sizes };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Cart cross-sell ("people also order") — live accessory products.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Accessory products surfaced on the cart page. Seeded by seed-ghana.ts. */
+export const CROSS_SELL_HANDLES = [
+  "packaging-tape-brown",
+  "packaging-tape-clear",
+  "bubble-wrap",
+];
+
+export interface CrossSellProduct {
+  id: string;
+  /** The single sellable variant — what addLineItem() needs. */
+  variantId: string;
+  slug: string;
+  name: string;
+  description: string;
+  pricePerUnit: number;
+  unitLabel: string;
+}
+
+/** Fetch the cross-sell accessories with live GHS prices. Returns [] when the
+ *  backend is unreachable or the accessories aren't seeded — the cart section
+ *  hides itself in that case. */
+export async function listCrossSellProducts(): Promise<CrossSellProduct[]> {
+  try {
+    const region_id = await getRegionId();
+    const { products: live } = await sdk.store.product.list({
+      region_id,
+      handle: CROSS_SELL_HANDLES,
+      fields:
+        "id,title,handle,description,metadata,*variants,variants.calculated_price",
+      limit: CROSS_SELL_HANDLES.length,
+    });
+    return live
+      .map((p): CrossSellProduct | null => {
+        const variant = p.variants?.[0];
+        if (!variant) return null;
+        const meta = (p.metadata ?? {}) as Record<string, unknown>;
+        return {
+          id: p.id,
+          variantId: variant.id,
+          slug: p.handle ?? p.id,
+          name: p.title,
+          description: p.description ?? "",
+          pricePerUnit: variant.calculated_price?.calculated_amount ?? 0,
+          unitLabel:
+            typeof meta.unit_label === "string" ? meta.unit_label : "per unit",
+        };
+      })
+      .filter((p): p is CrossSellProduct => p !== null);
+  } catch (err) {
+    console.error("[listCrossSellProducts] failed:", err);
+    return [];
+  }
 }
 
 /** ProductSummary projection of the static `products` array — the Figma

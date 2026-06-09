@@ -137,7 +137,11 @@ export function ProductCustomizer({ product }: { product: Product }) {
                   onSelect={() => setSize(s.id)}
                   title={s.label}
                   description={s.dimensions}
-                  trailing={<BoxDiagram dimensions={s.dimensions} />}
+                  trailing={
+                    s.dimensions ? (
+                      <BoxDiagram dimensions={s.dimensions} />
+                    ) : undefined
+                  }
                 />
               ))}
             </Section>

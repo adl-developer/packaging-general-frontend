@@ -1,38 +1,33 @@
 import Link from "next/link";
-import { FileText, Mailbox, Package, Truck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { SectionHeading, SectionSubtitle } from "./section-heading";
 import { Reveal } from "@/components/motion/reveal";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
 
-// Colored lucide icons (Figma mobile 452:8306) replace the earlier emoji set —
-// closer to the designed illustrations and consistent with the rest of the UI.
+// Colorful emoji icons (user preference — see shots/categories.png): richer
+// than the flat lucide set and match the playful look of the original build.
 const categories = [
   {
-    Icon: Package,
-    iconClass: "text-[#8b6f47]", // kraft brown box
+    emoji: "📦",
     title: "Shipping Cartons",
     description: "Durable single and double-wall cartons for general shipping needs",
     href: "/products?category=shipping-cartons",
   },
   {
-    Icon: Mailbox,
-    iconClass: "text-[#dc2626]", // red mailer
+    emoji: "📮",
     title: "Mailer Boxes",
     description:
       "Custom-designed boxes perfect for e-commerce and subscription brands",
     href: "/products?category=mailer-boxes",
   },
   {
-    Icon: FileText,
-    iconClass: "text-muted", // muted document
+    emoji: "📄",
     title: "Folding Cartons (FMCG)",
     description: "Retail-ready packaging for food and consumer goods",
     href: "/products?category=folding-cartons",
   },
   {
-    Icon: Truck,
-    iconClass: "text-rust", // terracotta truck
+    emoji: "🚚",
     title: "Export/Agro Boxes",
     description: "Heavy-duty packaging for agricultural exports and produce",
     href: "/products?category=export-agro-boxes",
@@ -57,7 +52,9 @@ export function ProductCategories() {
             <StaggerItem key={c.title} className="h-full">
               <Link href={c.href} className="group block h-full">
                 <Card className="flex h-full flex-col items-start gap-4 border-2 border-[rgba(165,154,135,0.3)] p-8 transition-colors group-hover:border-[rgba(61,52,40,0.4)]">
-                  <c.Icon className={`size-10 ${c.iconClass}`} aria-hidden />
+                  <span className="text-4xl leading-none" aria-hidden>
+                    {c.emoji}
+                  </span>
                   <span className="text-xl font-semibold leading-7 tracking-tight text-brand">
                     {c.title}
                   </span>
