@@ -10,7 +10,7 @@ import { AUTH_COOKIE, getAuthToken } from "@/lib/auth-token";
 /**
  * Customer authentication for the storefront.
  *
- * The Medusa customer JWT lives in an httpOnly cookie (`_medusa_jwt`). We never
+ * The Medusa customer JWT lives in an httpOnly cookie (AUTH_COOKIE). We never
  * use the SDK's in-memory token store (it leaks across SSR requests) — instead
  * we read the token from the cookie and pass it as an Authorization header on
  * each authenticated call (see authHeaders()).
@@ -21,7 +21,9 @@ import { AUTH_COOKIE, getAuthToken } from "@/lib/auth-token";
  *   login → returns the real auth JWT (persisted in the cookie)
  */
 const CART_COOKIE = "pg_cart_id";
-const AUTH_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+// Must match the backend's jwtExpiresIn ("24h" in medusa-config.ts) — a cookie
+// that outlives the JWT just produces silent 401s until it's cleared.
+const AUTH_TTL_SECONDS = 60 * 60 * 24; // 24 hours
 
 const AUTH_COOKIE_OPTS = {
   httpOnly: true as const,
@@ -32,6 +34,12 @@ const AUTH_COOKIE_OPTS = {
 };
 
 export type AuthState = { error: string | null };
+
+// Deliberately generic: confirming "this email is already registered" lets
+// anyone test which emails have accounts (enumeration). Same wording for
+// every signup-conflict path so the response can't be differentiated.
+const SIGNUP_FAILED =
+  "We couldn't create an account with these details. If you already have an account, try signing in or resetting your password.";
 
 async function setAuthToken(token: string) {
   const store = await cookies();
@@ -133,30 +141,24 @@ export async function authenticate(
       // The auth identity already exists. The ONLY case signup may continue is
       // a half-completed earlier attempt (identity created, customer record
       // never saved) — log in to check. A complete account must get the
-      // "already registered" error, never a silent sign-in.
+      // generic failure, never a silent sign-in.
       try {
         const recovered = await authClient.auth.login("customer", "emailpass", {
           email,
           password,
         });
         if (typeof recovered !== "string") {
-          return fieldError(
-            "This email is already registered — try signing in instead."
-          );
+          return fieldError(SIGNUP_FAILED);
         }
         const existing = await sdk.store.customer
           .retrieve({}, authHeaders(recovered))
           .catch(() => null);
         if (existing) {
-          return fieldError(
-            "This email is already registered — try signing in instead."
-          );
+          return fieldError(SIGNUP_FAILED);
         }
         token = recovered;
       } catch {
-        return fieldError(
-          "This email is already registered — try signing in instead."
-        );
+        return fieldError(SIGNUP_FAILED);
       }
     }
 
@@ -225,8 +227,20 @@ export async function authenticate(
 }
 
 export async function logout() {
-  // JWT auth is stateless — there's no server session to invalidate, so
-  // dropping our httpOnly cookie is the sign-out.
+  // Real revocation: the backend denylists the JWT so a stolen copy dies now
+  // instead of living until natural expiry. Best-effort — a failure (backend
+  // down, token already expired) must never block sign-out.
+  const token = await getAuthToken();
+  if (token) {
+    try {
+      await sdk.client.fetch("/store/auth/revoke", {
+        method: "POST",
+        headers: authHeaders(token),
+      });
+    } catch (err) {
+      console.error("[auth] token revocation failed:", err);
+    }
+  }
   await clearAuthToken();
   revalidatePath("/", "layout");
   redirect("/");

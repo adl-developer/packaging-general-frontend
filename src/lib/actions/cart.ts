@@ -31,7 +31,7 @@ const COOKIE_OPTS = {
 };
 
 const CART_FIELDS =
-  "id,email,currency_code,metadata,*items,*items.variant,*items.product,region,*shipping_address,*billing_address,*shipping_methods,*promotions,*payment_collection,payment_collection.payment_sessions,total,subtotal,tax_total,discount_total,shipping_total,item_total,item_subtotal,item_tax_total,completed_at";
+  "id,email,currency_code,metadata,*items,*items.variant,*items.variant.options,items.variant.options.option.title,*items.product,region,*shipping_address,*billing_address,*shipping_methods,*promotions,*payment_collection,payment_collection.payment_sessions,total,subtotal,tax_total,discount_total,shipping_total,item_total,item_subtotal,item_tax_total,completed_at";
 
 async function readCartId(): Promise<string | undefined> {
   const store = await cookies();
@@ -197,6 +197,71 @@ export async function addLineItem(
     variant_id: variantId,
     quantity,
   });
+  await writeCartId(cart.id); // sliding expiry
+  revalidatePath("/cart");
+  revalidatePath("/checkout");
+  return getCart();
+}
+
+/** Hidden service product holding the one-time printing setup fee variants
+ *  (seeded by seed-ghana.ts). */
+const PRINT_SETUP_HANDLE = "print-setup";
+
+/** Resolve the setup-fee variant for a printing option value (e.g.
+ *  "1-Color Print"). Throws when the product/variant isn't seeded — a printed
+ *  order MUST carry its setup fee, silently skipping would undercharge. */
+async function findSetupFeeVariant(printingValue: string): Promise<string> {
+  const { products } = await sdk.store.product.list({
+    handle: PRINT_SETUP_HANDLE,
+    fields: "id,*variants,*variants.options,variants.options.option.title",
+    limit: 1,
+  });
+  const variant = products[0]?.variants?.find((v) =>
+    (v.options ?? []).some(
+      (o) => o.option?.title === "Printing" && o.value === printingValue
+    )
+  );
+  if (!variant) {
+    throw new Error(
+      `Setup-fee variant for "${printingValue}" not found — has the backend been re-seeded with the enriched product model?`
+    );
+  }
+  return variant.id;
+}
+
+/** Add a fully-configured customizer item: the carton variant line plus, for
+ *  printed options, the one-time setup-fee line. The setup fee is charged
+ *  once per print type in the cart — re-adds don't duplicate or increment it.
+ *  Optional notes persist as line-item metadata (visible on the order). */
+export async function addConfiguredLineItem(input: {
+  variantId: string;
+  quantity: number;
+  /** Printing option value when the choice carries a setup fee. */
+  setupPrintingValue?: string | null;
+  notes?: string;
+}): Promise<HttpTypes.StoreCart | null> {
+  const cart = await ensureCart();
+  const notes = input.notes?.trim();
+
+  await sdk.store.cart.createLineItem(cart.id, {
+    variant_id: input.variantId,
+    quantity: input.quantity,
+    ...(notes ? { metadata: { notes } } : {}),
+  });
+
+  if (input.setupPrintingValue) {
+    const setupVariantId = await findSetupFeeVariant(input.setupPrintingValue);
+    const alreadyCharged = (cart.items ?? []).some(
+      (item) => item.variant_id === setupVariantId
+    );
+    if (!alreadyCharged) {
+      await sdk.store.cart.createLineItem(cart.id, {
+        variant_id: setupVariantId,
+        quantity: 1,
+      });
+    }
+  }
+
   await writeCartId(cart.id); // sliding expiry
   revalidatePath("/cart");
   revalidatePath("/checkout");

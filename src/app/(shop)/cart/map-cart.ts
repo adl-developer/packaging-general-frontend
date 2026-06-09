@@ -17,17 +17,42 @@ export interface CartItem {
   taxRate: number;
   quantity: number;
   productSlug?: string;
+  /** Service lines (one-time printing setup fee): fixed qty, no edit link. */
+  isService: boolean;
 }
+
+/** Spec display order for configured packaging lines. */
+const SPEC_OPTIONS = ["Size", "Material", "Printing"] as const;
 
 /** Map a Medusa cart line → the cart UI's CartItem shape. Pure + client-safe:
  *  the server page maps the initial cart, and the client re-maps the cart
- *  returned by addLineItem() after a cross-sell add. */
+ *  returned by the add-to-cart actions after a cross-sell/customizer add. */
 export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
-  const variantTitle = item.variant_title;
-  const specs: string[] = [];
-  // Accessories have a single "Roll" variant — a "Size: Roll" spec line would
-  // just be noise, so only size-like variant titles become specs.
-  if (variantTitle && variantTitle !== "Roll") specs.push(`Size: ${variantTitle}`);
+  const isService = Boolean(
+    (item.product?.metadata as Record<string, unknown> | null)?.service,
+  );
+
+  // Preferred: real variant option values (Size / Material / Printing).
+  // Accessories carry a "Unit: Roll" option — skipped as noise.
+  const byOption = new Map<string, string>();
+  for (const o of item.variant?.options ?? []) {
+    const title = o.option?.title;
+    if (title && o.value) byOption.set(title, o.value);
+  }
+
+  let specs: string[] = [];
+  if (isService) {
+    // e.g. "1-Color Print · one-time charge"
+    const printType = byOption.get("Printing") ?? item.variant_title;
+    specs = printType ? [`${printType} · one-time charge`] : ["One-time charge"];
+  } else if (byOption.size) {
+    specs = SPEC_OPTIONS.filter((key) => byOption.has(key)).map(
+      (key) => `${key}: ${byOption.get(key)}`,
+    );
+  } else if (item.variant_title && item.variant_title !== "Roll") {
+    // Fallback for lines created before variant options were fetched.
+    specs = [`Size: ${item.variant_title}`];
+  }
 
   return {
     id: item.id,
@@ -37,6 +62,7 @@ export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
     unitPrice: Number(item.unit_price ?? 0),
     taxRate: TAX_RATE,
     quantity: Number(item.quantity ?? 1),
-    productSlug: item.product_handle ?? undefined,
+    productSlug: isService ? undefined : (item.product_handle ?? undefined),
+    isService,
   };
 }

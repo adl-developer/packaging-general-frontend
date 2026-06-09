@@ -249,15 +249,24 @@ function CartLine({
           </div>
           <div className="flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted">
-                Quantity
-              </span>
-              <QtyStepper
-                qty={item.quantity}
-                onChange={(n) => onQty(item.id, n)}
-                disabled={pending}
-                label={item.name}
-              />
+              {item.isService ? (
+                // One-time service charge (printing setup) — fixed quantity.
+                <span className="text-sm text-muted">
+                  One-time fee — charged once per print type
+                </span>
+              ) : (
+                <>
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                    Quantity
+                  </span>
+                  <QtyStepper
+                    qty={item.quantity}
+                    onChange={(n) => onQty(item.id, n)}
+                    disabled={pending}
+                    label={item.name}
+                  />
+                </>
+              )}
               <div className="flex flex-col text-sm text-muted">
                 <span>Unit Price: {formatGhs(item.unitPrice)}</span>
                 <span>
@@ -389,6 +398,7 @@ export function CartClient({
         taxRate: TAX_RATE,
         quantity: 1,
         productSlug: c.slug,
+        isService: false,
       },
     ]);
     notifyCartAdd({ qty: 1 });
