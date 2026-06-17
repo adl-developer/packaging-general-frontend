@@ -23,7 +23,7 @@ import { authenticate, type AuthState } from "@/lib/actions/auth";
  */
 type Tab = "signin" | "signup";
 
-const fieldLabel = "text-sm font-medium leading-none tracking-tight text-brand";
+const fieldLabel = "text-sm font-medium leading-none text-brand";
 const fieldInput =
   "h-11 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none";
 const socialButton =
@@ -49,7 +49,7 @@ export function AuthCard({
     <div className="mx-auto flex w-full max-w-[448px] flex-col gap-8 px-4 pt-8">
       {/* Heading */}
       <div className="flex flex-col gap-2 text-center">
-        <h1 className="text-2xl font-bold leading-8 tracking-tight text-brand">
+        <h1 className="text-2xl font-bold leading-8 text-brand">
           Welcome Back
         </h1>
         <p className="text-base leading-6 text-muted">

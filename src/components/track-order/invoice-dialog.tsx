@@ -147,7 +147,7 @@ export function InvoiceDialog({
               <header className="flex flex-col items-center gap-2 text-center">
                 <h2
                   id="invoice-title"
-                  className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-brand"
+                  className="flex items-center gap-2 text-2xl font-semibold text-brand"
                 >
                   <FileText className="size-6 text-rust" aria-hidden />
                   Invoice
@@ -160,7 +160,7 @@ export function InvoiceDialog({
               {/* Company + invoice details card (rust-tinted) */}
               <section className="rounded-card border border-[rgba(150,64,34,0.2)] bg-[rgba(150,64,34,0.05)] p-6">
                 <div className="flex flex-col gap-1">
-                  <h3 className="text-lg font-semibold tracking-tight text-brand">
+                  <h3 className="text-lg font-semibold text-brand">
                     Packaging General
                   </h3>
                   <p className="text-sm text-muted">
@@ -169,7 +169,7 @@ export function InvoiceDialog({
                   <p className="text-sm text-muted">Accra, Ghana</p>
                 </div>
                 <div className="mt-6 flex flex-col gap-1 text-right">
-                  <h3 className="text-lg font-semibold tracking-tight text-brand">
+                  <h3 className="text-lg font-semibold text-brand">
                     Invoice Details
                   </h3>
                   <p className="text-sm text-muted">
@@ -182,7 +182,7 @@ export function InvoiceDialog({
               </section>
 
               <section className="flex flex-col gap-2">
-                <h3 className="text-base font-semibold tracking-tight text-brand">
+                <h3 className="text-base font-semibold text-brand">
                   Bill To
                 </h3>
                 <div className="flex flex-col gap-0 text-sm text-muted">
@@ -197,12 +197,12 @@ export function InvoiceDialog({
 
               {/* Items */}
               <section className="flex flex-col gap-4">
-                <h3 className="text-base font-semibold tracking-tight text-brand">
+                <h3 className="text-base font-semibold text-brand">
                   Items
                 </h3>
                 <div className="flex flex-col gap-3 rounded-card border border-[#c4bcb0] p-4">
                   <div className="flex flex-col gap-1">
-                    <p className="text-base font-medium tracking-tight text-brand">
+                    <p className="text-base font-medium text-brand">
                       {invoice.line.name}
                     </p>
                     <p className="text-sm text-muted">{invoice.line.specs}</p>
@@ -232,10 +232,10 @@ export function InvoiceDialog({
                     <Row label="GETFund (2.5%)" value={invoice.line.getfund} />
                     <hr className="border-[#c4bcb0]" />
                     <div className="flex items-center justify-between pt-2">
-                      <dt className="text-base font-semibold tracking-tight text-brand">
+                      <dt className="text-base font-semibold text-brand">
                         Item Total
                       </dt>
-                      <dd className="text-base font-semibold tracking-tight text-rust">
+                      <dd className="text-base font-semibold text-rust">
                         {formatGhs(invoice.line.itemTotal)}
                       </dd>
                     </div>
@@ -248,10 +248,10 @@ export function InvoiceDialog({
               {/* Total Amount card */}
               <section className="rounded-card border border-[rgba(150,64,34,0.2)] bg-[rgba(150,64,34,0.05)] p-6">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xl font-semibold tracking-tight text-brand">
+                  <p className="text-xl font-semibold text-brand">
                     Total Amount
                   </p>
-                  <p className="text-3xl font-bold tracking-tight text-rust">
+                  <p className="text-3xl font-bold text-rust">
                     {formatGhs(invoice.totalAmount)}
                   </p>
                 </div>
@@ -262,7 +262,7 @@ export function InvoiceDialog({
 
               {/* E-VAT receipt info + QR */}
               <section className="rounded-card border border-[#c4bcb0] p-6">
-                <h3 className="text-sm font-semibold tracking-tight text-brand">
+                <h3 className="text-sm font-semibold text-brand">
                   E-VAT RECEIPT INFORMATION
                 </h3>
                 <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1.5 text-xs text-muted">

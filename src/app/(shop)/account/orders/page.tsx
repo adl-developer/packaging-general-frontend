@@ -57,7 +57,7 @@ export default async function AccountOrdersPage() {
       </div>
 
       <Reveal className="flex flex-col gap-1">
-        <h1 className="text-3xl font-medium leading-9 tracking-tight text-brand">
+        <h1 className="text-3xl font-medium leading-9 text-brand">
           My Orders
         </h1>
         <p className="text-base leading-6 text-muted">

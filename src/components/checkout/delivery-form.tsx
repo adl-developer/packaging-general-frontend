@@ -75,7 +75,7 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
         className="mx-auto flex max-w-2xl flex-col gap-6 rounded-card border border-line bg-surface p-6"
       >
         <div className="flex flex-col gap-1">
-          <h1 className="text-base font-medium tracking-tight text-brand">
+          <h1 className="text-base font-medium text-brand">
             Delivery Information
           </h1>
           <p className="text-base text-muted">
@@ -84,7 +84,7 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
         </div>
 
         <fieldset className="flex flex-col gap-4">
-          <legend className="mb-2 text-lg font-medium leading-7 tracking-tight text-brand">
+          <legend className="mb-2 text-lg font-medium leading-7 text-brand">
             Contact Details
           </legend>
 

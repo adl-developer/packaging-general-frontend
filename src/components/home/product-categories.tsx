@@ -47,7 +47,7 @@ export function ProductCategories() {
           </SectionSubtitle>
         </Reveal>
 
-        <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <Stagger className="mx-auto grid max-w-4xl grid-cols-1 gap-6 sm:grid-cols-2">
           {categories.map((c) => (
             <StaggerItem key={c.title} className="h-full">
               <Link href={c.href} className="group block h-full">
@@ -55,7 +55,7 @@ export function ProductCategories() {
                   <span className="text-4xl leading-none" aria-hidden>
                     {c.emoji}
                   </span>
-                  <span className="text-xl font-semibold leading-7 tracking-tight text-brand">
+                  <span className="text-xl font-semibold leading-7 text-brand">
                     {c.title}
                   </span>
                   <span className="text-sm leading-relaxed text-muted">

@@ -287,7 +287,7 @@ export function TrackOrder({
       {/* Search card */}
       <section className={cardClass}>
         <div className="flex flex-col gap-1 p-4 sm:p-6">
-          <h1 className="flex items-center gap-2 text-base font-medium tracking-tight text-brand">
+          <h1 className="flex items-center gap-2 text-base font-medium text-brand">
             <Search className="size-5 text-rust" aria-hidden />
             Track Your Order
           </h1>
@@ -421,7 +421,7 @@ function LookupErrorAlert() {
     >
       <AlertCircle className="mt-0.5 size-5 shrink-0 text-[#ca3500]" aria-hidden />
       <div className="flex min-w-0 flex-col gap-1">
-        <h2 className="text-lg font-semibold leading-7 tracking-tight text-[#7e2a0c]">
+        <h2 className="text-lg font-semibold leading-7 text-[#7e2a0c]">
           Something Went Wrong
         </h2>
         <p className="text-sm leading-5 text-[#ca3500]">
@@ -438,7 +438,7 @@ function NotFoundAlert({ query }: { query: string }) {
     <section className="flex items-start gap-3 rounded-card border-2 border-[rgba(202,53,0,0.3)] bg-[rgba(202,53,0,0.06)] p-4 sm:p-6">
       <AlertCircle className="mt-0.5 size-5 shrink-0 text-[#ca3500]" aria-hidden />
       <div className="flex min-w-0 flex-col gap-1">
-        <h2 className="text-lg font-semibold leading-7 tracking-tight text-[#7e2a0c]">
+        <h2 className="text-lg font-semibold leading-7 text-[#7e2a0c]">
           Order Not Found
         </h2>
         <p className="break-words text-sm leading-5 text-[#ca3500]">
@@ -458,7 +458,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
         <div className="flex flex-col gap-4 p-4 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="flex flex-col gap-1">
-              <h2 className="text-base font-medium tracking-tight text-brand">
+              <h2 className="text-base font-medium text-brand">
                 Order {order.number}
               </h2>
               <p className="text-sm text-muted sm:text-base">{order.placedOn}</p>
@@ -487,7 +487,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
             <div className="flex items-start gap-3 rounded-option border-2 border-[rgba(231,0,11,0.25)] bg-[rgba(231,0,11,0.06)] p-4 sm:p-5">
               <XCircle className="mt-0.5 size-5 shrink-0 text-[#e7000b]" aria-hidden />
               <div className="flex min-w-0 flex-col gap-1">
-                <p className="text-base font-semibold tracking-tight text-brand">
+                <p className="text-base font-semibold text-brand">
                   This order has been canceled
                 </p>
                 <p className="text-sm leading-5 text-muted">
@@ -529,7 +529,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                     <step.Icon className="size-6" />
                   </span>
                   <div className="flex min-w-0 flex-col gap-0.5 pt-1">
-                    <p className="text-base font-semibold tracking-tight text-brand">
+                    <p className="text-base font-semibold text-brand">
                       {step.title}
                     </p>
                     <p className="text-sm text-muted">{step.detail}</p>
@@ -544,7 +544,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
       {/* Order details */}
       <section className={cn(cardClass, "overflow-hidden")}>
         <div className="border-b-2 border-[#e2e1e0] bg-mist px-4 py-4 sm:px-6 sm:py-5">
-          <h2 className="text-base font-medium tracking-tight text-brand">
+          <h2 className="text-base font-medium text-brand">
             Order Details
           </h2>
         </div>
@@ -577,12 +577,12 @@ function OrderResult({ order }: { order: TrackedOrder }) {
             <div className="rounded-option border border-[rgba(150,64,34,0.2)] bg-[rgba(150,64,34,0.05)] p-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <p className="break-words text-base font-medium tracking-tight text-brand">
+                  <p className="break-words text-base font-medium text-brand">
                     {order.pricing.itemName}
                   </p>
                   <p className="text-sm text-muted">{order.pricing.itemQty}</p>
                 </div>
-                <p className="text-base font-semibold tracking-tight text-brand">
+                <p className="text-base font-semibold text-brand">
                   {formatGhs(order.pricing.itemPrice)}
                 </p>
               </div>
@@ -614,7 +614,7 @@ function DetailBlock({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <h3 className="text-base font-semibold tracking-tight text-brand">{title}</h3>
+      <h3 className="text-base font-semibold text-brand">{title}</h3>
       {children}
     </div>
   );

@@ -44,9 +44,23 @@
   --radius-option: 16px;
   --radius-card: 20px;
 
-  /* Typography */
+  /* Typography — Figma type scale.
+     Tailwind's default font-sizes + line-heights already match the PG-MVP Figma
+     frames exactly (e.g. text-4xl = 36px/40px, text-3xl = 30px/36px,
+     text-6xl = 60px/60px). What Figma adds on top is a per-size letter-spacing,
+     so we encode those exact values here as `--text-<size>--letter-spacing`.
+     Result: every text utility carries the design's exact tracking with NO
+     per-element tracking classes. Values are px, read straight from Figma. */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     sans-serif;
+  --text-sm--letter-spacing: -0.15px; /* 14px — body, labels, nav */
+  --text-base--letter-spacing: -0.312px; /* 16px */
+  --text-lg--letter-spacing: -0.439px; /* 18px */
+  --text-xl--letter-spacing: -0.449px; /* 20px */
+  --text-2xl--letter-spacing: 0.07px; /* 24px — auth/section titles */
+  --text-3xl--letter-spacing: 0.396px; /* 30px — page titles */
+  --text-4xl--letter-spacing: 0.369px; /* 36px — section headings */
+  --text-6xl--letter-spacing: 0.264px; /* 60px — hero */
 
   /* Header elevation */
   --shadow-header: 0px 1px 1.5px rgba(0, 0, 0, 0.1),
@@ -79,7 +93,9 @@ body {
   background: var(--color-background);
   color: var(--color-brand);
   font-family: var(--font-sans);
-  letter-spacing: -0.011em; /* matches the Figma's slight negative tracking */
+  /* Letter-spacing is no longer set globally — it now comes per font-size from
+     the --text-<size>--letter-spacing tokens above, matching Figma exactly.
+     12px text (text-xs) intentionally has none, as in the design. */
 }
 
 /* Pointer cursor on all interactive controls. Tailwind v4 ships Preflight

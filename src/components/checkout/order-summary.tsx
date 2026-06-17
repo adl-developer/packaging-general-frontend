@@ -96,8 +96,8 @@ export function OrderSummary({
           )}
           <Divider />
           <div className="flex items-center justify-between">
-            <span className="text-lg font-semibold tracking-tight">Total</span>
-            <span className="text-lg font-semibold tracking-tight">
+            <span className="text-lg font-semibold">Total</span>
+            <span className="text-lg font-semibold">
               {formatGhs(total)}
             </span>
           </div>

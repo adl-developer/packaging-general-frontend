@@ -46,7 +46,7 @@ function EmptyCart() {
         <span className="grid size-16 place-items-center rounded-full bg-[#c4bcb0]">
           <ShoppingBag className="size-7 text-[#5b554c]" aria-hidden />
         </span>
-        <h1 className="text-2xl font-semibold tracking-tight text-brand">
+        <h1 className="text-2xl font-semibold text-brand">
           Your cart is empty
         </h1>
         <p className="text-base text-muted">
@@ -114,7 +114,7 @@ function ConfirmDialog({
             <div className="flex flex-col gap-2">
               <h2
                 id="confirm-title"
-                className="text-lg font-semibold tracking-tight text-brand"
+                className="text-lg font-semibold text-brand"
               >
                 {title}
               </h2>
@@ -215,7 +215,7 @@ function CartLine({
         <div className="flex flex-1 flex-col gap-3">
           <div className="flex items-start justify-between gap-4">
             <div className="flex flex-col gap-2">
-              <h3 className="text-lg font-semibold leading-7 tracking-tight text-brand">
+              <h3 className="text-lg font-semibold leading-7 text-brand">
                 {item.name}
               </h3>
               <div className="flex flex-col gap-1">
@@ -306,7 +306,7 @@ function CrossSellCard({
         <p className="line-clamp-2 text-sm text-muted">{item.description}</p>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div>
-            <p className="text-lg font-bold tracking-tight text-brand">
+            <p className="text-lg font-bold text-brand">
               {formatGhs(item.pricePerUnit)}
             </p>
             <p className="text-xs text-muted">{item.unitLabel}</p>
@@ -465,7 +465,7 @@ export function CartClient({
           </button>
         </div>
         <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-semibold leading-9 tracking-tight text-brand">
+          <h1 className="text-3xl font-semibold leading-9 text-brand">
             Shopping Cart
           </h1>
           <p className="text-base text-muted">
@@ -498,7 +498,7 @@ export function CartClient({
 
       {visibleCrossSell.length > 0 && (
         <div className="rounded-card border border-line bg-surface p-4 sm:p-6">
-          <h2 className="text-lg font-medium tracking-tight text-brand">
+          <h2 className="text-lg font-medium text-brand">
             People who usually order your order also order...
           </h2>
           <p className="mt-1 text-sm text-muted">
@@ -532,7 +532,7 @@ export function CartClient({
           code box. */}
       <div className="mx-auto flex w-full flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:max-w-xl sm:p-6">
         <div className="flex flex-col gap-1">
-          <h2 className="text-base font-medium tracking-tight text-brand">
+          <h2 className="text-base font-medium text-brand">
             Order Summary
           </h2>
           <p className="text-sm text-muted">
@@ -554,10 +554,10 @@ export function CartClient({
         </ul>
         <div className="flex flex-col gap-1 border-t border-line pt-3">
           <div className="flex items-center justify-between">
-            <span className="text-base font-semibold tracking-tight text-brand">
+            <span className="text-base font-semibold text-brand">
               Total
             </span>
-            <span className="text-base font-semibold tracking-tight text-brand tabular-nums">
+            <span className="text-base font-semibold text-brand tabular-nums">
               {formatGhs(total)}
             </span>
           </div>

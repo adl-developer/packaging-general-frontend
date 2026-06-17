@@ -12,7 +12,7 @@ import { requestPasswordReset, type ResetState } from "@/lib/actions/auth";
  * success state is intentionally generic ("if an account exists…") so it never
  * reveals whether the email is registered.
  */
-const fieldLabel = "text-sm font-medium leading-none tracking-tight text-brand";
+const fieldLabel = "text-sm font-medium leading-none text-brand";
 const fieldInput =
   "h-11 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none";
 
@@ -27,7 +27,7 @@ export function ForgotPasswordCard() {
   return (
     <div className="mx-auto flex w-full max-w-[448px] flex-col gap-8 px-4 pt-8">
       <div className="flex flex-col gap-2 text-center">
-        <h1 className="text-2xl font-bold leading-8 tracking-tight text-brand">
+        <h1 className="text-2xl font-bold leading-8 text-brand">
           Reset your password
         </h1>
         <p className="text-base leading-6 text-muted">

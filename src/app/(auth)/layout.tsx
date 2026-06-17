@@ -24,7 +24,7 @@ export default function AuthLayout({
               className="h-10 w-auto"
             />
             <span className="flex flex-col">
-              <span className="text-lg font-bold leading-7 tracking-tight text-brand">
+              <span className="text-lg font-bold leading-7 text-brand">
                 Packaging General
               </span>
               <span className="text-xs leading-4 text-muted">

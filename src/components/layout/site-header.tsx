@@ -45,7 +45,7 @@ export async function SiteHeader() {
               className="h-10 w-auto"
             />
             <span className="flex flex-col">
-              <span className="text-lg font-bold leading-7 tracking-tight text-brand">
+              <span className="text-lg font-bold leading-7 text-brand">
                 Packaging General
               </span>
               {/* Subtitle is desktop-only — mobile Figma hides it for space. */}

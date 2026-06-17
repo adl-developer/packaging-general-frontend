@@ -75,7 +75,7 @@ export function CompanyInfoForm({ initial }: { initial?: CompanyInfoInitial }) {
         <div className="flex items-start gap-3">
           <Building2 className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden />
           <div className="flex flex-col gap-1">
-            <h1 className="text-base font-medium tracking-tight text-brand">
+            <h1 className="text-base font-medium text-brand">
               Company Information
             </h1>
             <p className="text-base text-muted">

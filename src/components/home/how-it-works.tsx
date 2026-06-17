@@ -35,30 +35,32 @@ export function HowItWorks() {
   return (
     <section className="bg-mist">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <Reveal className="mx-auto mb-10 flex max-w-2xl flex-col items-center gap-2 text-center">
-          <SectionHeading className="text-brand">How It Works</SectionHeading>
+        <Reveal className="mx-auto mb-10 flex max-w-2xl flex-col items-center gap-3 text-center">
+          <SectionHeading className="text-[#1b1b1c]">How It Works</SectionHeading>
           <SectionSubtitle className="text-muted">
             Order custom packaging in minutes, not days — 5 easy steps
           </SectionSubtitle>
         </Reveal>
 
         <Reveal>
-          <ol className="grid grid-cols-1 gap-8 sm:grid-cols-3 lg:grid-cols-5">
+          <ol className="grid grid-cols-1 gap-6 sm:grid-cols-3 lg:grid-cols-5">
             {steps.map((step) => (
-              <li key={step.n} className="flex flex-col items-center gap-3 text-center">
-                <span className="grid size-16 place-items-center rounded-full border-2 border-[#a59a87] text-2xl font-bold text-brand">
+              <li key={step.n} className="flex flex-col items-center gap-4 text-center">
+                <span className="grid size-16 place-items-center rounded-full border-2 border-[#a59a87] bg-white text-2xl font-bold text-[#a59a87]">
                   {step.n}
                 </span>
-                <h3 className="text-lg font-semibold leading-7 tracking-tight text-brand">
-                  {step.title}
-                </h3>
-                <p className="text-sm text-muted">{step.description}</p>
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-lg font-semibold leading-7 text-[#1d1d1d]">
+                    {step.title}
+                  </h3>
+                  <p className="text-sm text-muted">{step.description}</p>
+                </div>
               </li>
             ))}
           </ol>
         </Reveal>
 
-        <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-[72px] flex flex-wrap items-center justify-center gap-4">
           <Link
             href="/products"
             className={buttonVariants({ variant: "primary", size: "lg" })}
@@ -67,7 +69,7 @@ export function HowItWorks() {
           </Link>
           <Link
             href="/track-order"
-            className={buttonVariants({ variant: "outline", size: "lg" })}
+            className={buttonVariants({ variant: "secondary", size: "lg" })}
           >
             Track Order
           </Link>

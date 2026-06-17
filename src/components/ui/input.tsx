@@ -30,7 +30,7 @@ export function Label({
 }: React.LabelHTMLAttributes<HTMLLabelElement>) {
   return (
     <label
-      className={cn("text-sm font-medium tracking-tight text-brand", className)}
+      className={cn("text-sm font-medium text-brand", className)}
       {...props}
     />
   );

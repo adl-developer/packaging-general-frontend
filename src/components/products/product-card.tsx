@@ -29,7 +29,7 @@ export function ProductCard({ product }: { product: ProductSummary }) {
 
       <div className="flex flex-1 flex-col gap-4 p-6">
         <div className="flex flex-col gap-1">
-          <h3 className="text-lg font-bold leading-7 tracking-tight text-brand">
+          <h3 className="text-lg font-bold leading-7 text-brand">
             {product.name}
           </h3>
           <p className="text-sm leading-relaxed text-muted">

@@ -150,17 +150,17 @@ export function ProductCustomizer({ product }: { product: Product }) {
 
       <div className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-medium leading-9 tracking-tight text-brand">
+          <h1 className="text-3xl font-medium leading-9 text-brand">
             {product.name}
           </h1>
-          <p className="text-lg leading-7 tracking-tight text-muted">
+          <p className="text-lg leading-7 text-muted">
             {product.description}
           </p>
         </div>
 
         <div className="overflow-hidden rounded-card border border-line bg-surface">
           <div className="border-b border-line p-6">
-            <h2 className="text-2xl font-medium tracking-tight text-brand">
+            <h2 className="text-2xl font-medium text-brand">
               Customize Product
             </h2>
             <p className="text-base text-muted">
@@ -376,7 +376,7 @@ function Section({
 }) {
   return (
     <fieldset ref={ref} className="flex flex-col gap-4">
-      <legend className="mb-4 flex items-center gap-2 text-base font-semibold leading-6 tracking-tight text-brand">
+      <legend className="mb-4 flex items-center gap-2 text-base font-semibold leading-6 text-brand">
         {title}
         {info && <Info className="size-4 text-muted" aria-hidden />}
       </legend>

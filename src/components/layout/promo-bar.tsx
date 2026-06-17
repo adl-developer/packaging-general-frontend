@@ -19,7 +19,7 @@ export async function PromoBar() {
 
   return (
     <div className="bg-accent text-accent-foreground">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-3 text-sm sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-3 text-sm font-medium sm:px-6 lg:px-8">
         <span className="inline-flex items-center gap-2">
           <Tag className="size-4 shrink-0" aria-hidden />
           <span>

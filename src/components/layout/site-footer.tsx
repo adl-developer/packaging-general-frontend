@@ -14,7 +14,7 @@ const supportLinks = [
 
 function FooterHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-sm font-semibold tracking-tight text-brand">
+    <h3 className="text-sm font-semibold text-brand">
       {children}
     </h3>
   );
@@ -78,7 +78,7 @@ export function SiteFooter() {
               Join our community
             </Link>
             <div className="mt-2 flex flex-col gap-1 border-t border-line pt-4">
-              <p className="text-sm font-semibold tracking-tight text-brand">
+              <p className="text-sm font-semibold text-brand">
                 Business Hours
               </p>
               <p className="text-xs text-muted">

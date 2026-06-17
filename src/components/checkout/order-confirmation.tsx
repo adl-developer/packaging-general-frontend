@@ -59,19 +59,19 @@ export function OrderConfirmation({
           <CheckCircle2 className="size-14 text-[#16a34a]" aria-hidden />
         </motion.span>
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold leading-9 tracking-tight text-brand">
+          <h1 className="text-3xl font-semibold leading-9 text-brand">
             Order Confirmed!
           </h1>
           <p className="text-base text-muted">
             Your order has been successfully placed
           </p>
         </div>
-        <p className="text-2xl font-semibold tracking-tight text-brand">
+        <p className="text-2xl font-semibold text-brand">
           Order #{orderNumber}
         </p>
 
         <div className="w-full rounded-option bg-line/60 p-6 text-left">
-          <h2 className="text-lg font-medium leading-7 tracking-tight text-brand">
+          <h2 className="text-lg font-medium leading-7 text-brand">
             What&apos;s Next?
           </h2>
           <motion.ul
@@ -181,7 +181,7 @@ function CreateAccountModal({
             <div className="flex flex-col gap-1">
               <h2
                 id="create-account-title"
-                className="text-xl font-semibold leading-7 tracking-tight text-brand"
+                className="text-xl font-semibold leading-7 text-brand"
               >
                 Create Your Account
               </h2>

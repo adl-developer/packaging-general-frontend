@@ -12,7 +12,7 @@ import { resetPassword, type ResetState } from "@/lib/actions/auth";
  * (passed in as props). On success the action auto-logs-in and redirects, so
  * this only ever renders the form or an error.
  */
-const fieldLabel = "text-sm font-medium leading-none tracking-tight text-brand";
+const fieldLabel = "text-sm font-medium leading-none text-brand";
 const fieldInput =
   "h-11 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none";
 
@@ -39,7 +39,7 @@ export function ResetPasswordCard({
           <ShieldAlert className="size-7" aria-hidden />
         </span>
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold leading-8 tracking-tight text-brand">
+          <h1 className="text-2xl font-bold leading-8 text-brand">
             Invalid reset link
           </h1>
           <p className="text-base leading-6 text-muted">
@@ -60,7 +60,7 @@ export function ResetPasswordCard({
   return (
     <div className="mx-auto flex w-full max-w-[448px] flex-col gap-8 px-4 pt-8">
       <div className="flex flex-col gap-2 text-center">
-        <h1 className="text-2xl font-bold leading-8 tracking-tight text-brand">
+        <h1 className="text-2xl font-bold leading-8 text-brand">
           Choose a new password
         </h1>
         <p className="text-base leading-6 text-muted">
