@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, MapPin, Navigation } from "lucide-react";
+import { ArrowLeft, CalendarClock, Loader2, MapPin, Navigation } from "lucide-react";
 import { motion } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { saveDeliveryAddress } from "@/lib/actions/checkout";
@@ -11,9 +11,15 @@ import { saveDeliveryAddress } from "@/lib/actions/checkout";
 /**
  * Checkout — Delivery step (Figma frame 424:2869). Persists the shipping +
  * billing address to the cart and auto-selects the first available shipping
- * option (currently Standard Delivery only). The map preview is decorative;
- * a real geocoder/map provider lands later. `initial` prefills from the cart /
- * the signed-in customer's saved address (see getCheckoutPrefill).
+ * option (currently Yango Scheduled). The map preview is a placeholder until
+ * we wire Google Maps Places; `Use My Current Location` already uses the
+ * browser's geolocation API to capture real lat/lng for Yango.
+ *
+ * Yango Delivery requires lat/lng on every claim — there is no geocoder on
+ * Yango's side. We persist coords onto `cart.shipping_address.metadata` so
+ * the backend's Yango provider can read them in `calculatePrice` and
+ * `createFulfillment`. Without coords Yango won't quote, and the customer
+ * sees a fallback price of 0 (admin gets the heads-up).
  */
 const labelCls = "text-sm font-medium leading-none text-brand";
 const inputCls =
@@ -25,12 +31,46 @@ export interface DeliveryInitial {
   email: string;
   address: string;
   instructions: string;
+  lat?: number | null;
+  lng?: number | null;
+}
+
+interface Coords {
+  lat: number;
+  lng: number;
 }
 
 export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
+  const [coords, setCoords] = React.useState<Coords | null>(
+    initial?.lat != null && initial?.lng != null
+      ? { lat: initial.lat, lng: initial.lng }
+      : null
+  );
+  const [coordSource, setCoordSource] = React.useState<"geolocation" | "manual" | null>(
+    coords ? "manual" : null
+  );
+  const [geoState, setGeoState] = React.useState<"idle" | "loading" | "error">("idle");
+  const [manualOpen, setManualOpen] = React.useState(false);
+
+  function locateMe() {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      setGeoState("error");
+      return;
+    }
+    setGeoState("loading");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setCoordSource("geolocation");
+        setGeoState("idle");
+      },
+      () => setGeoState("error"),
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 30_000 }
+    );
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -42,9 +82,17 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
       email: String(data.get("email") ?? "").trim(),
       address: String(data.get("address") ?? "").trim(),
       instructions: String(data.get("instructions") ?? "").trim(),
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
     };
     if (!payload.contactName || !payload.phone || !payload.email || !payload.address) {
       setError("Please fill in your contact name, phone, email and delivery address.");
+      return;
+    }
+    if (payload.lat == null || payload.lng == null) {
+      setError(
+        "Please share your delivery location — tap Use My Current Location or enter coordinates manually."
+      );
       return;
     }
     startTransition(async () => {
@@ -80,6 +128,20 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
           </h1>
           <p className="text-base text-muted">
             Where should we deliver your order?
+          </p>
+        </div>
+
+        <div
+          className="flex items-start gap-3 rounded-option border border-accent/40 bg-accent/10 px-3 py-2.5 text-sm text-brand"
+          role="status"
+        >
+          <CalendarClock className="mt-0.5 size-4 shrink-0 text-plum" aria-hidden />
+          <p className="leading-snug">
+            <span className="font-medium">Arrives in 2–3 business days.</span>{" "}
+            <span className="text-muted">
+              We schedule pickup with Yango Delivery the next business morning;
+              you can track the courier from your order page.
+            </span>
           </p>
         </div>
 
@@ -126,32 +188,94 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
 
           <button
             type="button"
-            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background text-sm font-medium text-brand transition-colors hover:bg-line/30"
+            onClick={locateMe}
+            disabled={geoState === "loading"}
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background text-sm font-medium text-brand transition-colors hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <Navigation className="size-4" aria-hidden />
-            Use My Current Location
+            {geoState === "loading" ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+            ) : (
+              <Navigation className="size-4" aria-hidden />
+            )}
+            {geoState === "loading" ? "Finding your location…" : "Use My Current Location"}
           </button>
+          {geoState === "error" && (
+            <p className="text-xs text-[#7e2a0c]">
+              Couldn&apos;t access your location. Enter coordinates manually below.
+            </p>
+          )}
 
           <div className="flex flex-col gap-2">
-            <span className={labelCls}>Location Coordinates</span>
+            <span className={labelCls}>Location Coordinates *</span>
             <div className="overflow-hidden rounded-option border border-line">
               <div className="grid h-48 place-items-center bg-gradient-to-br from-accent/20 via-mist to-plum/10">
                 <div className="flex flex-col items-center gap-1 text-center">
-                  <MapPin className="size-7 text-plum" aria-hidden />
-                  <p className="text-sm font-medium text-brand">Delivery Location</p>
-                  <p className="text-xs text-muted">Lat: 5.603700, Lng: -0.187000</p>
+                  <MapPin
+                    className={coords ? "size-7 text-plum" : "size-7 text-muted"}
+                    aria-hidden
+                  />
+                  <p className="text-sm font-medium text-brand">
+                    {coords ? "Delivery Location" : "No location set yet"}
+                  </p>
+                  <p className="text-xs text-muted">
+                    {coords
+                      ? `Lat: ${coords.lat.toFixed(6)}, Lng: ${coords.lng.toFixed(6)}${
+                          coordSource === "geolocation" ? " · from your device" : ""
+                        }`
+                      : "Use My Current Location, or enter coordinates manually."}
+                  </p>
                 </div>
               </div>
               <div className="border-t border-line bg-[#f9fafb] px-4 py-4">
                 <button
                   type="button"
+                  onClick={() => setManualOpen((v) => !v)}
                   className="mx-auto block rounded-button text-xs font-medium text-brand transition-colors hover:text-brand/70"
                 >
-                  Enter coordinates manually
+                  {manualOpen ? "Hide manual entry" : "Enter coordinates manually"}
                 </button>
               </div>
             </div>
           </div>
+
+          {manualOpen && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field id="lat" label="Latitude">
+                <input
+                  id="lat"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.000001"
+                  placeholder="5.603700"
+                  defaultValue={coords?.lat ?? ""}
+                  onChange={(e) => {
+                    const lat = Number(e.target.value);
+                    if (!Number.isFinite(lat)) return;
+                    setCoords((prev) => ({ lat, lng: prev?.lng ?? 0 }));
+                    setCoordSource("manual");
+                  }}
+                  className={inputCls}
+                />
+              </Field>
+              <Field id="lng" label="Longitude">
+                <input
+                  id="lng"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.000001"
+                  placeholder="-0.187000"
+                  defaultValue={coords?.lng ?? ""}
+                  onChange={(e) => {
+                    const lng = Number(e.target.value);
+                    if (!Number.isFinite(lng)) return;
+                    setCoords((prev) => ({ lat: prev?.lat ?? 0, lng }));
+                    setCoordSource("manual");
+                  }}
+                  className={inputCls}
+                />
+              </Field>
+            </div>
+          )}
 
           <Field id="instructions" label="Delivery Instructions / Landmarks">
             <textarea

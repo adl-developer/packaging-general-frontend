@@ -25,6 +25,10 @@ interface OrderSummaryProps {
   appliedCode?: string | null;
   /** Live discount amount from the cart (cart.discount_total). */
   discount?: number;
+  /** Shipping cost as quoted by the chosen carrier (cart.shipping_total). */
+  shipping?: number;
+  /** Name of the chosen shipping method, e.g. "Yango Delivery". */
+  shippingMethod?: string | null;
 }
 
 function Divider() {
@@ -38,6 +42,8 @@ export function OrderSummary({
   deliveryAddress,
   appliedCode,
   discount = 0,
+  shipping = 0,
+  shippingMethod,
 }: OrderSummaryProps) {
   return (
     <Card className="flex flex-col gap-6">
@@ -94,6 +100,14 @@ export function OrderSummary({
               </span>
             </div>
           )}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted">
+              Delivery{shippingMethod ? ` (${shippingMethod})` : ""}
+            </span>
+            <span className="text-brand">
+              {shipping > 0 ? formatGhs(shipping) : "Calculating…"}
+            </span>
+          </div>
           <Divider />
           <div className="flex items-center justify-between">
             <span className="text-lg font-semibold">Total</span>

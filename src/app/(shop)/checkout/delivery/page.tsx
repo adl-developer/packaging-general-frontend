@@ -21,6 +21,8 @@ export default async function DeliveryPage() {
         email: prefill.email,
         address: prefill.address,
         instructions: prefill.instructions,
+        lat: prefill.lat,
+        lng: prefill.lng,
       }}
     />
   );

@@ -56,6 +56,16 @@ export interface OrderLookupResult {
     discount_total: number;
     total: number;
   };
+  /** Carrier tracking block — present once a real fulfillment has been
+   *  created with a provider (e.g. Yango). Null for orders still in
+   *  pre-fulfillment (e.g. just paid, awaiting production). */
+  carrier?: {
+    provider_id: string | null;
+    tracking_url: string | null;
+    status_code: string | null;
+    status_label: string | null;
+    scheduled_for: string | null;
+  } | null;
 }
 
 export type OrderLookupOutcome =

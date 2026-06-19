@@ -93,6 +93,8 @@ export interface CheckoutPrefill {
   deliveryPhone: string;
   address: string;
   instructions: string;
+  lat: number | null;
+  lng: number | null;
 }
 
 /**
@@ -138,7 +140,22 @@ export async function getCheckoutPrefill(): Promise<CheckoutPrefill> {
     instructions:
       metaString(cartAddr?.metadata as Record<string, unknown> | null, "instructions") ||
       metaString(saved?.metadata as Record<string, unknown> | null, "instructions"),
+    lat: metaNumber(cartAddr?.metadata as Record<string, unknown> | null, "lat"),
+    lng: metaNumber(cartAddr?.metadata as Record<string, unknown> | null, "lng"),
   };
+}
+
+function metaNumber(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string
+): number | null {
+  const value = metadata?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 /** Persist company name, contact person, phone and email onto the cart. We
@@ -195,12 +212,25 @@ export async function saveDeliveryAddress(input: {
   email: string;
   address: string;
   instructions: string;
+  /** Captured by the delivery-form (geolocation or manual entry). REQUIRED by
+   *  Yango Delivery — without coords the Yango provider falls back to a 0 quote
+   *  and refuses to create a claim at order time. */
+  lat?: number | null;
+  lng?: number | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const id = await readCartId();
   if (!id) return { ok: false, error: "Your cart has expired. Please add an item again." };
 
   const [firstName, ...rest] = input.contactName.trim().split(/\s+/);
   const lastName = rest.join(" ") || firstName || "Customer";
+
+  const addressMetadata: Record<string, unknown> = { instructions: input.instructions };
+  if (typeof input.lat === "number" && Number.isFinite(input.lat)) {
+    addressMetadata.lat = input.lat;
+  }
+  if (typeof input.lng === "number" && Number.isFinite(input.lng)) {
+    addressMetadata.lng = input.lng;
+  }
 
   const address: HttpTypes.StoreAddAddress = {
     first_name: firstName || "Customer",
@@ -209,7 +239,7 @@ export async function saveDeliveryAddress(input: {
     address_1: input.address,
     city: "Accra",
     country_code: "gh",
-    metadata: { instructions: input.instructions },
+    metadata: addressMetadata,
   };
 
   try {
@@ -247,7 +277,7 @@ export async function saveDeliveryAddress(input: {
         address_1: input.address,
         city: "Accra",
         country_code: "gh",
-        metadata: { instructions: input.instructions },
+        metadata: addressMetadata,
       };
       const { addresses } = await sdk.store.customer.listAddress(
         {},

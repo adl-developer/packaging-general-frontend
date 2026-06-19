@@ -57,6 +57,8 @@ export default async function PaymentPage({
   const subtotal = cart.item_total ?? cart.subtotal ?? 0;
   const total = cart.total ?? 0;
   const discount = Number(cart.discount_total ?? 0);
+  const shipping = Number(cart.shipping_total ?? cart.shipping_subtotal ?? 0);
+  const shippingMethod = cart.shipping_methods?.[0]?.name ?? null;
   const appliedCode =
     (cart.promotions ?? []).map((p) => p.code).find((c) => !!c) ?? null;
   const deliveryAddress = formatAddress(cart.shipping_address);
@@ -77,6 +79,8 @@ export default async function PaymentPage({
           subtotal={subtotal}
           total={total}
           discount={discount}
+          shipping={shipping}
+          shippingMethod={shippingMethod}
           appliedCode={appliedCode}
           deliveryAddress={deliveryAddress}
         />

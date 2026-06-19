@@ -3,8 +3,10 @@
 import * as React from "react";
 import {
   AlertCircle,
+  CalendarClock,
   CheckCircle2,
   Download,
+  ExternalLink,
   Factory,
   Loader2,
   PackageCheck,
@@ -67,6 +69,14 @@ interface TrackedOrder {
     taxes: number;
     total: number;
   };
+  /** Carrier tracking info from the order's active fulfillment (Yango, etc.).
+   *  Null until the fulfillment has been created. */
+  carrier: {
+    name: string;
+    statusLabel: string | null;
+    trackingUrl: string | null;
+    scheduledFor: string | null;
+  } | null;
 }
 
 const cardClass = "rounded-card border-2 border-[#e2e1e0] bg-surface";
@@ -134,6 +144,20 @@ const trackDateFmt = new Intl.DateTimeFormat("en-GH", {
   month: "long",
   year: "numeric",
 });
+
+const scheduledFmt = new Intl.DateTimeFormat("en-GH", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+function formatScheduled(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return scheduledFmt.format(d);
+}
 
 const STEP_META: { title: string; detail: string; Icon: TimelineStep["Icon"] }[] =
   [
@@ -207,7 +231,23 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
       taxes: o.totals.tax_total,
       total: o.totals.total,
     },
+    carrier: o.carrier
+      ? {
+          name: carrierLabel(o.carrier.provider_id),
+          statusLabel: o.carrier.status_label,
+          trackingUrl: o.carrier.tracking_url,
+          scheduledFor: o.carrier.scheduled_for,
+        }
+      : null,
   };
+}
+
+/** Map Medusa fulfillment provider ids to a customer-facing carrier name. */
+function carrierLabel(providerId: string | null): string {
+  if (!providerId) return "Carrier";
+  if (providerId.startsWith("yango")) return "Yango Delivery";
+  if (providerId.startsWith("manual")) return "Store Pickup";
+  return providerId;
 }
 
 export function TrackOrder({
@@ -571,6 +611,43 @@ function OrderResult({ order }: { order: TrackedOrder }) {
 
           <DetailBlock title="Delivery Information">
             <DetailGrid rows={[["Address:", order.address]]} />
+            {order.carrier && (
+              <div className="mt-3 flex flex-col gap-3 rounded-option border border-accent/40 bg-accent/10 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Truck className="size-5 text-plum" aria-hidden />
+                  <span className="text-sm font-semibold text-brand">
+                    {order.carrier.name}
+                  </span>
+                  {order.carrier.statusLabel && (
+                    <span className="ml-auto rounded-full border border-plum/30 bg-surface px-2.5 py-0.5 text-xs font-medium text-plum">
+                      {order.carrier.statusLabel}
+                    </span>
+                  )}
+                </div>
+                {order.carrier.scheduledFor && (
+                  <div className="flex items-start gap-2 text-sm text-muted">
+                    <CalendarClock className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    <span>
+                      Scheduled pickup:{" "}
+                      <span className="font-medium text-brand">
+                        {formatScheduled(order.carrier.scheduledFor)}
+                      </span>
+                    </span>
+                  </div>
+                )}
+                {order.carrier.trackingUrl && (
+                  <a
+                    href={order.carrier.trackingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-button border border-line bg-background px-3 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+                  >
+                    <ExternalLink className="size-4" aria-hidden />
+                    Open live tracking
+                  </a>
+                )}
+              </div>
+            )}
           </DetailBlock>
 
           <DetailBlock title="Pricing Summary">
