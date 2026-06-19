@@ -3,10 +3,11 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CalendarClock, Loader2, MapPin, Navigation } from "lucide-react";
+import { ArrowLeft, CalendarClock, Loader2, Navigation } from "lucide-react";
 import { motion } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { saveDeliveryAddress } from "@/lib/actions/checkout";
+import { DeliveryMap, type MapCoordSource } from "./delivery-map";
 
 /**
  * Checkout — Delivery step (Figma frame 424:2869). Persists the shipping +
@@ -53,24 +54,72 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
     coords ? "manual" : null
   );
   const [geoState, setGeoState] = React.useState<"idle" | "loading" | "error">("idle");
+  const [geoError, setGeoError] = React.useState<string | null>(null);
   const [manualOpen, setManualOpen] = React.useState(false);
 
   function locateMe() {
     if (typeof window === "undefined" || !navigator.geolocation) {
       setGeoState("error");
+      setGeoError(
+        "Your browser doesn't support location lookup. Search for your address on the map below or enter coordinates manually."
+      );
+      return;
+    }
+    if (!window.isSecureContext) {
+      setGeoState("error");
+      setGeoError(
+        "Location only works on a secure connection. Search for your address on the map below or enter coordinates manually."
+      );
       return;
     }
     setGeoState("loading");
+    setGeoError(null);
+
+    const onSuccess = (pos: GeolocationPosition) => {
+      setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      setCoordSource("geolocation");
+      setGeoState("idle");
+      setGeoError(null);
+    };
+
+    // Staged lookup. High-accuracy (GPS) is great on phones but routinely
+    // hangs on desktops with no GPS and times out. So we try precise first
+    // with a short budget, then fall back to fast network/Wi-Fi location with
+    // a longer budget. The map lets them refine either way, so coarse coords
+    // are a fine starting point. Permission denials don't retry — they'd just
+    // fail again.
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setCoordSource("geolocation");
-        setGeoState("idle");
+      onSuccess,
+      (firstErr) => {
+        if (firstErr.code === firstErr.PERMISSION_DENIED) {
+          setGeoState("error");
+          setGeoError(geoErrorMessage(firstErr));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          onSuccess,
+          (secondErr) => {
+            setGeoState("error");
+            setGeoError(geoErrorMessage(secondErr));
+          },
+          { enableHighAccuracy: false, timeout: 20_000, maximumAge: 300_000 }
+        );
       },
-      () => setGeoState("error"),
-      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 30_000 }
+      { enableHighAccuracy: true, timeout: 8_000, maximumAge: 60_000 }
     );
   }
+
+  const handleMapChange = React.useCallback(
+    (lat: number, lng: number, source: MapCoordSource) => {
+      setCoords({ lat, lng });
+      // Treat geolocation/autocomplete/click/drag as "manual" in our metadata
+      // (the form already knows the precise source from the map; the
+      // coordSource state is only used for the UI hint string).
+      setCoordSource(source === "geolocation" ? "geolocation" : "manual");
+      setGeoError(null);
+    },
+    []
+  );
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -199,42 +248,39 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
             )}
             {geoState === "loading" ? "Finding your location…" : "Use My Current Location"}
           </button>
-          {geoState === "error" && (
-            <p className="text-xs text-[#7e2a0c]">
-              Couldn&apos;t access your location. Enter coordinates manually below.
+          {geoState === "error" && geoError && (
+            <p
+              role="alert"
+              className="rounded-button bg-[rgba(231,0,11,0.06)] px-3 py-2 text-xs text-[#7e2a0c]"
+            >
+              {geoError}
             </p>
           )}
 
           <div className="flex flex-col gap-2">
-            <span className={labelCls}>Location Coordinates *</span>
-            <div className="overflow-hidden rounded-option border border-line">
-              <div className="grid h-48 place-items-center bg-gradient-to-br from-accent/20 via-mist to-plum/10">
-                <div className="flex flex-col items-center gap-1 text-center">
-                  <MapPin
-                    className={coords ? "size-7 text-plum" : "size-7 text-muted"}
-                    aria-hidden
-                  />
-                  <p className="text-sm font-medium text-brand">
-                    {coords ? "Delivery Location" : "No location set yet"}
-                  </p>
-                  <p className="text-xs text-muted">
-                    {coords
-                      ? `Lat: ${coords.lat.toFixed(6)}, Lng: ${coords.lng.toFixed(6)}${
-                          coordSource === "geolocation" ? " · from your device" : ""
-                        }`
-                      : "Use My Current Location, or enter coordinates manually."}
-                  </p>
-                </div>
-              </div>
-              <div className="border-t border-line bg-[#f9fafb] px-4 py-4">
-                <button
-                  type="button"
-                  onClick={() => setManualOpen((v) => !v)}
-                  className="mx-auto block rounded-button text-xs font-medium text-brand transition-colors hover:text-brand/70"
-                >
-                  {manualOpen ? "Hide manual entry" : "Enter coordinates manually"}
-                </button>
-              </div>
+            <span className={labelCls}>
+              Delivery Location *{" "}
+              <span className="font-normal text-muted">
+                {coords
+                  ? coordSource === "geolocation"
+                    ? "— from your device"
+                    : "— set on map"
+                  : "— search, tap the map, or use your current location"}
+              </span>
+            </span>
+            <DeliveryMap
+              coords={coords}
+              onCoordsChange={handleMapChange}
+              initialAddress={initial?.address}
+            />
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setManualOpen((v) => !v)}
+                className="rounded-button text-xs font-medium text-brand transition-colors hover:text-brand/70"
+              >
+                {manualOpen ? "Hide manual entry" : "Enter coordinates manually"}
+              </button>
             </div>
           </div>
 
@@ -325,4 +371,18 @@ function Field({
       {children}
     </div>
   );
+}
+
+/** Turn a GeolocationPositionError into copy the customer can act on. */
+function geoErrorMessage(err: GeolocationPositionError): string {
+  switch (err.code) {
+    case err.PERMISSION_DENIED:
+      return "Location access was blocked. Allow location in your browser settings, search for your address on the map, or enter coordinates manually.";
+    case err.POSITION_UNAVAILABLE:
+      return "We couldn't find your location. Search for your address on the map below or enter coordinates manually.";
+    case err.TIMEOUT:
+      return "We couldn't pin your location automatically. Search for your address on the map below — it's usually faster.";
+    default:
+      return "Couldn't access your location. Search for your address on the map below or enter coordinates manually.";
+  }
 }
