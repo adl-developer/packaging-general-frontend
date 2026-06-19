@@ -49,18 +49,20 @@
      frames exactly (e.g. text-4xl = 36px/40px, text-3xl = 30px/36px,
      text-6xl = 60px/60px). What Figma adds on top is a per-size letter-spacing,
      so we encode those exact values here as `--text-<size>--letter-spacing`.
-     Result: every text utility carries the design's exact tracking with NO
-     per-element tracking classes. Values are px, read straight from Figma. */
+     Result: every text utility carries its tracking with NO per-element classes.
+     14–20px match Figma exactly; the heading sizes (24/30/36/60px) are
+     intentionally tightened past Figma + the display headings bolded, per client
+     preference (a tighter, heavier look). Figma values noted inline below. */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     sans-serif;
   --text-sm--letter-spacing: -0.15px; /* 14px — body, labels, nav */
   --text-base--letter-spacing: -0.312px; /* 16px */
   --text-lg--letter-spacing: -0.439px; /* 18px */
   --text-xl--letter-spacing: -0.449px; /* 20px */
-  --text-2xl--letter-spacing: 0.07px; /* 24px — auth/section titles */
-  --text-3xl--letter-spacing: 0.396px; /* 30px — page titles */
-  --text-4xl--letter-spacing: 0.369px; /* 36px — section headings */
-  --text-6xl--letter-spacing: 0.264px; /* 60px — hero */
+  --text-2xl--letter-spacing: -0.3px; /* 24px — titles (Figma +0.07, tightened) */
+  --text-3xl--letter-spacing: -0.4px; /* 30px — page titles (Figma +0.396, tightened) */
+  --text-4xl--letter-spacing: -0.5px; /* 36px — section headings (Figma +0.369, tightened) */
+  --text-6xl--letter-spacing: -0.8px; /* 60px — hero (Figma +0.264, tightened) */
 
   /* Header elevation */
   --shadow-header: 0px 1px 1.5px rgba(0, 0, 0, 0.1),

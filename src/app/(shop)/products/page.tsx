@@ -28,7 +28,7 @@ export default async function ProductsPage() {
       </div>
 
       <Reveal className="flex flex-col gap-2">
-        <h1 className="text-3xl font-medium sm:text-4xl text-brand">
+        <h1 className="text-3xl font-semibold sm:text-4xl text-brand">
           Browse Our Packaging Solutions
         </h1>
         <p className="max-w-3xl text-lg leading-7 text-muted">

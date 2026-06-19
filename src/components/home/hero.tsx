@@ -25,7 +25,7 @@ export function Hero() {
     <section className="bg-background">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <Reveal fade={false} className="mx-auto flex max-w-4xl flex-col items-center gap-6 text-center">
-          <h1 className="text-4xl font-medium text-brand sm:text-6xl">
+          <h1 className="text-4xl font-semibold text-brand sm:text-6xl">
             Quality Packaging for Africa&apos;s Growing Businesses
           </h1>
           <p className="max-w-2xl text-lg leading-7 text-muted">

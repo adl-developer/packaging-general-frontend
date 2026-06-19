@@ -150,7 +150,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
 
       <div className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-medium leading-9 text-brand">
+          <h1 className="text-3xl font-semibold leading-9 text-brand">
             {product.name}
           </h1>
           <p className="text-lg leading-7 text-muted">
@@ -160,7 +160,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
 
         <div className="overflow-hidden rounded-card border border-line bg-surface">
           <div className="border-b border-line p-6">
-            <h2 className="text-2xl font-medium text-brand">
+            <h2 className="text-2xl font-semibold text-brand">
               Customize Product
             </h2>
             <p className="text-base text-muted">
