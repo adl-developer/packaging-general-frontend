@@ -253,10 +253,15 @@ function carrierLabel(providerId: string | null): string {
 export function TrackOrder({
   initialQuery,
   initialEmail,
+  loggedInEmail,
 }: {
   initialQuery?: string;
   initialEmail?: string;
+  /** When set (signed-in customer), the email is applied automatically and the
+   *  email field is hidden — the user only enters an order number. */
+  loggedInEmail?: string;
 }) {
+  const isLoggedIn = Boolean(loggedInEmail);
   const [query, setQuery] = React.useState(initialQuery ?? "");
   const [email, setEmail] = React.useState(initialEmail ?? "");
   const [result, setResult] = React.useState<TrackedOrder | null>(null);
@@ -294,12 +299,13 @@ export function TrackOrder({
     [],
   );
 
-  // Auto-run when arriving with ?order=…&email=… (e.g. the "My Orders" link).
+  // Auto-run when arriving with ?order=… (e.g. the "My Orders" link), using the
+  // URL email if present, otherwise the signed-in customer's email.
   React.useEffect(() => {
     const o = (initialQuery ?? "").trim();
-    const e = (initialEmail ?? "").trim();
+    const e = (initialEmail ?? loggedInEmail ?? "").trim();
     if (o && e) runLookup(o, e);
-  }, [initialQuery, initialEmail, runLookup]);
+  }, [initialQuery, initialEmail, loggedInEmail, runLookup]);
 
   // Scroll the result/not-found section into view after a successful submit.
   // Respects reduced-motion via `behavior: "smooth"` (browsers honor the pref).
@@ -317,10 +323,39 @@ export function TrackOrder({
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const orderNumber = query.trim();
-    const emailValue = email.trim();
+    const emailValue = (loggedInEmail ?? email).trim();
     if (!orderNumber || !emailValue) return;
     runLookup(orderNumber, emailValue);
   }
+
+  // Shared action buttons — rendered inline with the order-number input when
+  // signed in (no email field), or on their own row when logged out.
+  const actionButtons = (
+    <>
+      <button
+        type="submit"
+        disabled={pending}
+        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust disabled:opacity-60 sm:w-auto"
+      >
+        {pending ? (
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+        ) : (
+          <Search className="size-4" aria-hidden />
+        )}
+        Track Order
+      </button>
+      <button
+        type="button"
+        onClick={() => setInvoiceOpen(true)}
+        disabled={!result}
+        title={result ? undefined : "Track an order first to view its invoice"}
+        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-background sm:w-auto"
+      >
+        <Download className="size-4" aria-hidden />
+        View Invoice
+      </button>
+    </>
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:gap-8 sm:px-6 sm:py-8 lg:px-8">
@@ -332,8 +367,9 @@ export function TrackOrder({
             Track Your Order
           </h1>
           <p className="text-sm text-muted sm:text-base">
-            Enter your order number and the email you used to view the current
-            status of your delivery
+            {isLoggedIn
+              ? "Enter your order number to view the current status of your delivery"
+              : "Enter your order number and the email you used to view the current status of your delivery"}
           </p>
         </div>
         <form
@@ -347,52 +383,51 @@ export function TrackOrder({
             >
               Order Number
             </label>
-            <input
-              id="order-number"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g., PG-2026-001"
-              className="w-full rounded-button border border-line bg-surface px-4 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 sm:py-2.5 sm:text-sm sm:leading-5"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label htmlFor="order-email" className="text-sm font-medium text-brand">
-              Email Address
-            </label>
-            <input
-              id="order-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
-              autoComplete="email"
-              className="w-full rounded-button border border-line bg-surface px-4 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 sm:py-2.5 sm:text-sm sm:leading-5"
-            />
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
-            <button
-              type="submit"
-              disabled={pending}
-              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust disabled:opacity-60 sm:w-auto"
-            >
-              {pending ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-              ) : (
-                <Search className="size-4" aria-hidden />
+            {/* Signed in: email is applied automatically (no field), so the
+                order-number input and the action buttons share one row. */}
+            <div
+              className={cn(
+                "flex flex-col gap-3",
+                isLoggedIn && "sm:flex-row sm:items-end",
               )}
-              Track Order
-            </button>
-            <button
-              type="button"
-              onClick={() => setInvoiceOpen(true)}
-              disabled={!result}
-              title={result ? undefined : "Track an order first to view its invoice"}
-              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-background sm:w-auto"
             >
-              <Download className="size-4" aria-hidden />
-              View Invoice
-            </button>
+              <input
+                id="order-number"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="e.g., PG-2026-001"
+                className={cn(
+                  "w-full rounded-button border border-line bg-surface px-4 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 sm:py-2.5 sm:text-sm sm:leading-5",
+                  isLoggedIn && "sm:flex-1",
+                )}
+              />
+              {isLoggedIn && actionButtons}
+            </div>
           </div>
+          {!isLoggedIn && (
+            <div className="flex flex-col gap-2">
+              <label
+                htmlFor="order-email"
+                className="text-sm font-medium text-brand"
+              >
+                Email Address
+              </label>
+              <input
+                id="order-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                autoComplete="email"
+                className="w-full rounded-button border border-line bg-surface px-4 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 sm:py-2.5 sm:text-sm sm:leading-5"
+              />
+            </div>
+          )}
+          {!isLoggedIn && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+              {actionButtons}
+            </div>
+          )}
           <p className="text-xs text-muted">
             You can find your order number in the confirmation email or SMS
           </p>
