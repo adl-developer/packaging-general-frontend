@@ -360,8 +360,8 @@ export function TrackOrder({
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:gap-8 sm:px-6 sm:py-8 lg:px-8">
       {/* Search card */}
-      <section className={cardClass}>
-        <div className="flex flex-col gap-1 p-4 sm:p-6">
+      <section className={cn(cardClass, "overflow-hidden")}>
+        <div className="flex flex-col gap-1 border-b-2 border-[#e2e1e0] bg-[linear-gradient(90deg,rgba(150,64,34,0.05)_0%,rgba(164,154,135,0.05)_100%)] p-4 sm:p-6">
           <h1 className="flex items-center gap-2 text-base font-medium text-brand">
             <Search className="size-5 text-rust" aria-hidden />
             Track Your Order
@@ -373,7 +373,7 @@ export function TrackOrder({
           </p>
         </div>
         <form
-          className="flex flex-col gap-3 px-4 pb-4 sm:px-6 sm:pb-6"
+          className="flex flex-col gap-3 p-4 sm:p-6"
           onSubmit={onSubmit}
         >
           <div className="flex flex-col gap-2">
@@ -529,35 +529,34 @@ function OrderResult({ order }: { order: TrackedOrder }) {
   return (
     <>
       {/* Status timeline */}
-      <section className={cardClass}>
-        <div className="flex flex-col gap-4 p-4 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <div className="flex flex-col gap-1">
-              <h2 className="text-base font-medium text-brand">
-                Order {order.number}
-              </h2>
-              <p className="text-sm text-muted sm:text-base">{order.placedOn}</p>
-            </div>
-            <motion.span
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={SPRING_SOFT}
-              className={cn(
-                "inline-flex w-fit items-center gap-2 rounded-full border-2 px-3 py-1.5 text-sm font-medium sm:py-2 sm:text-base",
-                order.canceled
-                  ? "border-[rgba(231,0,11,0.25)] bg-[rgba(231,0,11,0.06)] text-[#e7000b]"
-                  : "border-[rgba(150,64,34,0.3)] bg-[rgba(150,64,34,0.1)] text-rust",
-              )}
-            >
-              {order.canceled ? (
-                <XCircle className="size-4 sm:size-5" aria-hidden />
-              ) : (
-                <CheckCircle2 className="size-4 sm:size-5" aria-hidden />
-              )}
-              {order.status}
-            </motion.span>
+      <section className={cn(cardClass, "overflow-hidden")}>
+        <div className="flex flex-col gap-3 border-b-2 border-[#e2e1e0] bg-[linear-gradient(90deg,rgba(150,64,34,0.05)_0%,rgba(164,154,135,0.05)_100%)] p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-6">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-base font-medium text-brand">
+              Order {order.number}
+            </h2>
+            <p className="text-sm text-muted sm:text-base">{order.placedOn}</p>
           </div>
-
+          <motion.span
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={SPRING_SOFT}
+            className={cn(
+              "inline-flex w-fit items-center gap-2 rounded-full border-2 px-3 py-1.5 text-sm font-medium sm:py-2 sm:text-base",
+              order.canceled
+                ? "border-[rgba(231,0,11,0.25)] bg-[rgba(231,0,11,0.06)] text-[#e7000b]"
+                : "border-[rgba(150,64,34,0.3)] bg-[rgba(150,64,34,0.1)] text-rust",
+            )}
+          >
+            {order.canceled ? (
+              <XCircle className="size-4 sm:size-5" aria-hidden />
+            ) : (
+              <CheckCircle2 className="size-4 sm:size-5" aria-hidden />
+            )}
+            {order.status}
+          </motion.span>
+        </div>
+        <div className="p-4 sm:p-6">
           {order.canceled ? (
             <div className="flex items-start gap-3 rounded-option border-2 border-[rgba(231,0,11,0.25)] bg-[rgba(231,0,11,0.06)] p-4 sm:p-5">
               <XCircle className="mt-0.5 size-5 shrink-0 text-[#e7000b]" aria-hidden />
@@ -618,7 +617,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
 
       {/* Order details */}
       <section className={cn(cardClass, "overflow-hidden")}>
-        <div className="border-b-2 border-[#e2e1e0] bg-mist px-4 py-4 sm:px-6 sm:py-5">
+        <div className="border-b-2 border-[#e2e1e0] bg-[linear-gradient(90deg,rgba(150,64,34,0.05)_0%,rgba(164,154,135,0.05)_100%)] px-4 py-4 sm:px-6 sm:py-5">
           <h2 className="text-base font-medium text-brand">
             Order Details
           </h2>
