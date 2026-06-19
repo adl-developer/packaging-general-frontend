@@ -23,7 +23,10 @@ export async function PromoBar() {
         <span className="inline-flex items-center gap-2">
           <Tag className="size-4 shrink-0" aria-hidden />
           <span>
-            Enjoy <span className="font-semibold">{offer}</span> your order
+            Enjoy <span className="font-semibold">{offer}</span>{" "}
+            {promo.campaignName
+              ? `for all ${promo.campaignName} orders`
+              : "your order"}
           </span>
         </span>
         <span className="inline-flex items-center gap-2">

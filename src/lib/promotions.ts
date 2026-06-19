@@ -8,6 +8,8 @@ export interface ActivePromotion {
   /** Percentage (e.g. 10) or fixed GHS amount, per `valueType`. */
   value: number;
   valueType: "percentage" | "fixed";
+  /** Campaign name (e.g. "Easter") for promo-specific copy, or null. */
+  campaignName: string | null;
 }
 
 interface ActivePromotionResponse {
@@ -16,6 +18,7 @@ interface ActivePromotionResponse {
     value: number;
     value_type: string;
     target_type: string;
+    campaign_name: string | null;
   } | null;
 }
 
@@ -38,6 +41,7 @@ export async function getActivePromotion(): Promise<ActivePromotion | null> {
           code: promotion.code,
           value: Number(promotion.value ?? 0),
           valueType: promotion.value_type === "fixed" ? "fixed" : "percentage",
+          campaignName: promotion.campaign_name ?? null,
         }
       : null;
     cached = { promo, at: Date.now() };
