@@ -116,6 +116,66 @@ button:disabled,
   cursor: not-allowed;
 }
 
+/* Google Places Autocomplete dropdown. The `.pac-container` is injected onto
+   <body> by the Maps JS SDK, so it lives outside React and can't take Tailwind
+   classes — theme it here to match the warm kraft palette + radii. Used by the
+   Delivery Address field at /checkout/delivery.
+
+   NOTE: the Maps SDK injects its OWN `.pac-*` stylesheet at runtime, AFTER our
+   CSS loads. Both use single-class selectors, so Google would win on load
+   order. We prefix every rule with `body` to raise specificity (0,1,1 > 0,1,0)
+   so our theme reliably overrides Google's, and add `!important` on the few
+   props Google sets most aggressively (borders, background-image). */
+body .pac-container {
+  margin-top: 6px;
+  padding: 4px;
+  border: 1px solid var(--color-line) !important;
+  border-radius: var(--radius-option);
+  background-color: var(--color-surface);
+  box-shadow: 0 12px 32px rgba(61, 52, 40, 0.14);
+  font-family: var(--font-sans);
+  overflow: hidden;
+  /* Kill Google's default top border + drop-arrow sprite. */
+  background-image: none !important;
+}
+
+body .pac-item {
+  padding: 9px 12px;
+  border: 0 !important;
+  border-radius: var(--radius-button);
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+body .pac-item:hover,
+body .pac-item-selected,
+body .pac-item-selected:hover {
+  background-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+/* Main address text + the matched (typed) portion. */
+body .pac-item-query {
+  color: var(--color-brand);
+  font-size: 14px;
+}
+
+body .pac-matched {
+  color: var(--color-brand);
+  font-weight: 600;
+}
+
+/* Drop Google's grey location-pin sprite for a cleaner, text-first list. */
+body .pac-icon {
+  display: none;
+}
+
+/* Keep the required "powered by Google" attribution, just give it room. */
+body .pac-container::after {
+  margin: 4px 6px 2px;
+}
+
 /* Accessibility: honor the OS "reduce motion" setting for all CSS motion. */
 @media (prefers-reduced-motion: reduce) {
   *,

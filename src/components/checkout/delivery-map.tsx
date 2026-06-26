@@ -8,38 +8,47 @@ import {
   useMap,
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
-import { Loader2, MapPin, Search } from "lucide-react";
+import { MapPin } from "lucide-react";
 
 /**
- * Delivery map + Google Places autocomplete used at /checkout/delivery to
- * produce the lat/lng coordinates Yango Delivery requires.
+ * Delivery location for /checkout/delivery — produces the lat/lng coordinates
+ * Yango Delivery requires. Google Places autocomplete is bound directly onto
+ * the single "Delivery Address" input owned by `delivery-form.tsx` (passed in
+ * via `addressInputRef`), so there is ONE address field, not a separate search
+ * box. The map below is only for confirming / refining the pin.
  *
  * Performance contract (per Google's "Performance Best Practices"):
  *   • LAZY-MOUNT — we don't render the APIProvider (and don't pull the Maps JS
- *     bundle) until the map placeholder scrolls into view. The placeholder is
- *     a static gradient until then, so the page can hydrate with zero map
- *     bytes on the wire.
+ *     bundle) until the form signals `active` (the user focuses the address
+ *     field, scrolls the location section into view, or taps "Use My Current
+ *     Location"). Until then the address input is a plain text field and the
+ *     map slot is a static gradient, so the page hydrates with zero map bytes.
  *   • Official wrapper (`@vis.gl/react-google-maps`) — no raw `<script>`
- *     injection or `window.google` patching. The wrapper handles lifecycle so
- *     hot-reload and route changes don't leak Map instances.
+ *     injection or `window.google` patching.
  *   • Public APIs only — `LatLng.lat()` / `.lng()`, not internal properties.
  *
- * Wired to `delivery-form.tsx` via `onCoordsChange(lat, lng)`. Initial coords
- * (when revisiting the form) and the typed address come in via props; this
- * component never reads from or writes to the form fields directly.
+ * Coords flow back to the form via `onCoordsChange(lat, lng, source)`. We
+ * persist them onto `cart.shipping_address.metadata` so the backend's Yango
+ * provider can read them in `calculatePrice` / `createFulfillment`.
  *
  * Requires `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (restrict it to the storefront's
  * domain + Maps JavaScript / Places / Geocoding APIs).
  */
 
-export interface DeliveryMapProps {
+export interface DeliveryLocationProps {
+  /** Whether to mount Google Maps yet (lazy — set on address focus / scroll). */
+  active: boolean;
+  /** The Delivery Address input that Google Places autocomplete binds onto. */
+  addressInputRef: React.RefObject<HTMLInputElement | null>;
   /** Currently captured coords (controlled). */
   coords: { lat: number; lng: number } | null;
-  /** Called when the user drags the marker, clicks the map, or picks an
-   *  address from the autocomplete. */
+  /** Called when the user picks a suggestion, drags the marker, or clicks the
+   *  map. */
   onCoordsChange: (lat: number, lng: number, source: MapCoordSource) => void;
-  /** Optional address that, when set, syncs into the autocomplete input. */
-  initialAddress?: string;
+  /** Whether the manual lat/lng entry is expanded (label toggles accordingly). */
+  manualOpen: boolean;
+  /** Toggle the manual lat/lng entry (rendered by the form, below the map). */
+  onToggleManual: () => void;
 }
 
 export type MapCoordSource =
@@ -53,57 +62,57 @@ export type MapCoordSource =
  *  initial coords AND geolocation hasn't been resolved. */
 const ACCRA_FALLBACK = { lat: 5.5562, lng: -0.1969 };
 
-export function DeliveryMap(props: DeliveryMapProps) {
+export function DeliveryLocation({
+  active,
+  addressInputRef,
+  coords,
+  onCoordsChange,
+  manualOpen,
+  onToggleManual,
+}: DeliveryLocationProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  const placeholderRef = React.useRef<HTMLDivElement | null>(null);
-  const [shouldMount, setShouldMount] = React.useState(false);
 
-  // IntersectionObserver lazy-mount. We only pay the Maps JS cost once the
-  // user scrolls the delivery-form past the address inputs. IO is universally
-  // supported in our target browsers; if it ever isn't, the user just sees the
-  // placeholder until they scroll back into view of the form (we never block
-  // the form submit on the map mounting).
-  React.useEffect(() => {
-    const el = placeholderRef.current;
-    if (!el || shouldMount) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setShouldMount(true);
-            observer.disconnect();
-            break;
-          }
-        }
-      },
-      { rootMargin: "200px" } // start loading a viewport before it's visible
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [shouldMount]);
-
+  let mapArea: React.ReactNode;
   if (!apiKey) {
-    return (
-      <div className="overflow-hidden rounded-option border border-line bg-mist px-4 py-6 text-center text-sm text-muted">
+    mapArea = (
+      <div className="bg-mist px-4 py-6 text-center text-sm text-muted">
         <MapPin className="mx-auto mb-2 size-5 text-plum" aria-hidden />
         Map preview unavailable.{" "}
         <span className="font-medium text-brand">
           Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
         </span>{" "}
-        to enable the map.
+        to enable address search and the map.
       </div>
+    );
+  } else if (!active) {
+    mapArea = <MapPlaceholder coords={coords} />;
+  } else {
+    mapArea = (
+      <APIProvider apiKey={apiKey} libraries={["places", "geocoding"]}>
+        <AutocompleteBinder
+          inputRef={addressInputRef}
+          onPick={(lat, lng) => onCoordsChange(lat, lng, "autocomplete")}
+        />
+        <MapView coords={coords} onCoordsChange={onCoordsChange} />
+      </APIProvider>
     );
   }
 
+  // Container + footer bar mirror Figma 424:2869: 1px #c4bcb0 border, 16px
+  // radius, a #f9fafb footer strip (top border) holding a full-width centred
+  // "Enter coordinates manually" button.
   return (
-    <div ref={placeholderRef}>
-      {shouldMount ? (
-        <APIProvider apiKey={apiKey} libraries={["places", "geocoding"]}>
-          <MapShell {...props} />
-        </APIProvider>
-      ) : (
-        <MapPlaceholder coords={props.coords} />
-      )}
+    <div className="overflow-hidden rounded-option border border-line">
+      {mapArea}
+      <div className="border-t border-line bg-[#f9fafb] px-4 pb-4 pt-[17px]">
+        <button
+          type="button"
+          onClick={onToggleManual}
+          className="flex h-8 w-full items-center justify-center rounded-button text-xs font-medium text-brand transition-colors hover:bg-line/20"
+        >
+          {manualOpen ? "Hide manual entry" : "Enter coordinates manually"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -114,56 +123,47 @@ function MapPlaceholder({
   coords: { lat: number; lng: number } | null;
 }) {
   return (
-    <div className="overflow-hidden rounded-option border border-line">
-      <div className="grid h-48 place-items-center bg-gradient-to-br from-accent/20 via-mist to-plum/10">
-        <div className="flex flex-col items-center gap-1 text-center">
-          <MapPin
-            className={coords ? "size-7 text-plum" : "size-7 text-muted"}
-            aria-hidden
-          />
-          <p className="text-sm font-medium text-brand">
-            {coords ? "Delivery location set" : "Loading map…"}
-          </p>
-          <p className="text-xs text-muted">
-            {coords
-              ? `Lat: ${coords.lat.toFixed(6)}, Lng: ${coords.lng.toFixed(6)}`
-              : "Scroll down to load the interactive map."}
-          </p>
-        </div>
+    <div className="grid h-48 place-items-center bg-gradient-to-br from-accent/20 via-mist to-plum/10">
+      <div className="flex flex-col items-center gap-1 text-center">
+        <MapPin
+          className={coords ? "size-12 text-plum" : "size-12 text-muted"}
+          aria-hidden
+        />
+        <p className="text-sm font-medium text-brand">
+          {coords ? "Delivery location set" : "Delivery Location"}
+        </p>
+        <p className="text-xs text-muted">
+          {coords
+            ? `Lat: ${coords.lat.toFixed(6)}, Lng: ${coords.lng.toFixed(6)}`
+            : "Start typing your address to load the map."}
+        </p>
       </div>
     </div>
   );
 }
 
-function MapShell({ coords, onCoordsChange, initialAddress }: DeliveryMapProps) {
+function MapView({
+  coords,
+  onCoordsChange,
+}: {
+  coords: { lat: number; lng: number } | null;
+  onCoordsChange: DeliveryLocationProps["onCoordsChange"];
+}) {
   const center = coords ?? ACCRA_FALLBACK;
 
   return (
-    <div className="flex flex-col gap-3">
-      <AddressAutocomplete
-        defaultValue={initialAddress}
-        onPick={(lat, lng) => onCoordsChange(lat, lng, "autocomplete")}
-      />
-      <div className="overflow-hidden rounded-option border border-line">
-        <Map
-          mapId="pg-delivery-map"
-          style={{ width: "100%", height: "240px" }}
-          defaultCenter={center}
-          defaultZoom={coords ? 16 : 12}
-          gestureHandling="cooperative"
-          disableDefaultUI={false}
-          clickableIcons={false}
-          reuseMaps
-        >
-          <ClickToSetMarker coords={coords} onCoordsChange={onCoordsChange} />
-        </Map>
-        <div className="border-t border-line bg-[#f9fafb] px-4 py-2 text-center text-xs text-muted">
-          {coords
-            ? `Lat: ${coords.lat.toFixed(6)} · Lng: ${coords.lng.toFixed(6)} · drag the pin to refine`
-            : "Tap the map or search above to drop your delivery pin."}
-        </div>
-      </div>
-    </div>
+    <Map
+      mapId="pg-delivery-map"
+      style={{ width: "100%", height: "192px" }}
+      defaultCenter={center}
+      defaultZoom={coords ? 16 : 12}
+      gestureHandling="cooperative"
+      disableDefaultUI={false}
+      clickableIcons={false}
+      reuseMaps
+    >
+      <ClickToSetMarker coords={coords} onCoordsChange={onCoordsChange} />
+    </Map>
   );
 }
 
@@ -172,7 +172,7 @@ function ClickToSetMarker({
   onCoordsChange,
 }: {
   coords: { lat: number; lng: number } | null;
-  onCoordsChange: DeliveryMapProps["onCoordsChange"];
+  onCoordsChange: DeliveryLocationProps["onCoordsChange"];
 }) {
   const map = useMap();
 
@@ -219,16 +219,20 @@ function ClickToSetMarker({
   );
 }
 
-function AddressAutocomplete({
-  defaultValue,
+/**
+ * Binds a Google Places `Autocomplete` onto the form's Delivery Address input.
+ * Renders nothing — Google injects its own suggestions dropdown and writes the
+ * chosen address back into the input element (which the form reads via
+ * FormData). We only lift the geometry up as coords.
+ */
+function AutocompleteBinder({
+  inputRef,
   onPick,
 }: {
-  defaultValue?: string;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   onPick: (lat: number, lng: number) => void;
 }) {
   const places = useMapsLibrary("places");
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const [isReady, setIsReady] = React.useState(false);
 
   React.useEffect(() => {
     if (!places || !inputRef.current) return;
@@ -248,41 +252,11 @@ function AddressAutocomplete({
       onPick(loc.lat(), loc.lng());
     });
 
-    setIsReady(true);
-    return () => listener.remove();
-  }, [places, onPick]);
+    return () => {
+      listener.remove();
+      google.maps.event.clearInstanceListeners(autocomplete);
+    };
+  }, [places, inputRef, onPick]);
 
-  return (
-    <label className="relative block">
-      <Search
-        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
-        aria-hidden
-      />
-      <input
-        ref={inputRef}
-        type="text"
-        defaultValue={defaultValue}
-        placeholder={
-          isReady
-            ? "Search for a street, area, or landmark"
-            : "Loading address search…"
-        }
-        disabled={!isReady}
-        autoComplete="off"
-        // Stop Enter from submitting the surrounding form when a suggestion is
-        // being selected — Google fires `place_changed` first, but the form
-        // would still post if we don't preventDefault here.
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.preventDefault();
-        }}
-        className="h-9 w-full rounded-button border-2 border-input bg-surface pl-9 pr-3 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none disabled:opacity-60"
-      />
-      {!isReady && (
-        <Loader2
-          className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted"
-          aria-hidden
-        />
-      )}
-    </label>
-  );
+  return null;
 }

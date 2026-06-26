@@ -7,14 +7,15 @@ import { ArrowLeft, CalendarClock, Loader2, Navigation } from "lucide-react";
 import { motion } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { saveDeliveryAddress } from "@/lib/actions/checkout";
-import { DeliveryMap, type MapCoordSource } from "./delivery-map";
+import { DeliveryLocation, type MapCoordSource } from "./delivery-map";
 
 /**
  * Checkout — Delivery step (Figma frame 424:2869). Persists the shipping +
  * billing address to the cart and auto-selects the first available shipping
- * option (currently Yango Scheduled). The map preview is a placeholder until
- * we wire Google Maps Places; `Use My Current Location` already uses the
- * browser's geolocation API to capture real lat/lng for Yango.
+ * option (currently Yango Scheduled). There is ONE Delivery Address field:
+ * Google Places autocomplete binds onto it (see `DeliveryLocation`), so picking
+ * a suggestion fills the address text AND drops the map pin. `Use My Current
+ * Location` and the map (tap / drag) are alternative ways to set the lat/lng.
  *
  * Yango Delivery requires lat/lng on every claim — there is no geocoder on
  * Yango's side. We persist coords onto `cart.shipping_address.metadata` so
@@ -57,18 +58,47 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
   const [geoError, setGeoError] = React.useState<string | null>(null);
   const [manualOpen, setManualOpen] = React.useState(false);
 
+  // The single Delivery Address input — Google Places autocomplete binds onto
+  // this element once Maps mounts. We read its value via FormData on submit.
+  const addressRef = React.useRef<HTMLInputElement | null>(null);
+  const sectionRef = React.useRef<HTMLDivElement | null>(null);
+  // Lazy-mount Google Maps (autocomplete + map) only once the user engages the
+  // location section — keeps Maps JS off the wire until it's actually needed.
+  const [mapsActive, setMapsActive] = React.useState(false);
+  const activateMaps = React.useCallback(() => setMapsActive(true), []);
+
+  React.useEffect(() => {
+    const el = sectionRef.current;
+    if (!el || mapsActive) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setMapsActive(true);
+            observer.disconnect();
+            break;
+          }
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [mapsActive]);
+
   function locateMe() {
+    setMapsActive(true);
     if (typeof window === "undefined" || !navigator.geolocation) {
       setGeoState("error");
       setGeoError(
-        "Your browser doesn't support location lookup. Search for your address on the map below or enter coordinates manually."
+        "Your browser doesn't support location lookup. Search for your address in the field above or enter coordinates manually."
       );
       return;
     }
     if (!window.isSecureContext) {
       setGeoState("error");
       setGeoError(
-        "Location only works on a secure connection. Search for your address on the map below or enter coordinates manually."
+        "Location only works on a secure connection. Search for your address in the field above or enter coordinates manually."
       );
       return;
     }
@@ -140,7 +170,7 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
     }
     if (payload.lat == null || payload.lng == null) {
       setError(
-        "Please share your delivery location — tap Use My Current Location or enter coordinates manually."
+        "Please pick your delivery address from the suggestions, tap Use My Current Location, or set the pin on the map."
       );
       return;
     }
@@ -218,21 +248,29 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
         <div className="flex flex-col gap-4">
           <Field id="address" label="Delivery Address *">
             <input
+              ref={addressRef}
               id="address"
               name="address"
               type="text"
-              autoComplete="street-address"
+              // Google Places writes the chosen address back here; turn off
+              // the browser's native autofill so it doesn't fight the dropdown.
+              autoComplete="off"
               placeholder="Enter your street address, area, or landmark"
               defaultValue={initial?.address}
+              onFocus={activateMaps}
+              onKeyDown={(e) => {
+                // Don't let Enter submit the form while picking a suggestion.
+                if (e.key === "Enter") e.preventDefault();
+              }}
               className={inputCls}
               required
             />
           </Field>
 
           <div className="flex items-center gap-3">
-            <span className="h-px flex-1 bg-line" aria-hidden />
+            <span className="h-px flex-1 bg-input" aria-hidden />
             <span className="text-sm text-muted">or</span>
-            <span className="h-px flex-1 bg-line" aria-hidden />
+            <span className="h-px flex-1 bg-input" aria-hidden />
           </div>
 
           <button
@@ -257,31 +295,16 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
             </p>
           )}
 
-          <div className="flex flex-col gap-2">
-            <span className={labelCls}>
-              Delivery Location *{" "}
-              <span className="font-normal text-muted">
-                {coords
-                  ? coordSource === "geolocation"
-                    ? "— from your device"
-                    : "— set on map"
-                  : "— search, tap the map, or use your current location"}
-              </span>
-            </span>
-            <DeliveryMap
+          <div ref={sectionRef} className="flex flex-col gap-2">
+            <span className={labelCls}>Location Coordinates</span>
+            <DeliveryLocation
+              active={mapsActive}
+              addressInputRef={addressRef}
               coords={coords}
               onCoordsChange={handleMapChange}
-              initialAddress={initial?.address}
+              manualOpen={manualOpen}
+              onToggleManual={() => setManualOpen((v) => !v)}
             />
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setManualOpen((v) => !v)}
-                className="rounded-button text-xs font-medium text-brand transition-colors hover:text-brand/70"
-              >
-                {manualOpen ? "Hide manual entry" : "Enter coordinates manually"}
-              </button>
-            </div>
           </div>
 
           {manualOpen && (
@@ -377,12 +400,12 @@ function Field({
 function geoErrorMessage(err: GeolocationPositionError): string {
   switch (err.code) {
     case err.PERMISSION_DENIED:
-      return "Location access was blocked. Allow location in your browser settings, search for your address on the map, or enter coordinates manually.";
+      return "Location access was blocked. Allow location in your browser settings, search for your address in the field above, or enter coordinates manually.";
     case err.POSITION_UNAVAILABLE:
-      return "We couldn't find your location. Search for your address on the map below or enter coordinates manually.";
+      return "We couldn't find your location. Search for your address in the field above or enter coordinates manually.";
     case err.TIMEOUT:
-      return "We couldn't pin your location automatically. Search for your address on the map below — it's usually faster.";
+      return "We couldn't pin your location automatically. Search for your address in the field above — it's usually faster.";
     default:
-      return "Couldn't access your location. Search for your address on the map below or enter coordinates manually.";
+      return "Couldn't access your location. Search for your address in the field above or enter coordinates manually.";
   }
 }

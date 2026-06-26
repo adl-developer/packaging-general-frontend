@@ -74,6 +74,29 @@ export async function getCart(): Promise<HttpTypes.StoreCart | null> {
       await clearCartId();
       return null;
     }
+    // Self-heal stale line items. A cart can outlive its products — e.g. a
+    // re-seed (seed-ghana.ts deletes/recreates products on a model bump) removes
+    // the variants an existing cart still references. `cart.retrieve` happily
+    // returns such lines (with `variant: null`), but the next `cart.update`
+    // (saveContactInfo, promo, address…) triggers Medusa's variant re-validation
+    // and 400s ("Variants … do not exist"), dead-ending checkout with no escape.
+    // Drop the orphaned lines so the cart stays usable.
+    const staleItems = (cart.items ?? []).filter(
+      (item) => item.variant_id && !item.variant
+    );
+    if (staleItems.length) {
+      for (const item of staleItems) {
+        try {
+          await sdk.store.cart.deleteLineItem(cart.id, item.id);
+        } catch (err) {
+          console.error("[cart] failed to prune stale line item:", err);
+        }
+      }
+      const { cart: refreshed } = await sdk.store.cart.retrieve(id, {
+        fields: CART_FIELDS,
+      });
+      return refreshed;
+    }
     return cart;
   } catch (err) {
     console.error("[cart] retrieve failed; clearing cookie:", err);
