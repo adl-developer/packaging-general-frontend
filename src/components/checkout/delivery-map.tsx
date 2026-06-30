@@ -49,6 +49,12 @@ export interface DeliveryLocationProps {
   manualOpen: boolean;
   /** Toggle the manual lat/lng entry (rendered by the form, below the map). */
   onToggleManual: () => void;
+  /** Bumped (with the coords to resolve) whenever a non-autocomplete source
+   *  changes the pin — drag, click, "Use My Current Location", or manual
+   *  lat/lng entry. Triggers a reverse-geocode that writes the resolved
+   *  address back into `addressInputRef` so the field always reflects the
+   *  pin, the same way Places Autocomplete already does. */
+  geocodeRequest: { lat: number; lng: number; nonce: number } | null;
 }
 
 export type MapCoordSource =
@@ -69,6 +75,7 @@ export function DeliveryLocation({
   onCoordsChange,
   manualOpen,
   onToggleManual,
+  geocodeRequest,
 }: DeliveryLocationProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -93,6 +100,7 @@ export function DeliveryLocation({
           inputRef={addressInputRef}
           onPick={(lat, lng) => onCoordsChange(lat, lng, "autocomplete")}
         />
+        <ReverseGeocoder request={geocodeRequest} inputRef={addressInputRef} />
         <MapView coords={coords} onCoordsChange={onCoordsChange} />
       </APIProvider>
     );
@@ -257,6 +265,49 @@ function AutocompleteBinder({
       google.maps.event.clearInstanceListeners(autocomplete);
     };
   }, [places, inputRef, onPick]);
+
+  return null;
+}
+
+/**
+ * Reverse-geocodes `request.{lat,lng}` and writes the resolved address
+ * straight into `inputRef` (same direct-DOM-write pattern as
+ * `AutocompleteBinder`), so dragging the pin, tapping the map, using "Use My
+ * Current Location", or typing manual lat/lng always reflects back into the
+ * Delivery Address field. Skipped for the "autocomplete" source — Google's
+ * widget already writes the field itself there. Debounced so rapid clicks /
+ * keystrokes on the manual lat/lng fields collapse into one Geocoding call.
+ */
+function ReverseGeocoder({
+  request,
+  inputRef,
+}: {
+  request: { lat: number; lng: number; nonce: number } | null;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const geocodingLib = useMapsLibrary("geocoding");
+  const geocoderRef = React.useRef<google.maps.Geocoder | null>(null);
+
+  React.useEffect(() => {
+    if (!geocodingLib || !request) return;
+
+    const timer = window.setTimeout(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      if (!geocoderRef.current) {
+        geocoderRef.current = new geocodingLib.Geocoder();
+      }
+      geocoderRef.current.geocode(
+        { location: { lat: request.lat, lng: request.lng } },
+        (results, status) => {
+          if (status !== "OK" || !results?.[0]) return;
+          input.value = results[0].formatted_address;
+        }
+      );
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [geocodingLib, request, inputRef]);
 
   return null;
 }

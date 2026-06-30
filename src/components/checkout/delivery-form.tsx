@@ -58,6 +58,19 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
   const [geoError, setGeoError] = React.useState<string | null>(null);
   const [manualOpen, setManualOpen] = React.useState(false);
 
+  // Bumped (with coords) whenever the pin moves via something other than
+  // Places Autocomplete — drag, click, "Use My Current Location", or manual
+  // lat/lng entry — so `DeliveryLocation` reverse-geocodes and writes the
+  // resolved address back into the Delivery Address field.
+  const [geocodeRequest, setGeocodeRequest] = React.useState<
+    { lat: number; lng: number; nonce: number } | null
+  >(null);
+  const geocodeNonceRef = React.useRef(0);
+  const requestGeocode = React.useCallback((lat: number, lng: number) => {
+    geocodeNonceRef.current += 1;
+    setGeocodeRequest({ lat, lng, nonce: geocodeNonceRef.current });
+  }, []);
+
   // The single Delivery Address input — Google Places autocomplete binds onto
   // this element once Maps mounts. We read its value via FormData on submit.
   const addressRef = React.useRef<HTMLInputElement | null>(null);
@@ -106,10 +119,12 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
     setGeoError(null);
 
     const onSuccess = (pos: GeolocationPosition) => {
-      setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      const { latitude: lat, longitude: lng } = pos.coords;
+      setCoords({ lat, lng });
       setCoordSource("geolocation");
       setGeoState("idle");
       setGeoError(null);
+      requestGeocode(lat, lng);
     };
 
     // Staged lookup. High-accuracy (GPS) is great on phones but routinely
@@ -147,8 +162,11 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
       // coordSource state is only used for the UI hint string).
       setCoordSource(source === "geolocation" ? "geolocation" : "manual");
       setGeoError(null);
+      // Places Autocomplete already writes the address itself; every other
+      // source (drag/click/geolocation) needs a reverse-geocode.
+      if (source !== "autocomplete") requestGeocode(lat, lng);
     },
-    []
+    [requestGeocode]
   );
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -303,7 +321,11 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
               coords={coords}
               onCoordsChange={handleMapChange}
               manualOpen={manualOpen}
-              onToggleManual={() => setManualOpen((v) => !v)}
+              onToggleManual={() => {
+                setManualOpen((v) => !v);
+                activateMaps();
+              }}
+              geocodeRequest={geocodeRequest}
             />
           </div>
 
@@ -320,8 +342,10 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
                   onChange={(e) => {
                     const lat = Number(e.target.value);
                     if (!Number.isFinite(lat)) return;
-                    setCoords((prev) => ({ lat, lng: prev?.lng ?? 0 }));
+                    const next = { lat, lng: coords?.lng ?? 0 };
+                    setCoords(next);
                     setCoordSource("manual");
+                    requestGeocode(next.lat, next.lng);
                   }}
                   className={inputCls}
                 />
@@ -337,8 +361,10 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
                   onChange={(e) => {
                     const lng = Number(e.target.value);
                     if (!Number.isFinite(lng)) return;
-                    setCoords((prev) => ({ lat: prev?.lat ?? 0, lng }));
+                    const next = { lat: coords?.lat ?? 0, lng };
+                    setCoords(next);
                     setCoordSource("manual");
+                    requestGeocode(next.lat, next.lng);
                   }}
                   className={inputCls}
                 />
