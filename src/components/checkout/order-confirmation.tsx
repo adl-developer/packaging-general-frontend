@@ -12,31 +12,45 @@ import {
   staggerContainer,
   staggerItem,
 } from "@/lib/motion";
+import { formatGhs } from "@/lib/format";
+import { updateNotificationPreferences } from "@/lib/actions/orders";
 
 /**
- * Order Confirmed + Create-Your-Account modal (Figma frames 424:3548 confirmed
- * page + dialog, 424:3549 "Passwords don't match" error state).
+ * Payment Successful confirmation page + Create-Your-Account modal (Figma
+ * frame 2245:991 "Get WhatsApp/SMS/Email Notifications", dialog frames
+ * 424:3548/424:3549).
  *
- * The confirmation page shows a success state + "What's Next?" checklist. The
- * create-account dialog (open by default, dismissible) pre-fills the order's
- * company/contact/email and asks for a password + confirmation, linking the
- * order to the new account.
+ * Shows the success state, real order total/payment/delivery pulled from the
+ * order (omitted when the guest order.retrieve call can't read them), a
+ * "What's Next?" checklist, and the notification-channel preference toggles
+ * (persisted server-side onto order.metadata). The create-account dialog
+ * (open by default, dismissible) pre-fills the order's company/contact/email
+ * and asks for a password + confirmation, linking the order to the new
+ * account.
  *
- * TODO(medusa): take the real order number + details; wire Create Account to the
- * customer-create API and link the order.
+ * TODO(medusa): wire Create Account to the customer-create API and link the
+ * order.
  */
 const WHATS_NEXT = [
-  "You'll receive an email confirmation shortly",
-  "We'll start processing your order within 24 hours",
-  "Track your order status in your dashboard",
-  "Estimated delivery: 5-7 business days",
+  "Our team will contact you within 24 hours if needed",
+  'Track your order progress in "Track order" or "My Orders"',
 ];
+
+/** Only Paystack is integrated today — it settles Ghanaian cards under one
+ *  provider id, so this is a static label rather than a derived one. */
+function paymentMethodLabel(providerId?: string): string | null {
+  if (!providerId) return null;
+  return providerId.startsWith("pp_paystack") ? "Card Payment" : null;
+}
 
 interface OrderConfirmationProps {
   orderNumber: string;
   email?: string;
   company?: string;
   contactPerson?: string;
+  total?: number;
+  paymentProviderId?: string;
+  deliveryOption?: string;
 }
 
 export function OrderConfirmation({
@@ -44,47 +58,65 @@ export function OrderConfirmation({
   email,
   company,
   contactPerson,
+  total,
+  paymentProviderId,
+  deliveryOption,
 }: OrderConfirmationProps) {
   const [showModal, setShowModal] = React.useState(true);
+  const paymentMethod = paymentMethodLabel(paymentProviderId);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-2xl flex-col items-center gap-6 rounded-card border border-line bg-surface p-8 text-center">
+      <div className="mx-auto flex max-w-2xl flex-col items-center gap-8 rounded-card border-2 border-[#b9f8cf] bg-surface pb-6 pt-12 px-6 text-center">
         <motion.span
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={SPRING_SOFT}
-          className="grid size-28 place-items-center rounded-full bg-[#dcfce7]"
+          className="grid place-items-center rounded-full bg-[#dcfce7] p-8"
         >
-          <CheckCircle2 className="size-14 text-[#16a34a]" aria-hidden />
+          <CheckCircle2 className="size-20 text-[#16a34a]" aria-hidden />
         </motion.span>
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold leading-9 text-brand">
-            Order Confirmed!
+
+        <div className="flex flex-col gap-3">
+          <h1 className="text-3xl font-bold leading-9 text-brand">
+            Payment Successful!
           </h1>
-          <p className="text-base text-muted">
-            Your order has been successfully placed
+          <p className="text-lg text-muted">
+            Your order has been confirmed and is being processed
           </p>
         </div>
-        <p className="text-2xl font-semibold text-brand">
-          Order #{orderNumber}
-        </p>
 
-        <div className="w-full rounded-option bg-line/60 p-6 text-left">
-          <h2 className="text-lg font-medium leading-7 text-brand">
+        <div className="flex w-full max-w-[448px] flex-col gap-4 rounded-option border border-[#e5e7eb] bg-[#f9fafb] p-[33px] text-left">
+          <SummaryRow label="Order Number:" value={orderNumber} valueClassName="font-bold text-rust" />
+          {(total != null || paymentMethod || deliveryOption) && (
+            <div className="h-px w-full bg-line" aria-hidden />
+          )}
+          {total != null && (
+            <SummaryRow label="Order Total:" value={formatGhs(total)} valueClassName="text-lg font-bold text-brand" />
+          )}
+          {paymentMethod && (
+            <SummaryRow label="Payment Method:" value={paymentMethod} valueClassName="font-medium text-brand" />
+          )}
+          {deliveryOption && (
+            <SummaryRow label="Delivery Option:" value={deliveryOption} valueClassName="font-medium text-brand" />
+          )}
+        </div>
+
+        <div className="w-full max-w-[448px] rounded-option border border-line bg-line/30 p-[25px] text-left">
+          <h2 className="text-base font-semibold leading-6 text-brand">
             What&apos;s Next?
           </h2>
           <motion.ul
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
-            className="mt-4 flex flex-col gap-2"
+            className="mt-3 flex flex-col gap-2"
           >
             {WHATS_NEXT.map((item) => (
               <motion.li
                 variants={staggerItem}
                 key={item}
-                className="flex items-start gap-2 text-sm text-muted"
+                className="flex items-start gap-2 text-base leading-6 text-muted"
               >
                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-rust" aria-hidden />
                 {item}
@@ -93,18 +125,20 @@ export function OrderConfirmation({
           </motion.ul>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Link
-            href="/products"
-            className="inline-flex h-10 items-center justify-center rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30"
-          >
-            Continue Shopping
-          </Link>
+        <NotificationPreferences orderNumber={orderNumber} email={email} />
+
+        <div className="flex w-full max-w-[448px] gap-4">
           <Link
             href="/track-order"
-            className="inline-flex h-10 items-center justify-center rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
+            className="inline-flex h-10 flex-1 items-center justify-center rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
           >
-            Track Order
+            Track My Order
+          </Link>
+          <Link
+            href="/products"
+            className="inline-flex h-10 flex-1 items-center justify-center rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+          >
+            Continue Shopping
           </Link>
         </div>
       </div>
@@ -121,6 +155,81 @@ export function OrderConfirmation({
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-base text-muted">{label}</span>
+      <span className={cn("text-base text-brand", valueClassName)}>{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Email / WhatsApp-SMS order-update opt-in. Persists to `order.metadata` via
+ * the guest-safe order-lookup route (order number + email as the shared
+ * secret — no auth token needed right after checkout). Only interactive when
+ * `email` was resolvable from the order; otherwise renders as a read-only
+ * (checked) preview since there's nothing to persist against.
+ */
+function NotificationPreferences({
+  orderNumber,
+  email,
+}: {
+  orderNumber: string;
+  email?: string;
+}) {
+  const [notifyEmail, setNotifyEmail] = React.useState(true);
+  const [notifySms, setNotifySms] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function toggle(next: { notifyEmail: boolean; notifySms: boolean }) {
+    setNotifyEmail(next.notifyEmail);
+    setNotifySms(next.notifySms);
+    setError(null);
+    if (!email) return;
+    const result = await updateNotificationPreferences(orderNumber, email, next);
+    if (!result.ok) setError(result.error);
+  }
+
+  return (
+    <div className="w-full max-w-[448px] rounded-option border border-line bg-white p-[25px] text-left">
+      <h2 className="text-base font-semibold leading-6 text-brand">
+        Order Notifications
+      </h2>
+      <p className="mt-4 text-sm text-muted">
+        Choose how you&apos;d like to receive updates about your order:
+      </p>
+      <label className="mt-4 flex items-center gap-3 text-sm font-medium text-brand">
+        <input
+          type="checkbox"
+          checked={notifyEmail}
+          onChange={(e) => toggle({ notifyEmail: e.target.checked, notifySms })}
+          className="size-4 rounded-[4px] border-line text-brand focus-visible:outline-none"
+        />
+        Get email notifications about my order
+      </label>
+      <label className="mt-4 flex items-center gap-3 text-sm font-medium text-brand">
+        <input
+          type="checkbox"
+          checked={notifySms}
+          onChange={(e) => toggle({ notifyEmail, notifySms: e.target.checked })}
+          className="size-4 rounded-[4px] border-line text-brand focus-visible:outline-none"
+        />
+        Get WhatsApp/SMS notifications about my order
+      </label>
+      {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
     </div>
   );
 }

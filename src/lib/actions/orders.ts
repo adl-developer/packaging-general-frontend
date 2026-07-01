@@ -142,6 +142,45 @@ export async function emailInvoice(
   }
 }
 
+/**
+ * Persist the customer's order-update channel preference (email / WhatsApp-SMS)
+ * onto `order.metadata` via the guest-safe /store/order-lookup/notification-
+ * preferences route — same shared-secret (order number + email) rule as
+ * `lookupOrder`/`emailInvoice`, so no auth token is required right after
+ * checkout.
+ */
+export async function updateNotificationPreferences(
+  orderNumber: string,
+  email: string,
+  prefs: { notifyEmail: boolean; notifySms: boolean }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await sdk.client.fetch("/store/order-lookup/notification-preferences", {
+      method: "POST",
+      body: {
+        order_number: orderNumber,
+        email,
+        notify_email: prefs.notifyEmail,
+        notify_sms: prefs.notifySms,
+      },
+    });
+    return { ok: true };
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status === 404 || status === 400) {
+      return {
+        ok: false,
+        error: "We couldn't match that order to save your preference.",
+      };
+    }
+    console.error("[orders] updateNotificationPreferences failed:", err);
+    return {
+      ok: false,
+      error: "We couldn't save your notification preference. Please try again.",
+    };
+  }
+}
+
 /** A single order owned by the signed-in customer, or null. */
 export async function getMyOrder(
   id: string
