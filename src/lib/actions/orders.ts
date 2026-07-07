@@ -45,9 +45,15 @@ export interface OrderLookupResult {
   delivery_instructions: string;
   items: {
     title: string;
+    variant_title?: string | null;
     quantity: number;
     unit_price: number;
     total: number;
+    /** Variant option values keyed by option title (Size / Material / Printing). */
+    options?: Record<string, string>;
+    notes?: string | null;
+    /** One-time fee lines (printing setup) — not the ordered product. */
+    is_service?: boolean;
   }[];
   totals: {
     item_total: number;

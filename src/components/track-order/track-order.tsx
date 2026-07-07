@@ -186,8 +186,15 @@ const STEP_META: { title: string; detail: string; Icon: TimelineStep["Icon"] }[]
 /** Map the real backend lookup result onto the TrackedOrder UI shape. */
 function mapToTracked(o: OrderLookupResult): TrackedOrder {
   const canceled = o.status === "canceled";
-  const firstItem = o.items[0];
-  const totalQty = o.items.reduce((n, i) => n + i.quantity, 0);
+  // Service lines (printing setup fee) are charges, not products — the product
+  // card and quantities describe the real goods. Fall back to all items for
+  // resilience if the flag is ever absent.
+  const goods = o.items.filter((i) => !i.is_service);
+  const displayItems = goods.length ? goods : o.items;
+  const mainItem = displayItems[0];
+  const extraCount = displayItems.length - 1;
+  const opts = mainItem?.options ?? {};
+  const totalQty = displayItems.reduce((n, i) => n + i.quantity, 0);
   const steps: TimelineStep[] = STEP_META.map((m, idx) => ({
     title: m.title,
     detail:
@@ -216,15 +223,19 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
       email: o.customer.email,
     },
     product: {
-      name: firstItem?.title ?? "Your order",
-      size: o.items.length > 1 ? `${o.items.length} products` : "—",
-      material: "—",
-      printing: "—",
+      name:
+        (mainItem?.title ?? "Your order") +
+        (extraCount > 0 ? ` +${extraCount} more` : ""),
+      size: opts["Size"] ?? mainItem?.variant_title ?? "—",
+      material: opts["Material"] ?? "—",
+      printing: opts["Printing"] ?? "—",
       quantity: `${totalQty} ${totalQty === 1 ? "unit" : "units"}`,
     },
     address: o.address || "—",
     pricing: {
-      itemName: firstItem?.title ?? "Order",
+      itemName:
+        (mainItem?.title ?? "Order") +
+        (extraCount > 0 ? ` +${extraCount} more` : ""),
       itemQty: `${totalQty} ${totalQty === 1 ? "unit" : "units"}`,
       itemPrice: o.totals.item_total,
       fees: o.totals.shipping_total,

@@ -6,13 +6,18 @@ import * as React from "react";
  * Cart pulse bus — a CustomEvent channel that keeps the header cart badge in
  * sync with the rest of the app.
  *
+ * The badge counts cart LINES (distinct items), never unit quantities — a
+ * single line of 50 cartons shows "1", matching the /cart page.
+ *
  * Two events:
- *  - "cart:add"  → increment by qty (used when we don't know the new total,
- *                  e.g. cross-sell adds).
- *  - "cart:set"  → set the count absolutely (preferred — fired by the /cart
- *                  page after remove/edit/empty and by the customizer with
- *                  the cart returned from addLineItem, so the badge mirrors
- *                  the real Medusa cart line-item count).
+ *  - "cart:add"  → increment by `lines` NEW CART LINES (default 1; used for
+ *                  optimistic adds when we don't know the new total, e.g.
+ *                  cross-sell). Pass lines: 0 to only pulse the icon + toast
+ *                  when an absolute cart:set was already fired.
+ *  - "cart:set"  → set the line count absolutely (preferred — fired by the
+ *                  /cart page after remove/edit/empty and by the customizer
+ *                  with the cart returned from addLineItem, so the badge
+ *                  mirrors the real Medusa cart line-item count).
  *
  * Both events bump `lastBumpAt` so the icon re-plays its scale/rotate
  * keyframes. SSR-safe (count is 0 on the server; client picks up events).
@@ -20,8 +25,9 @@ import * as React from "react";
 const ADD_EVENT = "cart:add";
 const SET_EVENT = "cart:set";
 
-/** Fire a relative add (badge increments by qty). */
-export function notifyCartAdd(detail?: { qty?: number }) {
+/** Fire a relative add — badge increments by `lines` (new cart LINES, not
+ *  unit quantity). lines: 0 = pulse + toast only. */
+export function notifyCartAdd(detail?: { lines?: number }) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(ADD_EVENT, { detail }));
 }
@@ -51,10 +57,10 @@ export function useCartPulse(initialCount = 0): CartPulse {
 
   React.useEffect(() => {
     const onAdd = (e: Event) => {
-      const ce = e as CustomEvent<{ qty?: number } | undefined>;
-      const qty = ce.detail?.qty ?? 1;
+      const ce = e as CustomEvent<{ lines?: number } | undefined>;
+      const lines = ce.detail?.lines ?? 1;
       setPulse((p) => ({
-        count: Math.max(0, p.count + qty),
+        count: Math.max(0, p.count + lines),
         lastBumpAt: p.lastBumpAt + 1,
       }));
     };

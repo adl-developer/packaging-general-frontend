@@ -1,9 +1,10 @@
 import type { HttpTypes } from "@medusajs/types";
 
-/** Ghana VAT + NHIL + GETFund + COVID levies (effective ≈ 21.9% — matches the
- *  backend tax region seeded in seed-ghana.ts). Used to display "Total incl.
- *  tax" per line until live tax totals are wired from the cart's tax_total. */
-export const TAX_RATE = 0.219;
+/** Ghana VAT 15% + NHIL 2.5% + GETFund 2.5% on the same base = 20% flat
+ *  (VAT Act 2025, Act 1151, effective 1 Jan 2026 — matches the backend tax
+ *  region seeded in seed-ghana.ts). Used to display "Total incl. tax" per
+ *  line until live tax totals are wired from the cart's tax_total. */
+export const TAX_RATE = 0.2;
 
 export interface CartItem {
   id: string;

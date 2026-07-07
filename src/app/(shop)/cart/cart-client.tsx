@@ -401,7 +401,7 @@ export function CartClient({
         isService: false,
       },
     ]);
-    notifyCartAdd({ qty: 1 });
+    notifyCartAdd({ lines: 1 });
     startTransition(async () => {
       const cart = await addLineItem(c.variantId, 1);
       if (cart) {

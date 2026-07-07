@@ -97,7 +97,10 @@ export function ProductCustomizer({ product }: { product: Product }) {
         // Trigger the global "Added to cart!" toast (CartToast listens for
         // cart:add; cart:set is set-by-the-page and fires on remove too, so
         // we explicitly fire :add here to keep toast/badge events separable).
-        notifyCartAdd({ qty: quantity });
+        // lines: 0 — the badge was just set to the server truth above; the
+        // badge counts LINES, so passing the unit quantity here would show
+        // e.g. "50" for a single 50-carton line.
+        notifyCartAdd({ lines: 0 });
         onSuccess?.();
       } catch (err) {
         console.error("[customizer] add to cart failed:", err);
