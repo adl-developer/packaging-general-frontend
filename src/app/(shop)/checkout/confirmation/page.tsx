@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { OrderConfirmation } from "@/components/checkout/order-confirmation";
 import { sdk } from "@/lib/medusa";
 import { formatOrderNumber } from "@/lib/order-number";
+import { getCustomer } from "@/lib/actions/auth";
 
 export const metadata: Metadata = {
   title: "Order Confirmed",
@@ -57,6 +58,10 @@ export default async function ConfirmationPage({
 
   const formatted = formatOrderNumber(displayId, createdAt, orderId);
 
+  // Signed-in customers already have an account (and the order is linked to it),
+  // so they must not see the post-checkout "Create Your Account" dialog.
+  const isLoggedIn = !!(await getCustomer());
+
   return (
     <OrderConfirmation
       orderNumber={formatted}
@@ -66,6 +71,7 @@ export default async function ConfirmationPage({
       total={total}
       paymentProviderId={paymentProviderId}
       deliveryOption={deliveryOption}
+      isLoggedIn={isLoggedIn}
     />
   );
 }

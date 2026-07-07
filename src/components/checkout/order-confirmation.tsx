@@ -53,6 +53,10 @@ interface OrderConfirmationProps {
   total?: number;
   paymentProviderId?: string;
   deliveryOption?: string;
+  /** True when the visitor is already signed in — suppresses the
+   *  "Create Your Account" dialog (they already have an account, and the
+   *  order is linked to it server-side). */
+  isLoggedIn?: boolean;
 }
 
 export function OrderConfirmation({
@@ -63,8 +67,10 @@ export function OrderConfirmation({
   total,
   paymentProviderId,
   deliveryOption,
+  isLoggedIn,
 }: OrderConfirmationProps) {
-  const [showModal, setShowModal] = React.useState(true);
+  // Guests get the create-account dialog; signed-in customers never do.
+  const [showModal, setShowModal] = React.useState(!isLoggedIn);
   const paymentMethod = paymentMethodLabel(paymentProviderId);
 
   return (
@@ -147,8 +153,9 @@ export function OrderConfirmation({
 
       <AnimatePresence>
         {/* Registration needs the order's email — without it (guest
-            order.retrieve failed) the dialog would be a dead end. */}
-        {showModal && email && (
+            order.retrieve failed) the dialog would be a dead end. Signed-in
+            customers never see it (they already have an account). */}
+        {showModal && email && !isLoggedIn && (
           <CreateAccountModal
             key="modal"
             orderNumber={orderNumber}
