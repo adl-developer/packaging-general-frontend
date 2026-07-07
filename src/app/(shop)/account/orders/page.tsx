@@ -5,6 +5,7 @@ import { ArrowLeft, Package, ShoppingBag } from "lucide-react";
 import { getCustomer } from "@/lib/actions/auth";
 import { listMyOrders } from "@/lib/actions/orders";
 import { formatGhs } from "@/lib/format";
+import { formatOrderNumber } from "@/lib/order-number";
 import { Reveal } from "@/components/motion/reveal";
 
 export const metadata: Metadata = {
@@ -99,7 +100,7 @@ export default async function AccountOrdersPage() {
                       <div className="flex items-center gap-2">
                         <Package className="size-4 text-muted" aria-hidden />
                         <span className="text-base font-semibold text-brand">
-                          Order #PG-{order.display_id}
+                          Order {formatOrderNumber(order.display_id, order.created_at, order.id)}
                         </span>
                       </div>
                       <span className="text-sm text-muted">
@@ -140,7 +141,7 @@ export default async function AccountOrdersPage() {
                       </span>
                     </span>
                     <Link
-                      href={`/track-order?order=PG-${order.display_id}&email=${encodeURIComponent(order.email ?? customer.email)}`}
+                      href={`/track-order?order=${formatOrderNumber(order.display_id, order.created_at, order.id)}&email=${encodeURIComponent(order.email ?? customer.email)}`}
                       className="inline-flex h-9 items-center rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
                     >
                       Track Order

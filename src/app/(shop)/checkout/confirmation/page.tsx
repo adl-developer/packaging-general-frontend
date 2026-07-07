@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { OrderConfirmation } from "@/components/checkout/order-confirmation";
 import { sdk } from "@/lib/medusa";
+import { formatOrderNumber } from "@/lib/order-number";
 
 export const metadata: Metadata = {
   title: "Order Confirmed",
@@ -23,6 +24,7 @@ export default async function ConfirmationPage({
   if (!orderId) redirect("/");
 
   let displayId: string | number | undefined;
+  let createdAt: string | undefined;
   let email: string | undefined;
   let company: string | undefined;
   let contactPerson: string | undefined;
@@ -32,9 +34,10 @@ export default async function ConfirmationPage({
   try {
     const { order } = await sdk.store.order.retrieve(orderId, {
       fields:
-        "id,display_id,email,metadata,total,*payment_collections,payment_collections.payment_sessions,*shipping_methods",
+        "id,display_id,created_at,email,metadata,total,*payment_collections,payment_collections.payment_sessions,*shipping_methods",
     });
     displayId = order.display_id ?? undefined;
+    createdAt = order.created_at ? String(order.created_at) : undefined;
     email = order.email ?? undefined;
     const meta = (order.metadata ?? {}) as Record<string, unknown>;
     if (typeof meta.company_name === "string") company = meta.company_name;
@@ -52,7 +55,7 @@ export default async function ConfirmationPage({
     console.warn("[confirmation] order.retrieve failed; showing id only:", err);
   }
 
-  const formatted = displayId ? `PG-${displayId}` : orderId.replace(/^order_/, "PG-").toUpperCase();
+  const formatted = formatOrderNumber(displayId, createdAt, orderId);
 
   return (
     <OrderConfirmation
