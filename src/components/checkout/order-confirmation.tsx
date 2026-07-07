@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { CheckCircle2, Eye, EyeOff, ShieldCheck, X } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Loader2, ShieldCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -14,6 +14,10 @@ import {
 } from "@/lib/motion";
 import { formatGhs } from "@/lib/format";
 import { updateNotificationPreferences } from "@/lib/actions/orders";
+import {
+  createAccountFromOrder,
+  type OrderSignupState,
+} from "@/lib/actions/auth";
 
 /**
  * Payment Successful confirmation page + Create-Your-Account modal (Figma
@@ -24,12 +28,10 @@ import { updateNotificationPreferences } from "@/lib/actions/orders";
  * order (omitted when the guest order.retrieve call can't read them), a
  * "What's Next?" checklist, and the notification-channel preference toggles
  * (persisted server-side onto order.metadata). The create-account dialog
- * (open by default, dismissible) pre-fills the order's company/contact/email
- * and asks for a password + confirmation, linking the order to the new
- * account.
- *
- * TODO(medusa): wire Create Account to the customer-create API and link the
- * order.
+ * (open by default when the order's email is readable, dismissible) pre-fills
+ * the order's company/contact/email, asks for a password + confirmation, and
+ * submits to the createAccountFromOrder server action, which registers the
+ * customer, signs them in, and links this order to the new account.
  */
 const WHATS_NEXT = [
   "Our team will contact you within 24 hours if needed",
@@ -144,7 +146,9 @@ export function OrderConfirmation({
       </div>
 
       <AnimatePresence>
-        {showModal && (
+        {/* Registration needs the order's email — without it (guest
+            order.retrieve failed) the dialog would be a dead end. */}
+        {showModal && email && (
           <CreateAccountModal
             key="modal"
             orderNumber={orderNumber}
@@ -234,6 +238,12 @@ function NotificationPreferences({
   );
 }
 
+const INITIAL_SIGNUP_STATE: OrderSignupState = {
+  status: "idle",
+  linked: false,
+  error: null,
+};
+
 function CreateAccountModal({
   orderNumber,
   email,
@@ -242,7 +252,7 @@ function CreateAccountModal({
   onClose,
 }: {
   orderNumber: string;
-  email?: string;
+  email: string;
   company?: string;
   contactPerson?: string;
   onClose: () => void;
@@ -251,17 +261,27 @@ function CreateAccountModal({
   const [confirm, setConfirm] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirm, setShowConfirm] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [clientError, setClientError] = React.useState<string | null>(null);
+  const [state, formAction, pending] = React.useActionState(
+    createAccountFromOrder,
+    INITIAL_SIGNUP_STATE
+  );
+  const error =
+    clientError ?? (state.status === "error" ? state.error : null);
 
+  /** Instant validation before the server action runs. */
   function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (password !== confirm) {
-      setError("Passwords don't match");
+    if (password.length < 8) {
+      e.preventDefault();
+      setClientError("Password must be at least 8 characters.");
       return;
     }
-    setError(null);
-    // TODO(medusa): create the customer + link the order, then close.
-    onClose();
+    if (password !== confirm) {
+      e.preventDefault();
+      setClientError("Passwords don't match");
+      return;
+    }
+    setClientError(null);
   }
 
   return (
@@ -309,82 +329,134 @@ function CreateAccountModal({
           </button>
         </div>
 
-        {/* Benefits */}
-        <div className="rounded-option border border-[#e2e1e0] bg-mist p-3.5">
-          <p className="text-sm font-semibold text-brand">
-            Benefits of creating an account:
-          </p>
-          <ul className="mt-1 flex flex-col gap-0.5">
-            {[
-              "Track all your orders in one place",
-              "Faster checkout with saved addresses",
-              "Reorder with one click",
-            ].map((b) => (
-              <li key={b} className="text-xs text-muted">
-                {b}
-              </li>
-            ))}
-          </ul>
-        </div>
+        {state.status === "created" ? (
+          <>
+            <div className="flex flex-col items-center gap-3 rounded-option border border-[#b9f8cf] bg-[#dcfce7]/40 px-4 py-6 text-center">
+              <CheckCircle2 className="size-10 text-[#16a34a]" aria-hidden />
+              <p className="text-base font-semibold text-brand">
+                Account created — you&apos;re signed in
+              </p>
+              <p className="text-sm text-muted">
+                {state.linked
+                  ? `Order #${orderNumber} is now linked to your account.`
+                  : `Your account is ready. We couldn't link order #${orderNumber} automatically — you can still track it with your order number and email.`}
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-9 flex-1 items-center justify-center rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+              >
+                Done
+              </button>
+              <Link
+                href="/account/orders"
+                className="inline-flex h-9 flex-1 items-center justify-center rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust"
+              >
+                View My Orders
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Benefits */}
+            <div className="rounded-option border border-[#e2e1e0] bg-mist p-3.5">
+              <p className="text-sm font-semibold text-brand">
+                Benefits of creating an account:
+              </p>
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {[
+                  "Track all your orders in one place",
+                  "Faster checkout with saved addresses",
+                  "Reorder with one click",
+                ].map((b) => (
+                  <li key={b} className="text-xs text-muted">
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-        {/* Prefilled order details (read-only) */}
-        <dl className="flex flex-col gap-3">
-          {company && <ReadOnlyField label="Company Name" value={company} />}
-          {contactPerson && <ReadOnlyField label="Contact Name" value={contactPerson} />}
-          {email && <ReadOnlyField label="Email" value={email} />}
-        </dl>
+            {/* Prefilled order details (read-only) */}
+            <dl className="flex flex-col gap-3">
+              {company && <ReadOnlyField label="Company Name" value={company} />}
+              {contactPerson && <ReadOnlyField label="Contact Name" value={contactPerson} />}
+              <ReadOnlyField label="Email" value={email} />
+            </dl>
 
-        <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-          <PasswordField
-            id="create-password"
-            label="Create Password *"
-            value={password}
-            onChange={setPassword}
-            shown={showPassword}
-            onToggle={() => setShowPassword((s) => !s)}
-          />
-          <PasswordField
-            id="confirm-password"
-            label="Confirm Password *"
-            value={confirm}
-            onChange={setConfirm}
-            shown={showConfirm}
-            onToggle={() => setShowConfirm((s) => !s)}
-            invalid={!!error}
-          />
-
-          {error && (
-            <p className="rounded-button bg-[rgba(231,0,11,0.06)] px-3 py-2 text-[13px] font-medium text-[#171717]">
-              {error}
-            </p>
-          )}
-
-          <div className="rounded-option border border-[rgba(150,64,34,0.2)] bg-[rgba(150,64,34,0.05)] px-3 py-2.5">
-            <p className="text-xs font-bold text-rust">
-              Order #{orderNumber} will be linked to your account
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex h-9 flex-1 items-center justify-center rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+            <form
+              className="flex flex-col gap-4"
+              action={formAction}
+              onSubmit={onSubmit}
             >
-              Skip for Now
-            </button>
-            <button
-              type="submit"
-              className="inline-flex h-9 flex-1 items-center justify-center rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust"
-            >
-              Create Account
-            </button>
-          </div>
+              {/* Server action inputs the user doesn't edit here. Tampering
+                  gains nothing — the backend claim route re-verifies that the
+                  authenticated email matches the order's email. */}
+              <input type="hidden" name="order_number" value={orderNumber} />
+              <input type="hidden" name="email" value={email} />
+              <input type="hidden" name="contact_person" value={contactPerson ?? ""} />
+              <input type="hidden" name="company" value={company ?? ""} />
 
-          <p className="text-center text-xs text-muted">
-            You can track your order anytime using just your order number
-          </p>
-        </form>
+              <PasswordField
+                id="create-password"
+                name="password"
+                label="Create Password *"
+                value={password}
+                onChange={setPassword}
+                shown={showPassword}
+                onToggle={() => setShowPassword((s) => !s)}
+              />
+              <PasswordField
+                id="confirm-password"
+                name="confirm"
+                label="Confirm Password *"
+                value={confirm}
+                onChange={setConfirm}
+                shown={showConfirm}
+                onToggle={() => setShowConfirm((s) => !s)}
+                invalid={!!error}
+              />
+
+              {error && (
+                <p className="rounded-button bg-[rgba(231,0,11,0.06)] px-3 py-2 text-[13px] font-medium text-[#171717]">
+                  {error}
+                </p>
+              )}
+
+              <div className="rounded-option border border-[rgba(150,64,34,0.2)] bg-[rgba(150,64,34,0.05)] px-3 py-2.5">
+                <p className="text-xs font-bold text-rust">
+                  Order #{orderNumber} will be linked to your account
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={pending}
+                  className="inline-flex h-9 flex-1 items-center justify-center rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30 disabled:pointer-events-none disabled:opacity-60"
+                >
+                  Skip for Now
+                </button>
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust disabled:pointer-events-none disabled:opacity-60"
+                >
+                  {pending && (
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  )}
+                  {pending ? "Creating…" : "Create Account"}
+                </button>
+              </div>
+
+              <p className="text-center text-xs text-muted">
+                You can track your order anytime using just your order number
+              </p>
+            </form>
+          </>
+        )}
       </motion.div>
     </motion.div>
   );
@@ -401,6 +473,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
 
 function PasswordField({
   id,
+  name,
   label,
   value,
   onChange,
@@ -409,6 +482,7 @@ function PasswordField({
   invalid,
 }: {
   id: string;
+  name: string;
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -424,6 +498,7 @@ function PasswordField({
       <div className="relative">
         <input
           id={id}
+          name={name}
           type={shown ? "text" : "password"}
           value={value}
           onChange={(e) => onChange(e.target.value)}

@@ -99,6 +99,92 @@ function fieldError(message: string): AuthState {
 }
 
 /**
+ * Signup core shared by the auth card and the post-checkout create-account
+ * dialog: register the emailpass identity (recovering a half-completed earlier
+ * attempt), create the customer record, then exchange for a real session
+ * token. Returns the token, or a user-facing error message.
+ */
+async function registerCustomer(input: {
+  email: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  company?: string;
+  phone?: string;
+}): Promise<{ token: string } | { error: string }> {
+  const { email, password, firstName, lastName, company, phone } = input;
+  const authClient = createAuthClient();
+
+  let token: string;
+  try {
+    token = await authClient.auth.register("customer", "emailpass", {
+      email,
+      password,
+    });
+  } catch {
+    // The auth identity already exists. The ONLY case signup may continue is
+    // a half-completed earlier attempt (identity created, customer record
+    // never saved) — log in to check. A complete account must get the
+    // generic failure, never a silent sign-in.
+    try {
+      const recovered = await authClient.auth.login("customer", "emailpass", {
+        email,
+        password,
+      });
+      if (typeof recovered !== "string") {
+        return { error: SIGNUP_FAILED };
+      }
+      const existing = await sdk.store.customer
+        .retrieve({}, authHeaders(recovered))
+        .catch(() => null);
+      if (existing) {
+        return { error: SIGNUP_FAILED };
+      }
+      token = recovered;
+    } catch {
+      return { error: SIGNUP_FAILED };
+    }
+  }
+
+  try {
+    await sdk.store.customer.create(
+      {
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        company_name: company,
+        phone,
+      },
+      {},
+      authHeaders(token)
+    );
+  } catch {
+    // The customer record may already exist for this identity (recovered
+    // signup above) — only fail if it really isn't there.
+    const existing = await sdk.store.customer
+      .retrieve({}, authHeaders(token))
+      .catch(() => null);
+    if (!existing) {
+      return { error: "Could not save your details. Please try again." };
+    }
+  }
+
+  // Exchange the registration token for a real auth session token.
+  try {
+    const result = await authClient.auth.login("customer", "emailpass", {
+      email,
+      password,
+    });
+    if (typeof result !== "string") {
+      return { error: "Account created. Please sign in to continue." };
+    }
+    return { token: result };
+  } catch {
+    return { error: "Account created. Please sign in to continue." };
+  }
+}
+
+/**
  * Single entry point for the auth card. Branches on the hidden `mode` field so
  * one `useActionState` drives both the Sign In and Sign Up tabs.
  */
@@ -131,77 +217,20 @@ export async function authenticate(
     const phoneDigits = phoneLocal.replace(/[^0-9]/g, "").replace(/^0+/, "");
     const phone = phoneDigits ? `+233${phoneDigits}` : undefined;
 
-    let token: string;
-    try {
-      token = await authClient.auth.register("customer", "emailpass", {
-        email,
-        password,
-      });
-    } catch {
-      // The auth identity already exists. The ONLY case signup may continue is
-      // a half-completed earlier attempt (identity created, customer record
-      // never saved) — log in to check. A complete account must get the
-      // generic failure, never a silent sign-in.
-      try {
-        const recovered = await authClient.auth.login("customer", "emailpass", {
-          email,
-          password,
-        });
-        if (typeof recovered !== "string") {
-          return fieldError(SIGNUP_FAILED);
-        }
-        const existing = await sdk.store.customer
-          .retrieve({}, authHeaders(recovered))
-          .catch(() => null);
-        if (existing) {
-          return fieldError(SIGNUP_FAILED);
-        }
-        token = recovered;
-      } catch {
-        return fieldError(SIGNUP_FAILED);
-      }
+    const outcome = await registerCustomer({
+      email,
+      password,
+      firstName,
+      lastName: lastName || undefined,
+      company: company || undefined,
+      phone,
+    });
+    if ("error" in outcome) {
+      return fieldError(outcome.error);
     }
 
-    try {
-      await sdk.store.customer.create(
-        {
-          email,
-          first_name: firstName,
-          last_name: lastName || undefined,
-          company_name: company || undefined,
-          phone,
-        },
-        {},
-        authHeaders(token)
-      );
-    } catch {
-      // The customer record may already exist for this identity (recovered
-      // signup above) — only fail if it really isn't there.
-      const existing = await sdk.store.customer
-        .retrieve({}, authHeaders(token))
-        .catch(() => null);
-      if (!existing) {
-        return fieldError("Could not save your details. Please try again.");
-      }
-    }
-
-    // Exchange the registration token for a real auth session token.
-    let authToken: string;
-    try {
-      const result = await authClient.auth.login("customer", "emailpass", {
-        email,
-        password,
-      });
-      if (typeof result !== "string") {
-        return fieldError("Account created. Please sign in to continue.");
-      }
-      authToken = result;
-    } catch {
-      return fieldError("Account created. Please sign in to continue.");
-    }
-
-    await setAuthToken(authToken);
-    await transferGuestCart(authToken);
+    await setAuthToken(outcome.token);
+    await transferGuestCart(outcome.token);
     revalidatePath("/", "layout");
     redirect("/account/orders");
   }
@@ -224,6 +253,87 @@ export async function authenticate(
   await transferGuestCart(result);
   revalidatePath("/", "layout");
   redirect("/account/orders");
+}
+
+/* ─── Post-checkout account creation ─── */
+
+export type OrderSignupState = {
+  status: "idle" | "created" | "error";
+  /** Whether the order was linked to the new account (best-effort). */
+  linked: boolean;
+  error: string | null;
+};
+
+/**
+ * "Create Your Account" dialog on the order-confirmation page. Registers the
+ * customer with the order's email (passed via hidden fields — tampering gains
+ * nothing: anyone can register any unclaimed email via /sign-up, and the
+ * claim route re-verifies email ownership server-side), signs them in, then
+ * links the just-placed order to the account via POST /store/order-lookup/
+ * claim (authenticated; the backend checks the token's customer email matches
+ * the order email). No redirect — the dialog shows the outcome in place.
+ */
+export async function createAccountFromOrder(
+  _prev: OrderSignupState,
+  formData: FormData
+): Promise<OrderSignupState> {
+  const orderNumber = String(formData.get("order_number") || "").trim();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const contactPerson = String(formData.get("contact_person") || "").trim();
+  const company = String(formData.get("company") || "").trim();
+  const password = String(formData.get("password") || "");
+  const confirm = String(formData.get("confirm") || "");
+
+  const fail = (error: string): OrderSignupState => ({
+    status: "error",
+    linked: false,
+    error,
+  });
+
+  if (!email || !orderNumber) {
+    return fail(
+      "We couldn't read this order's details. You can create an account any time from the Sign In page."
+    );
+  }
+  if (password.length < 8) {
+    return fail("Password must be at least 8 characters.");
+  }
+  if (password !== confirm) {
+    return fail("Passwords don't match.");
+  }
+
+  const [firstName, ...rest] = contactPerson.split(/\s+/).filter(Boolean);
+  const outcome = await registerCustomer({
+    email,
+    password,
+    firstName: firstName || undefined,
+    lastName: rest.join(" ") || undefined,
+    company: company || undefined,
+  });
+  if ("error" in outcome) {
+    return fail(outcome.error);
+  }
+
+  await setAuthToken(outcome.token);
+  await transferGuestCart(outcome.token);
+
+  // Best-effort: a linking failure must not read as "account creation failed"
+  // — the account exists and the user is signed in; the order can still be
+  // tracked by number + email.
+  let linked = false;
+  try {
+    await sdk.client.fetch("/store/order-lookup/claim", {
+      method: "POST",
+      body: { order_number: orderNumber, email },
+      headers: authHeaders(outcome.token),
+    });
+    linked = true;
+  } catch (err) {
+    console.error("[auth] order claim failed:", err);
+  }
+
+  revalidatePath("/", "layout");
+  return { status: "created", linked, error: null };
 }
 
 export async function logout() {
