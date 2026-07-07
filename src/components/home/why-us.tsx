@@ -32,7 +32,7 @@ export function WhyUs() {
     <section className="bg-taupe text-dark-foreground">
       <Reveal className="mx-auto max-w-7xl px-4 py-12 text-center sm:px-6 lg:px-8">
         <SectionHeading>Why Packaging General?</SectionHeading>
-        <p className="mt-2 text-base leading-6 tracking-tight text-white/80">
+        <p className="mt-2 text-base leading-6 text-white/80">
           Built for Africa&apos;s growing businesses
         </p>
       </Reveal>
@@ -59,7 +59,7 @@ export function WhyUs() {
                 <Icon className="size-7" aria-hidden />
               </span>
               <div className="flex flex-col gap-2">
-                <h3 className="text-base font-semibold leading-6 tracking-tight">
+                <h3 className="text-base font-semibold leading-6">
                   {title}
                 </h3>
                 <p className="text-sm leading-5 text-white/80">{description}</p>

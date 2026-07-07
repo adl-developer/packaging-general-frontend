@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
+import { logout } from "@/lib/actions/auth";
 
 export interface AccountUser {
   name: string;
@@ -96,18 +97,17 @@ export function AccountMenu({ user }: { user?: AccountUser }) {
                 Track Order
               </Link>
               <div className="my-1 h-px bg-line" aria-hidden />
-              <button
-                type="button"
-                role="menuitem"
-                className={cn(menuItem, "text-[#e7000b] hover:bg-[#e7000b]/10")}
-                onClick={() => {
-                  setOpen(false);
-                  // TODO(medusa): call the auth logout endpoint + clear session.
-                }}
-              >
-                <LogOut className="size-4" aria-hidden />
-                Logout
-              </button>
+              <form action={logout}>
+                <button
+                  type="submit"
+                  role="menuitem"
+                  className={cn(menuItem, "text-[#e7000b] hover:bg-[#e7000b]/10")}
+                  onClick={() => setOpen(false)}
+                >
+                  <LogOut className="size-4" aria-hidden />
+                  Logout
+                </button>
+              </form>
             </>
           ) : (
             <>

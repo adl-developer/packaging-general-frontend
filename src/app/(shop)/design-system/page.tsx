@@ -38,7 +38,7 @@ function Section({
 }) {
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+      <h2 className="text-lg font-semibold">{title}</h2>
       {children}
     </section>
   );
@@ -48,7 +48,7 @@ export default function DesignSystemShowcase() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-12">
       <div>
-        <p className="text-2xl font-bold tracking-tight">Design System</p>
+        <p className="text-2xl font-bold">Design System</p>
         <p className="text-sm text-muted">
           Tokens and primitives derived from the PG Figma. Internal reference.
         </p>
@@ -72,8 +72,8 @@ export default function DesignSystemShowcase() {
 
       <Section title="Typography (Inter)">
         <div className="flex flex-col gap-1">
-          <p className="text-lg font-bold tracking-tight">Bold 18 — Heading</p>
-          <p className="text-base font-medium tracking-tight">
+          <p className="text-lg font-bold">Bold 18 — Heading</p>
+          <p className="text-base font-medium">
             Medium 16 — Subheading
           </p>
           <p className="text-sm">Regular 14 — Body copy and form labels.</p>

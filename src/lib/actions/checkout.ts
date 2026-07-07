@@ -3,8 +3,10 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
-import { sdk } from "@/lib/medusa";
+import { sdk, authHeaders } from "@/lib/medusa";
 import { getCart } from "./cart";
+import { getCustomer } from "./auth";
+import { getAuthToken } from "@/lib/auth-token";
 
 /**
  * Checkout server actions — wire forms + payment to Medusa, then to Paystack.
@@ -18,11 +20,30 @@ import { getCart } from "./cart";
  * The cart id is stored in the httpOnly `pg_cart_id` cookie set by cart.ts.
  */
 const CART_COOKIE = "pg_cart_id";
+const LAST_ORDER_COOKIE = "pg_last_order";
 const PAYSTACK_PROVIDER_ID = "pp_paystack";
 
 async function readCartId(): Promise<string | undefined> {
   const store = await cookies();
   return store.get(CART_COOKIE)?.value;
+}
+
+/** Remember the just-placed order for a short while, so revisiting the
+ *  Paystack callback (browser back / refresh) after the cart cookie is gone
+ *  can still land on the confirmation page instead of an error. */
+async function rememberLastOrder(orderId: string) {
+  try {
+    const store = await cookies();
+    store.set(LAST_ORDER_COOKIE, orderId, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60, // 1 hour — only needs to outlive the redirect dance
+      path: "/",
+    });
+  } catch {
+    /* read-only context — purely a UX nicety, never fatal */
+  }
 }
 
 async function clearCartCookie() {
@@ -37,6 +58,104 @@ async function clearCartCookie() {
   } catch {
     /* read-only context — cleanup deferred to getCart() */
   }
+}
+
+function metaString(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string
+): string {
+  const value = metadata?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+/** The signed-in customer's default (or first) saved address, if any. */
+async function getSavedAddress(): Promise<HttpTypes.StoreCustomerAddress | null> {
+  const token = await getAuthToken();
+  if (!token) return null;
+  try {
+    const { addresses } = await sdk.store.customer.listAddress(
+      {},
+      authHeaders(token)
+    );
+    return addresses.find((a) => a.is_default_shipping) ?? addresses[0] ?? null;
+  } catch (err) {
+    console.error("[checkout] listAddress failed:", err);
+    return null;
+  }
+}
+
+export interface CheckoutPrefill {
+  companyName: string;
+  contactPerson: string;
+  contactPhone: string;
+  email: string;
+  deliveryName: string;
+  deliveryPhone: string;
+  address: string;
+  instructions: string;
+  lat: number | null;
+  lng: number | null;
+}
+
+/**
+ * Initial values for the checkout forms. Within a checkout session the cart is
+ * the source of truth (so going back never loses what was typed); across
+ * sessions a signed-in customer's profile + default saved address fill the
+ * gaps. Guests start blank once their previous cart completes.
+ */
+export async function getCheckoutPrefill(): Promise<CheckoutPrefill> {
+  const [cart, customer, saved] = await Promise.all([
+    getCart(),
+    getCustomer(),
+    getSavedAddress(),
+  ]);
+
+  const meta = (cart?.metadata ?? null) as Record<string, unknown> | null;
+  const cartAddr = cart?.shipping_address;
+  const customerName = customer
+    ? [customer.first_name, customer.last_name].filter(Boolean).join(" ")
+    : "";
+  const cartAddrName = cartAddr
+    ? [cartAddr.first_name, cartAddr.last_name].filter(Boolean).join(" ")
+    : "";
+  const savedName = saved
+    ? [saved.first_name, saved.last_name].filter(Boolean).join(" ")
+    : "";
+
+  return {
+    companyName: metaString(meta, "company_name") || customer?.company_name || "",
+    contactPerson: metaString(meta, "contact_person") || customerName,
+    contactPhone:
+      metaString(meta, "contact_phone") || customer?.phone || saved?.phone || "",
+    email: cart?.email || customer?.email || "",
+    deliveryName:
+      cartAddrName || savedName || metaString(meta, "contact_person") || customerName,
+    deliveryPhone:
+      cartAddr?.phone ||
+      saved?.phone ||
+      metaString(meta, "contact_phone") ||
+      customer?.phone ||
+      "",
+    address: cartAddr?.address_1 || saved?.address_1 || "",
+    instructions:
+      metaString(cartAddr?.metadata as Record<string, unknown> | null, "instructions") ||
+      metaString(saved?.metadata as Record<string, unknown> | null, "instructions"),
+    lat: metaNumber(cartAddr?.metadata as Record<string, unknown> | null, "lat"),
+    lng: metaNumber(cartAddr?.metadata as Record<string, unknown> | null, "lng"),
+  };
+}
+
+function metaNumber(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string
+): number | null {
+  const value = metadata?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 /** Persist company name, contact person, phone and email onto the cart. We
@@ -59,12 +178,28 @@ export async function saveContactInfo(input: {
         contact_phone: input.phone,
       },
     });
-    revalidatePath("/checkout/delivery");
-    return { ok: true };
   } catch (err) {
     console.error("[checkout] saveContactInfo failed:", err);
     return { ok: false, error: "Couldn't save your contact info. Please try again." };
   }
+
+  // Best-effort: keep the signed-in customer's profile in sync so their NEXT
+  // checkout prefills these details. Never blocks the current checkout.
+  const token = await getAuthToken();
+  if (token) {
+    try {
+      await sdk.store.customer.update(
+        { company_name: input.companyName, phone: input.phone },
+        {},
+        authHeaders(token)
+      );
+    } catch (err) {
+      console.error("[checkout] customer profile sync failed:", err);
+    }
+  }
+
+  revalidatePath("/checkout/delivery");
+  return { ok: true };
 }
 
 /** Persist the shipping address and auto-select the first shipping option for
@@ -77,12 +212,25 @@ export async function saveDeliveryAddress(input: {
   email: string;
   address: string;
   instructions: string;
+  /** Captured by the delivery-form (geolocation or manual entry). REQUIRED by
+   *  Yango Delivery — without coords the Yango provider falls back to a 0 quote
+   *  and refuses to create a claim at order time. */
+  lat?: number | null;
+  lng?: number | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const id = await readCartId();
   if (!id) return { ok: false, error: "Your cart has expired. Please add an item again." };
 
   const [firstName, ...rest] = input.contactName.trim().split(/\s+/);
   const lastName = rest.join(" ") || firstName || "Customer";
+
+  const addressMetadata: Record<string, unknown> = { instructions: input.instructions };
+  if (typeof input.lat === "number" && Number.isFinite(input.lat)) {
+    addressMetadata.lat = input.lat;
+  }
+  if (typeof input.lng === "number" && Number.isFinite(input.lng)) {
+    addressMetadata.lng = input.lng;
+  }
 
   const address: HttpTypes.StoreAddAddress = {
     first_name: firstName || "Customer",
@@ -91,7 +239,7 @@ export async function saveDeliveryAddress(input: {
     address_1: input.address,
     city: "Accra",
     country_code: "gh",
-    metadata: { instructions: input.instructions },
+    metadata: addressMetadata,
   };
 
   try {
@@ -112,13 +260,47 @@ export async function saveDeliveryAddress(input: {
       };
     }
     await sdk.store.cart.addShippingMethod(id, { option_id: option.id });
-
-    revalidatePath("/checkout/payment");
-    return { ok: true };
   } catch (err) {
     console.error("[checkout] saveDeliveryAddress failed:", err);
     return { ok: false, error: "Couldn't save your delivery details. Please try again." };
   }
+
+  // Best-effort: upsert the signed-in customer's default saved address so the
+  // NEXT checkout prefills it. Never blocks the current checkout.
+  const token = await getAuthToken();
+  if (token) {
+    try {
+      const payload = {
+        first_name: address.first_name,
+        last_name: address.last_name,
+        phone: input.phone,
+        address_1: input.address,
+        city: "Accra",
+        country_code: "gh",
+        metadata: addressMetadata,
+      };
+      const { addresses } = await sdk.store.customer.listAddress(
+        {},
+        authHeaders(token)
+      );
+      const target =
+        addresses.find((a) => a.is_default_shipping) ?? addresses[0];
+      if (target) {
+        await sdk.store.customer.updateAddress(target.id, payload, {}, authHeaders(token));
+      } else {
+        await sdk.store.customer.createAddress(
+          { ...payload, is_default_shipping: true },
+          {},
+          authHeaders(token)
+        );
+      }
+    } catch (err) {
+      console.error("[checkout] saving customer address failed:", err);
+    }
+  }
+
+  revalidatePath("/checkout/payment");
+  return { ok: true };
 }
 
 interface PaystackSessionData {
@@ -173,11 +355,21 @@ export async function completeCheckout(): Promise<
   { ok: true; orderId: string } | { ok: false; error: string; cartId?: string }
 > {
   const cartId = await readCartId();
-  if (!cartId) return { ok: false, error: "Your checkout session has expired." };
+  if (!cartId) {
+    // No active cart — most likely the browser came BACK onto the Paystack
+    // callback after the order was already placed (we clear the cart cookie on
+    // success). If we remember that order, send the user to its confirmation
+    // instead of an error.
+    const store = await cookies();
+    const lastOrderId = store.get(LAST_ORDER_COOKIE)?.value;
+    if (lastOrderId) return { ok: true, orderId: lastOrderId };
+    return { ok: false, error: "Your checkout session has expired." };
+  }
 
   try {
     const result = await sdk.store.cart.complete(cartId);
     if (result.type === "order") {
+      await rememberLastOrder(result.order.id);
       await clearCartCookie();
       revalidatePath("/cart");
       return { ok: true, orderId: result.order.id };

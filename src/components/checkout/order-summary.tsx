@@ -21,8 +21,14 @@ interface OrderSummaryProps {
   subtotal: number;
   total: number;
   deliveryAddress: string;
-  /** Pre-fill the discount field (demo of the invalid-code state). */
-  discountCode?: string;
+  /** Promotion code currently applied to the cart (cart.promotions). */
+  appliedCode?: string | null;
+  /** Live discount amount from the cart (cart.discount_total). */
+  discount?: number;
+  /** Shipping cost as quoted by the chosen carrier (cart.shipping_total). */
+  shipping?: number;
+  /** Name of the chosen shipping method, e.g. "Yango Delivery". */
+  shippingMethod?: string | null;
 }
 
 function Divider() {
@@ -34,7 +40,10 @@ export function OrderSummary({
   subtotal,
   total,
   deliveryAddress,
-  discountCode,
+  appliedCode,
+  discount = 0,
+  shipping = 0,
+  shippingMethod,
 }: OrderSummaryProps) {
   return (
     <Card className="flex flex-col gap-6">
@@ -72,7 +81,7 @@ export function OrderSummary({
 
         <Divider />
 
-        <DiscountField defaultValue={discountCode} />
+        <DiscountField appliedCode={appliedCode} />
 
         <Divider />
 
@@ -81,10 +90,28 @@ export function OrderSummary({
             <span className="text-muted">Subtotal</span>
             <span className="text-brand">{formatGhs(subtotal)}</span>
           </div>
+          {discount > 0 && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">
+                Discount{appliedCode ? ` (${appliedCode})` : ""}
+              </span>
+              <span className="font-medium text-plum">
+                −{formatGhs(discount)}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted">
+              Delivery{shippingMethod ? ` (${shippingMethod})` : ""}
+            </span>
+            <span className="text-brand">
+              {shipping > 0 ? formatGhs(shipping) : "Calculating…"}
+            </span>
+          </div>
           <Divider />
           <div className="flex items-center justify-between">
-            <span className="text-lg font-semibold tracking-tight">Total</span>
-            <span className="text-lg font-semibold tracking-tight">
+            <span className="text-lg font-semibold">Total</span>
+            <span className="text-lg font-semibold">
               {formatGhs(total)}
             </span>
           </div>

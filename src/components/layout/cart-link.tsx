@@ -13,14 +13,16 @@ const navButton =
   "inline-flex h-8 items-center gap-2 rounded-button border border-line bg-background px-3 text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
 
 /**
- * Header Cart link (client island). Subscribes to "cart:add" events fired by
- * Add-to-Cart buttons across the app; bumps the icon (scale + tilt) and
- * spring-pops the badge on each event. Reduced motion is handled globally by
+ * Header Cart link (client island). Seeded with the live Medusa line count
+ * (server-fetched in SiteHeader) so the badge is right on first paint, then
+ * subscribes to "cart:add"/"cart:set" events fired by Add-to-Cart buttons and
+ * the cart page; bumps the icon (scale + tilt) and spring-pops the badge on
+ * each event. Reduced motion is handled globally by
  * <MotionConfig reducedMotion="user"> — transforms drop out, opacity stays, so
  * the badge still fades in but the icon doesn't wiggle.
  */
-export function CartLink() {
-  const { count, lastBumpAt } = useCartPulse();
+export function CartLink({ initialCount = 0 }: { initialCount?: number }) {
+  const { count, lastBumpAt } = useCartPulse(initialCount);
 
   return (
     <Link href="/cart" className={cn(navButton, "relative")}>

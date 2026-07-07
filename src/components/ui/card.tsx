@@ -36,7 +36,7 @@ export function CardTitle({
 }: React.HTMLAttributes<HTMLParagraphElement>) {
   return (
     <p
-      className={cn("text-base font-medium tracking-tight text-brand", className)}
+      className={cn("text-base font-medium text-brand", className)}
       {...props}
     />
   );

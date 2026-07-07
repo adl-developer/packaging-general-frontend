@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-type ButtonVariant = "primary" | "outline" | "ghost";
+type ButtonVariant = "primary" | "outline" | "secondary" | "ghost";
 type ButtonSize = "sm" | "md" | "lg";
 
 const variantStyles: Record<ButtonVariant, string> = {
@@ -11,6 +11,10 @@ const variantStyles: Record<ButtonVariant, string> = {
   // Cream outline buttons (e.g. "Apply", "Cart", "Account")
   outline:
     "bg-background text-brand border border-line hover:bg-line/30 active:bg-line/40",
+  // Muted secondary CTA on light sections — Figma "Track Order" beside a primary
+  // ("Shop now"): muted/10 fill + muted border + muted text (#7a7575), medium.
+  secondary:
+    "bg-muted/10 text-muted border border-muted hover:bg-muted/20 active:bg-muted/30",
   ghost: "bg-transparent text-brand hover:bg-line/30",
 };
 
@@ -34,8 +38,7 @@ export function buttonVariants({
 } = {}) {
   return cn(
     "inline-flex items-center justify-center rounded-button font-medium",
-    "transition-[color,background-color,transform] duration-200 ease-out",
-    "hover:-translate-y-px active:translate-y-0 active:scale-[0.98]",
+    "transition-[color,background-color] duration-200 ease-out",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40",
     "disabled:pointer-events-none disabled:opacity-50",
     variantStyles[variant],

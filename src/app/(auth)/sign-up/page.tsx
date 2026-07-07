@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { AuthCard } from "@/components/auth/auth-card";
+import { getCustomer } from "@/lib/actions/auth";
 
 export const metadata: Metadata = {
   title: "Create Account",
@@ -8,6 +10,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: true },
 };
 
-export default function SignUpPage() {
+export default async function SignUpPage() {
+  // Already signed in — nothing to do here.
+  if (await getCustomer()) redirect("/account/orders");
   return <AuthCard defaultTab="signup" />;
 }

@@ -25,10 +25,10 @@ export function Hero() {
     <section className="bg-background">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <Reveal fade={false} className="mx-auto flex max-w-4xl flex-col items-center gap-6 text-center">
-          <h1 className="text-[2.5rem] font-medium leading-tight tracking-[0.26px] text-brand sm:text-[60px] sm:leading-[60px]">
+          <h1 className="text-4xl font-semibold text-brand sm:text-6xl">
             Quality Packaging for Africa&apos;s Growing Businesses
           </h1>
-          <p className="max-w-2xl text-lg leading-7 tracking-tight text-muted">
+          <p className="max-w-2xl text-lg leading-7 text-muted">
             {
               "West Africa's first digital-first packaging platform. We simplify how SMEs discover, customize, and order quality packaging with transparent pricing and trusted suppliers."
             }
@@ -43,7 +43,7 @@ export function Hero() {
             </Link>
             <Link
               href="/track-order"
-              className={buttonVariants({ variant: "outline", size: "lg", fullWidth: true, className: "sm:w-auto" })}
+              className={buttonVariants({ variant: "secondary", size: "lg", fullWidth: true, className: "sm:w-auto" })}
             >
               Track Order
             </Link>

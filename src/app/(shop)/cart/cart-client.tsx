@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Box,
-  Check,
   Loader2,
   Minus,
   Pencil,
@@ -18,59 +17,18 @@ import { buttonVariants } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
 import { motion, AnimatePresence } from "motion/react";
 import { DURATION, EASE_PREMIUM, SPRING_TAP } from "@/lib/motion";
-import { notifyCartCount } from "@/lib/cart-events";
+import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
 import {
+  addLineItem,
   emptyCart as emptyCartAction,
   removeLineItem,
   updateLineItemQuantity,
 } from "@/lib/actions/cart";
+import { mapLineItem, TAX_RATE, type CartItem } from "./map-cart";
+import type { CrossSellProduct } from "@/lib/products";
+import type { ActivePromotion } from "@/lib/promotions";
 
-export interface CartItem {
-  id: string;
-  name: string;
-  specs: string[];
-  unitPrice: number;
-  /** Effective tax rate applied to the line subtotal for the displayed total..
-   *  (Ghana VAT+NHIL+GETFund+COVID ≈ 21.9% — matches the backend tax region). */
-  taxRate: number;
-  quantity: number;
-  productSlug?: string;
-}
-
-// Cross-sell (Figma 404:1984 + mobile 452:9255). Visual-only for now —
-// these items aren't seeded in Medusa, so the Add button only updates local
-// state. Wire to live cart once these are added to the catalog.
-interface CrossSellItem {
-  id: string;
-  name: string;
-  description: string;
-  pricePerUnit: number;
-  unitLabel: string;
-}
-
-const CROSSSELL: CrossSellItem[] = [
-  {
-    id: "tape-brown",
-    name: "Packaging Tape - Brown",
-    description: "Heavy-duty 48mm × 66m brown packaging tape",
-    pricePerUnit: 12.5,
-    unitLabel: "per roll",
-  },
-  {
-    id: "tape-clear",
-    name: "Packaging Tape - Clear",
-    description: "Heavy-duty 48mm × 66m clear packaging tape",
-    pricePerUnit: 15.0,
-    unitLabel: "per roll",
-  },
-  {
-    id: "bubble-wrap",
-    name: "Bubble Wrap",
-    description: "Protective bubble wrap, 50cm × 10m roll",
-    pricePerUnit: 22.0,
-    unitLabel: "per roll",
-  },
-];
+export type { CartItem } from "./map-cart";
 
 const lineSubtotal = (item: CartItem) => item.unitPrice * item.quantity;
 const lineTotal = (item: CartItem) =>
@@ -88,7 +46,7 @@ function EmptyCart() {
         <span className="grid size-16 place-items-center rounded-full bg-[#c4bcb0]">
           <ShoppingBag className="size-7 text-[#5b554c]" aria-hidden />
         </span>
-        <h1 className="text-2xl font-semibold tracking-tight text-brand">
+        <h1 className="text-2xl font-semibold text-brand">
           Your cart is empty
         </h1>
         <p className="text-base text-muted">
@@ -156,7 +114,7 @@ function ConfirmDialog({
             <div className="flex flex-col gap-2">
               <h2
                 id="confirm-title"
-                className="text-lg font-semibold tracking-tight text-brand"
+                className="text-lg font-semibold text-brand"
               >
                 {title}
               </h2>
@@ -205,7 +163,7 @@ function QtyStepper({
         aria-label={`Decrease ${label}`}
         onClick={() => onChange(Math.max(min, qty - 1))}
         disabled={disabled || qty <= min}
-        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color,transform] duration-200 hover:bg-line/30 active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
+        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color] duration-200 hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Minus className="size-4" aria-hidden />
       </button>
@@ -229,7 +187,7 @@ function QtyStepper({
         aria-label={`Increase ${label}`}
         onClick={() => onChange(qty + 1)}
         disabled={disabled}
-        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color,transform] duration-200 hover:bg-line/30 active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-40"
+        className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color] duration-200 hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Plus className="size-4" aria-hidden />
       </button>
@@ -257,7 +215,7 @@ function CartLine({
         <div className="flex flex-1 flex-col gap-3">
           <div className="flex items-start justify-between gap-4">
             <div className="flex flex-col gap-2">
-              <h3 className="text-lg font-semibold leading-7 tracking-tight text-brand">
+              <h3 className="text-lg font-semibold leading-7 text-brand">
                 {item.name}
               </h3>
               <div className="flex flex-col gap-1">
@@ -273,7 +231,7 @@ function CartLine({
                 <Link
                   href={`/products/${item.productSlug}`}
                   aria-label={`Edit ${item.name} — change size, material, printing or quantity`}
-                  className="grid size-8 place-items-center rounded-button text-muted transition-[color,background-color,transform] duration-200 hover:bg-line/30 hover:text-brand active:scale-[0.92]"
+                  className="grid size-8 place-items-center rounded-button text-muted transition-[color,background-color] duration-200 hover:bg-line/30 hover:text-brand"
                 >
                   <Pencil className="size-4" aria-hidden />
                 </Link>
@@ -283,7 +241,7 @@ function CartLine({
                 aria-label="Remove item"
                 onClick={() => onRemove(item.id)}
                 disabled={pending}
-                className="grid size-8 place-items-center rounded-button text-plum transition-[color,background-color,transform] duration-200 hover:bg-plum/10 active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-40"
+                className="grid size-8 place-items-center rounded-button text-plum transition-[color,background-color] duration-200 hover:bg-plum/10 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Trash2 className="size-4" aria-hidden />
               </button>
@@ -291,15 +249,24 @@ function CartLine({
           </div>
           <div className="flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted">
-                Quantity
-              </span>
-              <QtyStepper
-                qty={item.quantity}
-                onChange={(n) => onQty(item.id, n)}
-                disabled={pending}
-                label={item.name}
-              />
+              {item.isService ? (
+                // One-time service charge (printing setup) — fixed quantity.
+                <span className="text-sm text-muted">
+                  One-time fee — charged once per print type
+                </span>
+              ) : (
+                <>
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                    Quantity
+                  </span>
+                  <QtyStepper
+                    qty={item.quantity}
+                    onChange={(n) => onQty(item.id, n)}
+                    disabled={pending}
+                    label={item.name}
+                  />
+                </>
+              )}
               <div className="flex flex-col text-sm text-muted">
                 <span>Unit Price: {formatGhs(item.unitPrice)}</span>
                 <span>
@@ -322,11 +289,9 @@ function CartLine({
 
 function CrossSellCard({
   item,
-  added,
   onAdd,
 }: {
-  item: CrossSellItem;
-  added: boolean;
+  item: CrossSellProduct;
   onAdd: () => void;
 }) {
   return (
@@ -341,52 +306,38 @@ function CrossSellCard({
         <p className="line-clamp-2 text-sm text-muted">{item.description}</p>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div>
-            <p className="text-lg font-bold tracking-tight text-brand">
+            <p className="text-lg font-bold text-brand">
               {formatGhs(item.pricePerUnit)}
             </p>
             <p className="text-xs text-muted">{item.unitLabel}</p>
           </div>
-          <AnimatePresence mode="wait" initial={false}>
-            {added ? (
-              <motion.span
-                key="added"
-                initial={{ opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.92 }}
-                transition={SPRING_TAP}
-                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-green-100 px-3 text-xs font-medium text-green-700 sm:w-auto sm:px-4"
-              >
-                <Check className="size-4" aria-hidden />
-                Added
-              </motion.span>
-            ) : (
-              <motion.button
-                key="add"
-                initial={{ opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.92 }}
-                transition={SPRING_TAP}
-                type="button"
-                onClick={onAdd}
-                aria-label={`Add ${item.name} to cart`}
-                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-[color,background-color,transform] duration-200 hover:bg-brand/90 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:w-auto sm:px-4"
-              >
-                <ShoppingCart className="size-4" aria-hidden />
-                Add to Cart
-              </motion.button>
-            )}
-          </AnimatePresence>
+          <motion.button
+            type="button"
+            onClick={onAdd}
+            whileTap={{ scale: 0.97 }}
+            transition={SPRING_TAP}
+            aria-label={`Add ${item.name} to cart`}
+            className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-[color,background-color] duration-200 hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 sm:w-auto sm:px-4"
+          >
+            <ShoppingCart className="size-4" aria-hidden />
+            Add to Cart
+          </motion.button>
         </div>
       </div>
     </div>
   );
 }
 
-export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
+export function CartClient({
+  initialItems,
+  crossSell,
+  promo,
+}: {
+  initialItems: CartItem[];
+  crossSell: CrossSellProduct[];
+  promo: ActivePromotion | null;
+}) {
   const [items, setItems] = React.useState<CartItem[]>(initialItems);
-  const [addedCrossSell, setAddedCrossSell] = React.useState<Set<string>>(
-    new Set(),
-  );
   const [confirmEmpty, setConfirmEmpty] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
 
@@ -423,30 +374,48 @@ export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
     });
   };
 
-  const addCrossSell = (c: CrossSellItem) => {
-    // Visual-only for now — these aren't in the catalog yet. Local state +
-    // header badge sync via the items.length effect above, but not persisted
-    // to the Medusa cart.
-    setItems((xs) => {
-      if (xs.some((x) => x.id === `cs-${c.id}`)) return xs;
-      return [
-        ...xs,
-        {
-          id: `cs-${c.id}`,
-          name: c.name,
-          specs: [c.description],
-          unitPrice: c.pricePerUnit,
-          taxRate: 0.219,
-          quantity: 1,
-        },
-      ];
+  // A cross-sell product whose variant is already a cart line is hidden from
+  // the recommended section — derived from the live cart, so it stays hidden
+  // across reloads and reappears if the line is removed.
+  const inCart = (c: CrossSellProduct) =>
+    items.some((x) => x.variantId === c.variantId);
+  const visibleCrossSell = crossSell.filter((c) => !inCart(c));
+
+  // Optimistic insert → real Medusa line via addLineItem → replace local
+  // state with the server cart (temp id becomes the real li_… id, so the
+  // line's remove/qty controls work immediately). Revert on failure.
+  const addCrossSell = (c: CrossSellProduct) => {
+    if (inCart(c)) return;
+    const tempId = `cs-${c.id}`;
+    setItems((xs) => [
+      ...xs,
+      {
+        id: tempId,
+        variantId: c.variantId,
+        name: c.name,
+        specs: [],
+        unitPrice: c.pricePerUnit,
+        taxRate: TAX_RATE,
+        quantity: 1,
+        productSlug: c.slug,
+        isService: false,
+      },
+    ]);
+    notifyCartAdd({ lines: 1 });
+    startTransition(async () => {
+      const cart = await addLineItem(c.variantId, 1);
+      if (cart) {
+        setItems((cart.items ?? []).map(mapLineItem));
+      } else {
+        // Server rejected the add — drop the optimistic line (the
+        // items.length effect re-syncs the badge).
+        setItems((xs) => xs.filter((x) => x.id !== tempId));
+      }
     });
-    setAddedCrossSell((prev) => new Set(prev).add(c.id));
   };
 
   const doEmptyCart = () => {
     setItems([]);
-    setAddedCrossSell(new Set());
     setConfirmEmpty(false);
     startTransition(async () => {
       await emptyCartAction();
@@ -496,7 +465,7 @@ export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
           </button>
         </div>
         <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-semibold leading-9 tracking-tight text-brand">
+          <h1 className="text-3xl font-semibold leading-9 text-brand">
             Shopping Cart
           </h1>
           <p className="text-base text-muted">
@@ -527,49 +496,74 @@ export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
         </AnimatePresence>
       </div>
 
-      <div className="rounded-card border border-line bg-surface p-4 sm:p-6">
-        <h2 className="text-lg font-medium tracking-tight text-brand">
-          People who usually order your order also order...
-        </h2>
-        <p className="mt-1 text-sm text-muted">
-          Add these items to your order and save on delivery fees
-        </p>
-        <div
-          className="-mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0"
-          role="list"
-        >
-          {CROSSSELL.map((c) => (
-            <div
-              key={c.id}
-              role="listitem"
-              className="snap-start sm:snap-align-none"
-            >
-              <CrossSellCard
-                item={c}
-                added={addedCrossSell.has(c.id)}
-                onAdd={() => addCrossSell(c)}
-              />
-            </div>
-          ))}
+      {visibleCrossSell.length > 0 && (
+        <div className="rounded-card border border-line bg-surface p-4 sm:p-6">
+          <h2 className="text-lg font-medium text-brand">
+            People who usually order your order also order...
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            Add these items to your order and save on delivery fees
+          </p>
+          <div
+            className="-mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0"
+            role="list"
+          >
+            <AnimatePresence mode="popLayout" initial={false}>
+              {visibleCrossSell.map((c) => (
+                <motion.div
+                  key={c.id}
+                  layout
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
+                  role="listitem"
+                  className="snap-start sm:snap-align-none"
+                >
+                  <CrossSellCard item={c} onAdd={() => addCrossSell(c)} />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="rounded-card border border-line bg-surface p-6">
+      {/* Order Summary — narrower card centered on desktop per Figma; on
+          mobile spans the full width like the other cart sections. Includes
+          per-line breakdown, total, both checkout actions, and the promo
+          code box. */}
+      <div className="mx-auto flex w-full flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:max-w-xl sm:p-6">
         <div className="flex flex-col gap-1">
-          <h2 className="text-base font-medium tracking-tight text-brand">
+          <h2 className="text-base font-medium text-brand">
             Order Summary
           </h2>
-          <p className="text-base text-muted">
+          <p className="text-sm text-muted">
             {items.length} item{items.length === 1 ? "" : "s"}
           </p>
         </div>
-        <div className="mt-4 flex items-center justify-between border-t border-line pt-4">
-          <span className="text-base font-semibold tracking-tight text-brand">
-            Total
-          </span>
-          <span className="text-base font-semibold tracking-tight text-brand">
-            {formatGhs(total)}
-          </span>
+        <ul className="flex flex-col gap-1.5">
+          {items.map((item) => (
+            <li
+              key={item.id}
+              className="flex items-baseline justify-between gap-3 text-sm"
+            >
+              <span className="truncate text-muted">{item.name}</span>
+              <span className="shrink-0 font-medium text-brand tabular-nums">
+                {formatGhs(lineTotal(item))}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <div className="flex flex-col gap-1 border-t border-line pt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-base font-semibold text-brand">
+              Total
+            </span>
+            <span className="text-base font-semibold text-brand tabular-nums">
+              {formatGhs(total)}
+            </span>
+          </div>
+          <p className="text-xs text-muted">
+            Includes VAT, NHIL, and all applicable fees
+          </p>
         </div>
         <Link
           href="/checkout"
@@ -577,11 +571,37 @@ export function CartClient({ initialItems }: { initialItems: CartItem[] }) {
             variant: "primary",
             size: "lg",
             fullWidth: true,
-            className: "mt-4",
+            className: "mt-1",
           })}
         >
           Proceed to Checkout
         </Link>
+        <Link
+          href="/products"
+          className={buttonVariants({
+            variant: "outline",
+            size: "lg",
+            fullWidth: true,
+          })}
+        >
+          Keep Shopping
+        </Link>
+        {/* Promo / discount-code prompt — the live active promotion from
+            Medusa (GET /store/active-promotion). Hidden when none is active. */}
+        {promo && (
+          <div className="mt-1 rounded-option border border-line bg-surface px-4 py-3">
+            <p className="text-xs text-muted">Use code</p>
+            <p className="text-base font-bold tracking-wider text-brand">
+              {promo.code}
+            </p>
+            <p className="text-xs text-muted">
+              at checkout for{" "}
+              {promo.valueType === "percentage"
+                ? `${promo.value}% off!`
+                : `${formatGhs(promo.value)} off!`}
+            </p>
+          </div>
+        )}
       </div>
 
       <ConfirmDialog

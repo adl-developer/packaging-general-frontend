@@ -2,10 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
+import { useActionState } from "react";
+import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { SPRING_SOFT } from "@/lib/motion";
+import { authenticate, type AuthState } from "@/lib/actions/auth";
 
 /**
  * Tabbed auth card — exact spec from Figma "Sign In" (458:14565) and
@@ -16,31 +18,54 @@ import { SPRING_SOFT } from "@/lib/motion";
  * Company Name, Phone Number (Ghana +233 prefix) — both verified against the
  * cached Figma nodes.
  *
- * TODO(medusa): wire submit handlers to the Medusa customer/auth endpoints.
+ * Submits through the `authenticate` server action (Medusa emailpass auth);
+ * the hidden `mode` field tells the action which tab is active.
  */
 type Tab = "signin" | "signup";
 
-const fieldLabel = "text-sm font-medium leading-none tracking-tight text-brand";
+const fieldLabel = "text-sm font-medium leading-none text-brand";
 const fieldInput =
-  "h-11 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-brand focus-visible:outline-none";
+  "h-11 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none";
 const socialButton =
   "flex h-11 w-full items-center justify-center gap-2 rounded-button border border-line bg-background text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
 
-export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
+const initialAuthState: AuthState = { error: null };
+
+export function AuthCard({
+  defaultTab = "signin",
+  notice,
+}: {
+  defaultTab?: Tab;
+  notice?: string;
+}) {
   const [tab, setTab] = React.useState<Tab>(defaultTab);
   const [showPassword, setShowPassword] = React.useState(false);
+  const [state, formAction, pending] = useActionState(
+    authenticate,
+    initialAuthState,
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-[448px] flex-col gap-8 px-4 pt-8">
       {/* Heading */}
       <div className="flex flex-col gap-2 text-center">
-        <h1 className="text-2xl font-bold leading-8 tracking-tight text-brand">
+        <h1 className="text-2xl font-bold leading-8 text-brand">
           Welcome Back
         </h1>
         <p className="text-base leading-6 text-muted">
           Sign in to your account or create a new one
         </p>
       </div>
+
+      {notice && (
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-button border border-[#bbe5c8] bg-[#dcfce7] px-3 py-2 text-sm text-[#166534]"
+        >
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>{notice}</span>
+        </p>
+      )}
 
       {/* Tabs */}
       <div className="flex flex-col gap-10">
@@ -95,7 +120,8 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
           <Divider label="Or continue with email" />
 
           {/* Email + password form */}
-          <form className="flex flex-col gap-4" onSubmit={(e) => e.preventDefault()}>
+          <form action={formAction} className="flex flex-col gap-4">
+            <input type="hidden" name="mode" value={tab} />
             {tab === "signup" && (
               <Field id="name" label="Full Name">
                 <input
@@ -104,6 +130,7 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
                   type="text"
                   autoComplete="name"
                   placeholder="Ama Mensah"
+                  required
                   className={fieldInput}
                 />
               </Field>
@@ -116,6 +143,7 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
                 type="email"
                 autoComplete="email"
                 placeholder="you@company.com"
+                required
                 className={fieldInput}
               />
             </Field>
@@ -128,6 +156,8 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
                   type={showPassword ? "text" : "password"}
                   autoComplete={tab === "signin" ? "current-password" : "new-password"}
                   placeholder="••••••••"
+                  required
+                  minLength={tab === "signup" ? 8 : undefined}
                   className={cn(fieldInput, "pr-11")}
                 />
                 <PasswordToggle
@@ -136,6 +166,17 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
                 />
               </div>
             </Field>
+
+            {tab === "signin" && (
+              <div className="-mt-1 flex justify-end">
+                <Link
+                  href="/forgot-password"
+                  className="text-sm font-medium text-brand underline-offset-2 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            )}
 
             {tab === "signup" && (
               <>
@@ -168,10 +209,23 @@ export function AuthCard({ defaultTab = "signin" }: { defaultTab?: Tab }) {
               </>
             )}
 
+            {state.error && (
+              <p
+                role="alert"
+                aria-live="polite"
+                className="flex items-start gap-2 rounded-button border border-rust/30 bg-rust/10 px-3 py-2 text-sm text-rust"
+              >
+                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+                <span>{state.error}</span>
+              </p>
+            )}
+
             <button
               type="submit"
-              className="h-11 w-full rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+              disabled={pending}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:opacity-60"
             >
+              {pending && <Loader2 className="size-4 animate-spin" aria-hidden />}
               {tab === "signin" ? "Sign In" : "Create Account"}
             </button>
           </form>

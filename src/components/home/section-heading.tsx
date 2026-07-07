@@ -1,9 +1,10 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Standard landing section heading — Figma: Inter Medium 36px / 40px,
- * letter-spacing +0.37px. Pass a color via className (brand on light
- * sections, dark-foreground on dark sections).
+ * Standard landing section heading — Figma: Inter Medium, 30px/36px on mobile
+ * scaling to 36px/40px at sm+ (matches the mobile + desktop Figma frames).
+ * Letter-spacing comes from the size tokens (+0.396px @30, +0.369px @36). Pass
+ * a color via className (brand on light sections, dark-foreground on dark).
  */
 export function SectionHeading({
   className,
@@ -15,7 +16,7 @@ export function SectionHeading({
   return (
     <h2
       className={cn(
-        "text-4xl font-medium leading-10 tracking-[0.37px]",
+        "text-3xl font-semibold sm:text-4xl",
         className,
       )}
     >
@@ -33,7 +34,7 @@ export function SectionSubtitle({
   children: React.ReactNode;
 }) {
   return (
-    <p className={cn("text-lg leading-7 tracking-tight", className)}>
+    <p className={cn("text-lg leading-7", className)}>
       {children}
     </p>
   );

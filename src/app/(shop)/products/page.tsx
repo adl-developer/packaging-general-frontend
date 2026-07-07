@@ -28,10 +28,10 @@ export default async function ProductsPage() {
       </div>
 
       <Reveal className="flex flex-col gap-2">
-        <h1 className="text-4xl font-medium leading-10 tracking-[0.37px] text-brand">
+        <h1 className="text-3xl font-semibold sm:text-4xl text-brand">
           Browse Our Packaging Solutions
         </h1>
-        <p className="max-w-3xl text-lg leading-7 tracking-tight text-muted">
+        <p className="max-w-3xl text-lg leading-7 text-muted">
           Select a packaging type to customize and get instant pricing. All
           products meet quality standards for West African markets.
         </p>

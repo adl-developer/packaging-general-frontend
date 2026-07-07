@@ -41,21 +41,21 @@ export function CartToast() {
     <div
       aria-live="polite"
       aria-atomic="true"
-      className="pointer-events-none fixed inset-x-0 top-[140px] z-50 flex justify-center px-4 sm:left-auto sm:right-6 sm:top-[140px] sm:justify-end sm:px-0"
+      className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:justify-end sm:px-0"
     >
       <AnimatePresence>
         {visible && (
           <motion.div
             key={pulse}
-            initial={{ opacity: 0, y: -12, scale: 0.95 }}
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+            exit={{ opacity: 0, y: 40, scale: 0.95 }}
             transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
-            className="pointer-events-auto inline-flex items-center gap-2.5 rounded-card border border-line/60 bg-white py-3 pl-3 pr-5 text-sm font-medium text-brand shadow-lg"
+            className="pointer-events-auto inline-flex items-center gap-2.5 rounded-button border border-line/60 bg-white py-3 pl-3 pr-5 text-sm font-medium text-brand shadow-lg"
             role="status"
           >
             <CheckCircle2
-              className="size-5 fill-green-500 text-white"
+              className="size-5 fill-brand text-white"
               aria-hidden
             />
             Added to cart!

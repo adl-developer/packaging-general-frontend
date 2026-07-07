@@ -60,7 +60,7 @@ export function Certifications() {
     <section className="bg-background">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <Reveal className="rounded-card bg-surface p-8">
-          <h2 className="mb-8 text-center text-sm font-semibold tracking-tight text-brand">
+          <h2 className="mb-8 text-center text-sm font-semibold text-brand">
             Quality &amp; Compliance Certifications
           </h2>
 
