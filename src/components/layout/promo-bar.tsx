@@ -23,7 +23,7 @@ export async function PromoBar() {
         <span className="inline-flex items-center gap-2">
           <Tag className="size-4 shrink-0" aria-hidden />
           <span>
-            Enjoy <span className="font-semibold">{offer}</span>{" "}
+            Enjoy <span className="font-extrabold text-white">{offer}</span>{" "}
             {promo.campaignName
               ? `for all ${promo.campaignName} orders`
               : "your order"}
@@ -31,7 +31,7 @@ export async function PromoBar() {
         </span>
         <span className="inline-flex items-center gap-2">
           Code:
-          <span className="rounded-chip bg-white/20 px-2 py-0.5 font-semibold">
+          <span className="rounded-chip bg-white px-2 py-0.5 font-bold tracking-wide text-plum">
             {promo.code}
           </span>
         </span>

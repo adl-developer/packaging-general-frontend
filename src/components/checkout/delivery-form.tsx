@@ -186,6 +186,13 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
       setError("Please fill in your contact name, phone, email and delivery address.");
       return;
     }
+    // Landmarks are how couriers actually find addresses in Ghana — required.
+    if (!payload.instructions) {
+      setError(
+        "Please add delivery instructions or a landmark so the courier can find you."
+      );
+      return;
+    }
     if (payload.lat == null || payload.lng == null) {
       setError(
         "Please pick your delivery address from the suggestions, tap Use My Current Location, or set the pin on the map."
@@ -372,7 +379,7 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
             </div>
           )}
 
-          <Field id="instructions" label="Delivery Instructions / Landmarks">
+          <Field id="instructions" label="Delivery Instructions / Landmarks *">
             <textarea
               id="instructions"
               name="instructions"
@@ -380,6 +387,7 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
               placeholder="e.g., Behind Shell Fuel Station, ask for Mr. Mensah"
               defaultValue={initial?.instructions}
               className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none"
+              required
             />
           </Field>
         </div>

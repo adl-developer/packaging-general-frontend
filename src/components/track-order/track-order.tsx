@@ -5,6 +5,7 @@ import {
   AlertCircle,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   Download,
   ExternalLink,
   Factory,
@@ -53,13 +54,15 @@ interface TrackedOrder {
   canceled: boolean;
   steps: TimelineStep[];
   customer: { name: string; phone: string; email: string };
-  product: {
+  /** One entry per ordered product (service/fee lines excluded) — the
+   *  Product Information card lists them all. */
+  products: {
     name: string;
     size: string;
     material: string;
     printing: string;
     quantity: string;
-  };
+  }[];
   address: string;
   pricing: {
     itemName: string;
@@ -96,12 +99,9 @@ function buildInvoice(order: TrackedOrder): InvoiceData {
   const vat = +((taxes * 15) / 20).toFixed(2);
   const nhil = +((taxes * 2.5) / 20).toFixed(2);
   const getfund = +(taxes - vat - nhil).toFixed(2);
-  const specs = [
-    order.product.size,
-    order.product.material,
-    order.product.printing,
-  ]
-    .filter((s) => s && s !== "—")
+  const mainProduct = order.products[0];
+  const specs = [mainProduct?.size, mainProduct?.material, mainProduct?.printing]
+    .filter((s): s is string => Boolean(s) && s !== "—")
     .join(" • ");
   return {
     orderNumber: order.number,
@@ -193,7 +193,6 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
   const displayItems = goods.length ? goods : o.items;
   const mainItem = displayItems[0];
   const extraCount = displayItems.length - 1;
-  const opts = mainItem?.options ?? {};
   const totalQty = displayItems.reduce((n, i) => n + i.quantity, 0);
   const steps: TimelineStep[] = STEP_META.map((m, idx) => ({
     title: m.title,
@@ -222,15 +221,16 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
       phone: o.customer.phone || "—",
       email: o.customer.email,
     },
-    product: {
-      name:
-        (mainItem?.title ?? "Your order") +
-        (extraCount > 0 ? ` +${extraCount} more` : ""),
-      size: opts["Size"] ?? mainItem?.variant_title ?? "—",
-      material: opts["Material"] ?? "—",
-      printing: opts["Printing"] ?? "—",
-      quantity: `${totalQty} ${totalQty === 1 ? "unit" : "units"}`,
-    },
+    products: displayItems.map((item) => {
+      const opts = item.options ?? {};
+      return {
+        name: item.title || "Your order",
+        size: opts["Size"] ?? item.variant_title ?? "—",
+        material: opts["Material"] ?? "—",
+        printing: opts["Printing"] ?? "—",
+        quantity: `${item.quantity} ${item.quantity === 1 ? "unit" : "units"}`,
+      };
+    }),
     address: o.address || "—",
     pricing: {
       itemName:
@@ -281,6 +281,11 @@ export function TrackOrder({
   const [invoiceOpen, setInvoiceOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
   const resultAnchorRef = React.useRef<HTMLDivElement | null>(null);
+  // The inputs that produced `result` — so View Invoice can tell whether the
+  // current fields still match the shown order or a fresh lookup is needed.
+  const lookedUpRef = React.useRef<{ order: string; email: string } | null>(
+    null,
+  );
 
   // Only a real, looked-up order has an invoice — never fabricate one.
   const invoiceData = React.useMemo(
@@ -289,13 +294,15 @@ export function TrackOrder({
   );
 
   const runLookup = React.useCallback(
-    (orderNumber: string, emailValue: string) => {
+    (orderNumber: string, emailValue: string, openInvoice = false) => {
       startTransition(async () => {
         const outcome = await lookupOrder(orderNumber, emailValue);
         if (outcome.status === "found") {
+          lookedUpRef.current = { order: orderNumber, email: emailValue };
           setResult(mapToTracked(outcome.order));
           setNotFound(null);
           setLookupError(false);
+          if (openInvoice) setInvoiceOpen(true);
         } else if (outcome.status === "not_found") {
           setResult(null);
           setNotFound(orderNumber);
@@ -331,12 +338,37 @@ export function TrackOrder({
     return () => window.cancelAnimationFrame(id);
   }, [result, notFound, lookupError]);
 
+  // Both actions need the same credentials: an order number plus an email
+  // (the signed-in email counts). Until both exist the buttons stay disabled.
+  // Same precedence as the auto-run effect: an explicit email (typed or from
+  // the URL) wins over the signed-in one, so a deep link for an order placed
+  // under a different address keeps working.
+  const orderNumber = query.trim();
+  const emailValue = (email || loggedInEmail || "").trim();
+  const canLookup = Boolean(orderNumber && emailValue);
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const orderNumber = query.trim();
-    const emailValue = (loggedInEmail ?? email).trim();
-    if (!orderNumber || !emailValue) return;
+    if (!canLookup) return;
     runLookup(orderNumber, emailValue);
+  }
+
+  // View Invoice works straight from the entered details: reuse the shown
+  // order when the fields still match it, otherwise look the order up and
+  // open the invoice as soon as it's found.
+  function onViewInvoice() {
+    if (!canLookup || pending) return;
+    const fresh = lookedUpRef.current;
+    if (
+      result &&
+      fresh &&
+      fresh.order === orderNumber &&
+      fresh.email === emailValue
+    ) {
+      setInvoiceOpen(true);
+      return;
+    }
+    runLookup(orderNumber, emailValue, true);
   }
 
   // Shared action buttons — rendered inline with the order-number input when
@@ -345,8 +377,15 @@ export function TrackOrder({
     <>
       <button
         type="submit"
-        disabled={pending}
-        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust disabled:opacity-60 sm:w-auto"
+        disabled={!canLookup || pending}
+        title={
+          canLookup
+            ? undefined
+            : isLoggedIn
+              ? "Enter your order number first"
+              : "Enter your order number and email first"
+        }
+        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
         {pending ? (
           <Loader2 className="size-4 animate-spin" aria-hidden />
@@ -357,9 +396,15 @@ export function TrackOrder({
       </button>
       <button
         type="button"
-        onClick={() => setInvoiceOpen(true)}
-        disabled={!result}
-        title={result ? undefined : "Track an order first to view its invoice"}
+        onClick={onViewInvoice}
+        disabled={!canLookup || pending}
+        title={
+          canLookup
+            ? undefined
+            : isLoggedIn
+              ? "Enter your order number first"
+              : "Enter your order number and email first"
+        }
         className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-background sm:w-auto"
       >
         <Download className="size-4" aria-hidden />
@@ -643,15 +688,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
           />
 
           <DetailBlock title="Product Information">
-            <DetailGrid
-              rows={[
-                ["Product:", order.product.name],
-                ["Size:", order.product.size],
-                ["Material:", order.product.material],
-                ["Printing:", order.product.printing],
-                ["Quantity:", order.product.quantity],
-              ]}
-            />
+            <ProductInformation products={order.products} />
           </DetailBlock>
 
           <DetailBlock title="Delivery Information">
@@ -724,6 +761,68 @@ function OrderResult({ order }: { order: TrackedOrder }) {
         </div>
       </section>
     </>
+  );
+}
+
+/** How many products show before the list collapses behind "Show all". */
+const PRODUCTS_PREVIEW_COUNT = 2;
+
+/** Every ordered product with its own specs — first two visible, the rest
+ *  behind a Show all / Show less toggle (mirrors the confirmation email's
+ *  per-item list instead of the old single-item summary). */
+function ProductInformation({
+  products,
+}: {
+  products: TrackedOrder["products"];
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  const visible = expanded
+    ? products
+    : products.slice(0, PRODUCTS_PREVIEW_COUNT);
+  const hiddenCount = products.length - PRODUCTS_PREVIEW_COUNT;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {visible.map((p, idx) => (
+        <div
+          key={`${p.name}-${idx}`}
+          className={cn(
+            "flex flex-col gap-2",
+            idx > 0 && "border-t border-line pt-4",
+          )}
+        >
+          <p className="break-words text-sm font-semibold text-brand">
+            {p.name}
+          </p>
+          <DetailGrid
+            rows={[
+              ["Size:", p.size],
+              ["Material:", p.material],
+              ["Printing:", p.printing],
+              ["Quantity:", p.quantity],
+            ]}
+          />
+        </div>
+      ))}
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+        >
+          <ChevronDown
+            className={cn(
+              "size-4 transition-transform",
+              expanded && "rotate-180",
+            )}
+            aria-hidden
+          />
+          {expanded
+            ? "Show less"
+            : `Show all ${products.length} products`}
+        </button>
+      )}
+    </div>
   );
 }
 

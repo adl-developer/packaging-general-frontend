@@ -253,7 +253,13 @@ export function ProductCustomizer({ product }: { product: Product }) {
                   type="number"
                   min={product.moq || 1}
                   value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value) || 0)}
+                  onChange={(e) => {
+                    // Drop leading zeros so "088" reads "88" — React skips the
+                    // DOM rewrite on number inputs when values match numerically.
+                    const cleaned = e.target.value.replace(/^0+(?=\d)/, "");
+                    if (cleaned !== e.target.value) e.target.value = cleaned;
+                    setQuantity(Number(cleaned) || 0);
+                  }}
                   className="h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand focus-visible:border-accent focus-visible:outline-none"
                 />
                 {tier && product.tiers.length > 0 && (
@@ -462,14 +468,14 @@ function BoxDiagram({ dimensions }: { dimensions: string }) {
   return (
     <span className="relative hidden h-14 w-20 shrink-0 sm:block" aria-hidden>
       <svg viewBox="0 0 80 56" className="size-full" fill="none">
-        {/* top, left, right faces (light → dark tan) */}
-        <path d="M16 18 L40 8 L64 18 L40 28 Z" fill="#e8d5c4" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
-        <path d="M16 18 L16 40 L40 50 L40 28 Z" fill="#d4b59a" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
-        <path d="M64 18 L64 40 L40 50 L40 28 Z" fill="#c19f82" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
+        {/* top, left, right faces (light → dark tan) — inset so labels clear the outlines */}
+        <path d="M24 16 L44 8 L64 16 L44 24 Z" fill="#e8d5c4" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
+        <path d="M24 16 L24 36 L44 44 L44 24 Z" fill="#d4b59a" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
+        <path d="M64 16 L64 36 L44 44 L44 24 Z" fill="#c19f82" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
       </svg>
-      <span className="absolute left-0 top-3 text-[8px] font-bold leading-none text-rust">{h}</span>
-      <span className="absolute bottom-1 left-6 text-[8px] font-bold leading-none text-rust">{w}</span>
-      <span className="absolute bottom-3 right-0 text-[8px] font-bold leading-none text-rust">{l}</span>
+      <span className="absolute left-0 top-[19px] text-[8px] font-bold leading-none text-rust">{h}</span>
+      <span className="absolute bottom-0 left-[23px] text-[8px] font-bold leading-none text-rust">{w}</span>
+      <span className="absolute bottom-0 right-0 text-[8px] font-bold leading-none text-rust">{l}</span>
     </span>
   );
 }

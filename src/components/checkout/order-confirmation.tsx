@@ -73,6 +73,15 @@ export function OrderConfirmation({
   const [showModal, setShowModal] = React.useState(!isLoggedIn);
   const paymentMethod = paymentMethodLabel(paymentProviderId);
 
+  // We already know the order number (and usually the email) here, so the
+  // track page can run the lookup immediately instead of asking again. When
+  // the email couldn't be read (guest retrieve failure) but the visitor is
+  // signed in, the track page falls back to the signed-in email; otherwise
+  // they land on the form with the order number pre-filled.
+  const trackHref = email
+    ? `/track-order?order=${encodeURIComponent(orderNumber)}&email=${encodeURIComponent(email)}`
+    : `/track-order?order=${encodeURIComponent(orderNumber)}`;
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-2xl flex-col items-center gap-8 rounded-card border-2 border-[#b9f8cf] bg-surface pb-6 pt-12 px-6 text-center">
@@ -137,7 +146,7 @@ export function OrderConfirmation({
 
         <div className="flex w-full max-w-[448px] gap-4">
           <Link
-            href="/track-order"
+            href={trackHref}
             className="inline-flex h-10 flex-1 items-center justify-center rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
           >
             Track My Order
