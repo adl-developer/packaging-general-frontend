@@ -19,11 +19,11 @@ export async function PromoBar() {
 
   return (
     <div className="bg-accent text-accent-foreground">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-3 text-sm font-medium sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-3 text-sm font-bold sm:px-6 lg:px-8">
         <span className="inline-flex items-center gap-2">
           <Tag className="size-4 shrink-0" aria-hidden />
           <span>
-            Enjoy <span className="font-extrabold text-white">{offer}</span>{" "}
+            Enjoy <span className="text-white">{offer}</span>{" "}
             {promo.campaignName
               ? `for all ${promo.campaignName} orders`
               : "your order"}
@@ -31,7 +31,7 @@ export async function PromoBar() {
         </span>
         <span className="inline-flex items-center gap-2">
           Code:
-          <span className="rounded-chip bg-white/25 px-2 py-0.5 font-extrabold tracking-wide">
+          <span className="rounded-chip bg-white/25 px-2 py-0.5 tracking-wide">
             {promo.code}
           </span>
         </span>

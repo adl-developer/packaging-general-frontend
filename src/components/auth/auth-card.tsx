@@ -107,14 +107,6 @@ export function AuthCard({
               <GoogleIcon />
               Continue with Google
             </button>
-            <button type="button" className={socialButton}>
-              <FacebookIcon />
-              Continue with Facebook
-            </button>
-            <button type="button" className={socialButton}>
-              <AppleIcon />
-              Continue with Apple
-            </button>
           </div>
 
           <Divider label="Or continue with email" />
@@ -332,24 +324,3 @@ function GoogleIcon() {
   );
 }
 
-function FacebookIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
-      <path
-        fill="#1877f2"
-        d="M16 8a8 8 0 1 0-9.25 7.9v-5.59H4.72V8h2.03V6.24c0-2 1.2-3.11 3.02-3.11.87 0 1.79.16 1.79.16v1.97h-1.01c-.99 0-1.3.62-1.3 1.25V8h2.22l-.36 2.31H9.25v5.59A8 8 0 0 0 16 8Z"
-      />
-    </svg>
-  );
-}
-
-function AppleIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
-      <path
-        fill="#3d3428"
-        d="M10.84 8.5c-.02-1.5 1.22-2.22 1.28-2.26-.7-1.02-1.78-1.16-2.17-1.18-.92-.09-1.8.54-2.27.54-.47 0-1.19-.53-1.96-.51-1 .01-1.94.59-2.46 1.49-1.05 1.82-.27 4.51.76 5.99.5.72 1.1 1.53 1.88 1.5.76-.03 1.04-.49 1.96-.49.91 0 1.17.49 1.96.47.81-.01 1.32-.73 1.82-1.46.57-.84.81-1.65.82-1.69-.02-.01-1.57-.6-1.59-2.39ZM9.36 4.07c.41-.5.69-1.2.61-1.9-.59.03-1.31.4-1.74.89-.38.44-.72 1.15-.63 1.83.66.05 1.34-.33 1.76-.82Z"
-      />
-    </svg>
-  );
-}

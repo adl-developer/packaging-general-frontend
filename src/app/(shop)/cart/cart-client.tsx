@@ -475,25 +475,15 @@ export function CartClient({
       </div>
 
       <div className="flex flex-col gap-4">
-        <AnimatePresence mode="popLayout" initial={false}>
-          {items.map((item) => (
-            <motion.div
-              key={item.id}
-              layout
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
-            >
-              <CartLine
-                item={item}
-                pending={isPending}
-                onRemove={remove}
-                onQty={setQty}
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
+        {items.map((item) => (
+          <CartLine
+            key={item.id}
+            item={item}
+            pending={isPending}
+            onRemove={remove}
+            onQty={setQty}
+          />
+        ))}
       </div>
 
       {visibleCrossSell.length > 0 && (
@@ -508,20 +498,15 @@ export function CartClient({
             className="-mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0"
             role="list"
           >
-            <AnimatePresence mode="popLayout" initial={false}>
-              {visibleCrossSell.map((c) => (
-                <motion.div
-                  key={c.id}
-                  layout
-                  exit={{ opacity: 0, scale: 0.96 }}
-                  transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
-                  role="listitem"
-                  className="snap-start sm:snap-align-none"
-                >
-                  <CrossSellCard item={c} onAdd={() => addCrossSell(c)} />
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            {visibleCrossSell.map((c) => (
+              <div
+                key={c.id}
+                role="listitem"
+                className="snap-start sm:snap-align-none"
+              >
+                <CrossSellCard item={c} onAdd={() => addCrossSell(c)} />
+              </div>
+            ))}
           </div>
         </div>
       )}
