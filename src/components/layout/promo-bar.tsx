@@ -31,7 +31,7 @@ export async function PromoBar() {
         </span>
         <span className="inline-flex items-center gap-2">
           Code:
-          <span className="rounded-chip bg-white px-2 py-0.5 font-bold tracking-wide text-plum">
+          <span className="rounded-chip bg-white/25 px-2 py-0.5 font-extrabold tracking-wide">
             {promo.code}
           </span>
         </span>
