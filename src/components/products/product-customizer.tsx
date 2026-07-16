@@ -187,11 +187,6 @@ export function ProductCustomizer({ product }: { product: Product }) {
                   onSelect={() => setSize(s.id)}
                   title={s.label}
                   description={s.dimensions}
-                  trailing={
-                    s.dimensions ? (
-                      <BoxDiagram dimensions={s.dimensions} />
-                    ) : undefined
-                  }
                 />
               ))}
             </Section>
@@ -400,14 +395,12 @@ function OptionCard({
   title,
   description,
   meta,
-  trailing,
 }: {
   selected: boolean;
   onSelect: () => void;
   title: string;
   description: string;
   meta?: string;
-  trailing?: React.ReactNode;
 }) {
   return (
     <button
@@ -442,7 +435,6 @@ function OptionCard({
         <span className="text-sm text-muted">{description}</span>
         {meta && <span className="text-sm text-muted">{meta}</span>}
       </span>
-      {trailing}
       {selected && (
         <motion.span
           initial={{ scale: 0, opacity: 0 }}
@@ -456,26 +448,3 @@ function OptionCard({
   );
 }
 
-/**
- * Filled isometric box illustration with L/W/H labels (Figma frame 404:1371).
- * Parses "300 × 200 × 150 mm" into the three edge labels.
- */
-function BoxDiagram({ dimensions }: { dimensions: string }) {
-  const [l, w, h] = dimensions
-    .replace(/mm/i, "")
-    .split("×")
-    .map((s) => s.trim());
-  return (
-    <span className="relative hidden h-14 w-20 shrink-0 sm:block" aria-hidden>
-      <svg viewBox="0 0 80 56" className="size-full" fill="none">
-        {/* top, left, right faces (light → dark tan) — inset so labels clear the outlines */}
-        <path d="M24 16 L44 8 L64 16 L44 24 Z" fill="#e8d5c4" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
-        <path d="M24 16 L24 36 L44 44 L44 24 Z" fill="#d4b59a" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
-        <path d="M64 16 L64 36 L44 44 L44 24 Z" fill="#c19f82" stroke="#964022" strokeWidth="1.2" strokeLinejoin="round" />
-      </svg>
-      <span className="absolute left-0 top-[19px] text-[8px] font-bold leading-none text-rust">{h}</span>
-      <span className="absolute bottom-0 left-[23px] text-[8px] font-bold leading-none text-rust">{w}</span>
-      <span className="absolute bottom-0 right-0 text-[8px] font-bold leading-none text-rust">{l}</span>
-    </span>
-  );
-}

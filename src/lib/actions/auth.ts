@@ -6,6 +6,12 @@ import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk, createAuthClient, authHeaders } from "@/lib/medusa";
 import { AUTH_COOKIE, getAuthToken } from "@/lib/auth-token";
+import {
+  isValidEmail,
+  normalizeGhanaPhone,
+  EMAIL_ERROR,
+  PHONE_ERROR,
+} from "@/lib/validation";
 
 /**
  * Customer authentication for the storefront.
@@ -207,15 +213,16 @@ export async function authenticate(
     const company = String(formData.get("company") || "").trim();
     const phoneLocal = String(formData.get("phone") || "").trim();
     if (!fullName) return fieldError("Please enter your full name.");
+    if (!isValidEmail(email)) return fieldError(EMAIL_ERROR);
     if (password.length < 8) {
       return fieldError("Password must be at least 8 characters.");
     }
     const [firstName, ...rest] = fullName.split(/\s+/);
     const lastName = rest.join(" ");
-    // Ghanaian numbers are usually entered with a leading 0 (e.g. 024 123
-    // 4567) — strip it before prefixing the country code.
-    const phoneDigits = phoneLocal.replace(/[^0-9]/g, "").replace(/^0+/, "");
-    const phone = phoneDigits ? `+233${phoneDigits}` : undefined;
+    // Phone is optional on signup, but when given it must be a real Ghana
+    // number — normalized to E.164 so SMS notifications work later.
+    const phone = phoneLocal ? normalizeGhanaPhone(phoneLocal) : undefined;
+    if (phone === null) return fieldError(PHONE_ERROR);
 
     const outcome = await registerCustomer({
       email,

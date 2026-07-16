@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatGhs } from "@/lib/format";
+import { isValidEmail } from "@/lib/validation";
 import { lookupOrder, type OrderLookupResult } from "@/lib/actions/orders";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -345,7 +346,9 @@ export function TrackOrder({
   // under a different address keeps working.
   const orderNumber = query.trim();
   const emailValue = (email || loggedInEmail || "").trim();
-  const canLookup = Boolean(orderNumber && emailValue);
+  // Format-check the email too: "View Invoice" is type="button", so native
+  // form validation never runs for it.
+  const canLookup = Boolean(orderNumber && isValidEmail(emailValue));
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -383,7 +386,7 @@ export function TrackOrder({
             ? undefined
             : isLoggedIn
               ? "Enter your order number first"
-              : "Enter your order number and email first"
+              : "Enter your order number and a valid email first"
         }
         className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
@@ -403,7 +406,7 @@ export function TrackOrder({
             ? undefined
             : isLoggedIn
               ? "Enter your order number first"
-              : "Enter your order number and email first"
+              : "Enter your order number and a valid email first"
         }
         className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-background sm:w-auto"
       >

@@ -7,6 +7,13 @@ import { ArrowLeft, Building2, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { saveContactInfo } from "@/lib/actions/checkout";
+import {
+  isValidEmail,
+  normalizeGhanaPhone,
+  EMAIL_ERROR,
+  PHONE_ERROR,
+  GH_PHONE_PATTERN,
+} from "@/lib/validation";
 
 /**
  * Checkout — Company Information step (Figma frame 424:2868, step 1 of the
@@ -45,8 +52,17 @@ export function CompanyInfoForm({ initial }: { initial?: CompanyInfoInitial }) {
       setError("Please fill in every field before continuing.");
       return;
     }
+    const phone = normalizeGhanaPhone(payload.phone);
+    if (!phone) {
+      setError(PHONE_ERROR);
+      return;
+    }
+    if (!isValidEmail(payload.email)) {
+      setError(EMAIL_ERROR);
+      return;
+    }
     startTransition(async () => {
-      const result = await saveContactInfo(payload);
+      const result = await saveContactInfo({ ...payload, phone });
       if (!result.ok) {
         setError(result.error);
         return;
@@ -92,7 +108,7 @@ export function CompanyInfoForm({ initial }: { initial?: CompanyInfoInitial }) {
             <input id="contact-person" name="contactPerson" type="text" autoComplete="name" placeholder="Emmanuel Ntim" defaultValue={initial?.contactPerson} className={inputCls} required />
           </Field>
           <Field id="company-phone" label="Phone Number *">
-            <input id="company-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 123 456 890" defaultValue={initial?.phone} className={inputCls} required />
+            <input id="company-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 24 123 4567" pattern={GH_PHONE_PATTERN} title={PHONE_ERROR} defaultValue={initial?.phone} className={inputCls} required />
           </Field>
           <Field id="company-email" label="Email Address *">
             <input id="company-email" name="email" type="email" autoComplete="email" placeholder="entim@gmail.com" defaultValue={initial?.email} className={inputCls} required />

@@ -7,6 +7,12 @@ import { sdk, authHeaders } from "@/lib/medusa";
 import { getCart } from "./cart";
 import { getCustomer } from "./auth";
 import { getAuthToken } from "@/lib/auth-token";
+import {
+  isValidEmail,
+  normalizeGhanaPhone,
+  EMAIL_ERROR,
+  PHONE_ERROR,
+} from "@/lib/validation";
 
 /**
  * Checkout server actions — wire forms + payment to Medusa, then to Paystack.
@@ -169,13 +175,19 @@ export async function saveContactInfo(input: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const id = await readCartId();
   if (!id) return { ok: false, error: "Your cart has expired. Please add an item again." };
+  // Re-validate server-side — the forms check too, but actions are callable
+  // directly, and a bad phone breaks Twilio SMS / Yango downstream.
+  const email = input.email.trim();
+  const phone = normalizeGhanaPhone(input.phone);
+  if (!isValidEmail(email)) return { ok: false, error: EMAIL_ERROR };
+  if (!phone) return { ok: false, error: PHONE_ERROR };
   try {
     await sdk.store.cart.update(id, {
-      email: input.email,
+      email,
       metadata: {
         company_name: input.companyName,
         contact_person: input.contactPerson,
-        contact_phone: input.phone,
+        contact_phone: phone,
       },
     });
   } catch (err) {
@@ -189,7 +201,7 @@ export async function saveContactInfo(input: {
   if (token) {
     try {
       await sdk.store.customer.update(
-        { company_name: input.companyName, phone: input.phone },
+        { company_name: input.companyName, phone },
         {},
         authHeaders(token)
       );
@@ -221,6 +233,13 @@ export async function saveDeliveryAddress(input: {
   const id = await readCartId();
   if (!id) return { ok: false, error: "Your cart has expired. Please add an item again." };
 
+  // Re-validate server-side — the forms check too, but actions are callable
+  // directly, and Yango claims + SMS notifications need a real E.164 phone.
+  const email = input.email.trim();
+  const phone = normalizeGhanaPhone(input.phone);
+  if (!isValidEmail(email)) return { ok: false, error: EMAIL_ERROR };
+  if (!phone) return { ok: false, error: PHONE_ERROR };
+
   const [firstName, ...rest] = input.contactName.trim().split(/\s+/);
   const lastName = rest.join(" ") || firstName || "Customer";
 
@@ -235,7 +254,7 @@ export async function saveDeliveryAddress(input: {
   const address: HttpTypes.StoreAddAddress = {
     first_name: firstName || "Customer",
     last_name: lastName,
-    phone: input.phone,
+    phone,
     address_1: input.address,
     city: "Accra",
     country_code: "gh",
@@ -244,7 +263,7 @@ export async function saveDeliveryAddress(input: {
 
   try {
     await sdk.store.cart.update(id, {
-      email: input.email,
+      email,
       shipping_address: address,
       billing_address: address,
     });
@@ -273,7 +292,7 @@ export async function saveDeliveryAddress(input: {
       const payload = {
         first_name: address.first_name,
         last_name: address.last_name,
-        phone: input.phone,
+        phone,
         address_1: input.address,
         city: "Accra",
         country_code: "gh",

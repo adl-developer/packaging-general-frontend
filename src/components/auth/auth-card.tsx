@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { SPRING_SOFT } from "@/lib/motion";
 import { authenticate, type AuthState } from "@/lib/actions/auth";
+import { GH_PHONE_PATTERN, PHONE_ERROR } from "@/lib/validation";
 
 /**
  * Tabbed auth card — exact spec from Figma "Sign In" (458:14565) and
@@ -194,6 +195,8 @@ export function AuthCard({
                       type="tel"
                       autoComplete="tel-national"
                       placeholder="24 123 4567"
+                      pattern={GH_PHONE_PATTERN}
+                      title={PHONE_ERROR}
                       className={fieldInput}
                     />
                   </div>

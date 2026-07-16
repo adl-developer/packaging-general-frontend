@@ -7,6 +7,13 @@ import { ArrowLeft, CalendarClock, Loader2, Navigation } from "lucide-react";
 import { motion } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { saveDeliveryAddress } from "@/lib/actions/checkout";
+import {
+  isValidEmail,
+  normalizeGhanaPhone,
+  EMAIL_ERROR,
+  PHONE_ERROR,
+  GH_PHONE_PATTERN,
+} from "@/lib/validation";
 import { DeliveryLocation, type MapCoordSource } from "./delivery-map";
 
 /**
@@ -186,6 +193,16 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
       setError("Please fill in your contact name, phone, email and delivery address.");
       return;
     }
+    const phone = normalizeGhanaPhone(payload.phone);
+    if (!phone) {
+      setError(PHONE_ERROR);
+      return;
+    }
+    payload.phone = phone;
+    if (!isValidEmail(payload.email)) {
+      setError(EMAIL_ERROR);
+      return;
+    }
     // Landmarks are how couriers actually find addresses in Ghana — required.
     if (!payload.instructions) {
       setError(
@@ -259,7 +276,7 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
               <input id="contact-name" name="contactName" type="text" autoComplete="name" placeholder="Emmanuel Ntim" defaultValue={initial?.contactName} className={inputCls} required />
             </Field>
             <Field id="contact-phone" label="Phone Number *">
-              <input id="contact-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 123 456 890" defaultValue={initial?.phone} className={inputCls} required />
+              <input id="contact-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 24 123 4567" pattern={GH_PHONE_PATTERN} title={PHONE_ERROR} defaultValue={initial?.phone} className={inputCls} required />
             </Field>
           </div>
 
