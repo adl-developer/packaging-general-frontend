@@ -43,6 +43,12 @@ export function ProductCustomizer({ product }: { product: Product }) {
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
 
+  // Warm the cart route (Add to Cart / Buy Now both land there) so the post-add
+  // navigation is instant instead of paying for the route on click.
+  React.useEffect(() => {
+    router.prefetch("/cart");
+  }, [router]);
+
   // Section layout adapts to the product (accessories have no material or
   // printing choices). Indices feed the scroll-spy refs + heading numbers.
   const hasMaterials = product.materials.length > 0;

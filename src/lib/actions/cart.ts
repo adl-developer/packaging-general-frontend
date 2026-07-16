@@ -192,11 +192,32 @@ export async function removePromoCode(code: string): Promise<PromoResult> {
   }
 }
 
-/** Internal: return current cart or create a fresh one bound to the Ghana region. */
-async function ensureCart(): Promise<HttpTypes.StoreCart> {
-  const existing = await getCart();
-  if (existing) return existing;
+/** True when the SDK error means the cart no longer exists server-side.
+ *  This genuinely happens in prod: Medusa's createCartsStep compensation
+ *  hard-deletes a cart when a later workflow step fails (observed on the
+ *  memory-starved Render instance, 2026-07-16). */
+function isCartGone(err: unknown): boolean {
+  return (err as { status?: number })?.status === 404;
+}
 
+/**
+ * Static-data caches (module scope, per server instance).
+ *
+ * The Ghana region and the print-setup fee variants come from the seed and
+ * effectively never change at runtime, yet we were re-fetching them from the
+ * backend on cart actions — each fetch is a full backend round-trip (~0.5–1.5s
+ * on the current Render box). The TTL keeps a re-seed from wedging a
+ * long-lived server instance with stale ids forever.
+ */
+const STATIC_CACHE_TTL_MS = 10 * 60 * 1000;
+let regionCache: { id: string; at: number } | null = null;
+const setupVariantCache = new Map<string, { id: string; at: number }>();
+
+/** Resolve (and cache) the id of the GHS region carts are bound to. */
+async function getGhanaRegionId(): Promise<string> {
+  if (regionCache && Date.now() - regionCache.at < STATIC_CACHE_TTL_MS) {
+    return regionCache.id;
+  }
   const { regions } = await sdk.store.region.list();
   const region =
     regions.find((r) => r.currency_code === "ghs") ?? regions[0];
@@ -205,7 +226,18 @@ async function ensureCart(): Promise<HttpTypes.StoreCart> {
       "No region available — has the Medusa backend been seeded for Ghana?"
     );
   }
-  const { cart } = await sdk.store.cart.create({ region_id: region.id });
+  regionCache = { id: region.id, at: Date.now() };
+  return region.id;
+}
+
+/** Internal: return current cart or create a fresh one bound to the Ghana region. */
+async function ensureCart(): Promise<HttpTypes.StoreCart> {
+  const existing = await getCart();
+  if (existing) return existing;
+
+  const { cart } = await sdk.store.cart.create({
+    region_id: await getGhanaRegionId(),
+  });
   await writeCartId(cart.id);
   return cart;
 }
@@ -216,14 +248,26 @@ export async function addLineItem(
   quantity = 1
 ): Promise<HttpTypes.StoreCart | null> {
   const cart = await ensureCart();
-  await sdk.store.cart.createLineItem(cart.id, {
-    variant_id: variantId,
-    quantity,
-  });
+  let updated: HttpTypes.StoreCart;
+  try {
+    // createLineItem returns the updated cart — asking for CART_FIELDS here
+    // saves the extra retrieve we used to do after the mutation.
+    ({ cart: updated } = await sdk.store.cart.createLineItem(
+      cart.id,
+      { variant_id: variantId, quantity },
+      { fields: CART_FIELDS }
+    ));
+  } catch (err) {
+    // A 404 here is either a vanished cart or a missing variant. getCart()
+    // tells them apart: it clears the cookie only when the cart itself is
+    // gone, so the user's retry starts a fresh cart. Callers show error UI.
+    if (isCartGone(err)) await getCart();
+    throw err;
+  }
   await writeCartId(cart.id); // sliding expiry
   revalidatePath("/cart");
   revalidatePath("/checkout");
-  return getCart();
+  return updated;
 }
 
 /** Hidden service product holding the one-time printing setup fee variants
@@ -232,8 +276,12 @@ const PRINT_SETUP_HANDLE = "print-setup";
 
 /** Resolve the setup-fee variant for a printing option value (e.g.
  *  "1-Color Print"). Throws when the product/variant isn't seeded — a printed
- *  order MUST carry its setup fee, silently skipping would undercharge. */
+ *  order MUST carry its setup fee, silently skipping would undercharge.
+ *  Cached: the setup-fee product is static seed data. */
 async function findSetupFeeVariant(printingValue: string): Promise<string> {
+  const cached = setupVariantCache.get(printingValue);
+  if (cached && Date.now() - cached.at < STATIC_CACHE_TTL_MS) return cached.id;
+
   const { products } = await sdk.store.product.list({
     handle: PRINT_SETUP_HANDLE,
     fields: "id,*variants,*variants.options,variants.options.option.title",
@@ -249,6 +297,7 @@ async function findSetupFeeVariant(printingValue: string): Promise<string> {
       `Setup-fee variant for "${printingValue}" not found — has the backend been re-seeded with the enriched product model?`
     );
   }
+  setupVariantCache.set(printingValue, { id: variant.id, at: Date.now() });
   return variant.id;
 }
 
@@ -266,29 +315,51 @@ export async function addConfiguredLineItem(input: {
   const cart = await ensureCart();
   const notes = input.notes?.trim();
 
-  await sdk.store.cart.createLineItem(cart.id, {
-    variant_id: input.variantId,
-    quantity: input.quantity,
-    ...(notes ? { metadata: { notes } } : {}),
-  });
+  // The setup-fee lookup doesn't depend on the carton line — run it while the
+  // first mutation is in flight instead of after it.
+  const setupVariantPromise = input.setupPrintingValue
+    ? findSetupFeeVariant(input.setupPrintingValue)
+    : null;
+  // If the createLineItem below throws before we await this, the rejection
+  // must not surface as an unhandledRejection — awaiting it later still throws.
+  setupVariantPromise?.catch(() => {});
 
-  if (input.setupPrintingValue) {
-    const setupVariantId = await findSetupFeeVariant(input.setupPrintingValue);
-    const alreadyCharged = (cart.items ?? []).some(
-      (item) => item.variant_id === setupVariantId
-    );
-    if (!alreadyCharged) {
-      await sdk.store.cart.createLineItem(cart.id, {
-        variant_id: setupVariantId,
-        quantity: 1,
-      });
+  let updated: HttpTypes.StoreCart;
+  try {
+    ({ cart: updated } = await sdk.store.cart.createLineItem(
+      cart.id,
+      {
+        variant_id: input.variantId,
+        quantity: input.quantity,
+        ...(notes ? { metadata: { notes } } : {}),
+      },
+      { fields: CART_FIELDS }
+    ));
+
+    if (setupVariantPromise) {
+      const setupVariantId = await setupVariantPromise;
+      const alreadyCharged = (updated.items ?? []).some(
+        (item) => item.variant_id === setupVariantId
+      );
+      if (!alreadyCharged) {
+        ({ cart: updated } = await sdk.store.cart.createLineItem(
+          cart.id,
+          { variant_id: setupVariantId, quantity: 1 },
+          { fields: CART_FIELDS }
+        ));
+      }
     }
+  } catch (err) {
+    // Same vanished-cart recovery as addLineItem (the customizer shows its
+    // "Couldn't add to cart" message; the retry then works).
+    if (isCartGone(err)) await getCart();
+    throw err;
   }
 
   await writeCartId(cart.id); // sliding expiry
   revalidatePath("/cart");
   revalidatePath("/checkout");
-  return getCart();
+  return updated;
 }
 
 /** Set a line item's quantity. Quantity ≤ 0 removes the line. */
@@ -298,14 +369,37 @@ export async function updateLineItemQuantity(
 ): Promise<HttpTypes.StoreCart | null> {
   const id = await readCartId();
   if (!id) return null;
-  if (quantity <= 0) {
-    await sdk.store.cart.deleteLineItem(id, itemId);
-  } else {
-    await sdk.store.cart.updateLineItem(id, itemId, { quantity });
+  let updated: HttpTypes.StoreCart | null;
+  try {
+    if (quantity <= 0) {
+      // The delete response carries the updated cart as `parent` (typed
+      // optional) — fall back to a retrieve if it's ever absent.
+      const { parent } = await sdk.store.cart.deleteLineItem(id, itemId, {
+        fields: CART_FIELDS,
+      });
+      updated = parent ?? (await getCart());
+    } else {
+      ({ cart: updated } = await sdk.store.cart.updateLineItem(
+        id,
+        itemId,
+        { quantity },
+        { fields: CART_FIELDS }
+      ));
+    }
+  } catch (err) {
+    if (isCartGone(err)) {
+      // Cart (or just this line) vanished server-side. getCart() resolves
+      // which: dead cart → clears the cookie and returns null (the client
+      // reverts its optimistic update); live cart → fresh state re-syncs it.
+      const fresh = await getCart();
+      revalidatePath("/cart");
+      return fresh;
+    }
+    throw err;
   }
   await writeCartId(id); // sliding expiry
   revalidatePath("/cart");
-  return getCart();
+  return updated;
 }
 
 export async function removeLineItem(
@@ -313,10 +407,23 @@ export async function removeLineItem(
 ): Promise<HttpTypes.StoreCart | null> {
   const id = await readCartId();
   if (!id) return null;
-  await sdk.store.cart.deleteLineItem(id, itemId);
+  let updated: HttpTypes.StoreCart | null;
+  try {
+    const { parent } = await sdk.store.cart.deleteLineItem(id, itemId, {
+      fields: CART_FIELDS,
+    });
+    updated = parent ?? (await getCart());
+  } catch (err) {
+    if (isCartGone(err)) {
+      const fresh = await getCart();
+      revalidatePath("/cart");
+      return fresh;
+    }
+    throw err;
+  }
   await writeCartId(id); // sliding expiry
   revalidatePath("/cart");
-  return getCart();
+  return updated;
 }
 
 /** Empty the cart by deleting every line item. Keeps the cart id so the guest
@@ -324,10 +431,32 @@ export async function removeLineItem(
 export async function emptyCart(): Promise<HttpTypes.StoreCart | null> {
   const cart = await getCart();
   if (!cart) return null;
-  for (const item of cart.items ?? []) {
-    if (item?.id) await sdk.store.cart.deleteLineItem(cart.id, item.id);
+  const itemIds = (cart.items ?? [])
+    .map((item) => item?.id)
+    .filter((id): id is string => !!id);
+  // Deletes MUST run sequentially — Medusa locks the cart per mutation and a
+  // concurrent delete 409s (verified against prod 2026-07-16). The last delete
+  // returns the updated cart, saving the trailing retrieve.
+  let updated: HttpTypes.StoreCart | null = cart;
+  try {
+    for (const [index, itemId] of itemIds.entries()) {
+      const last = index === itemIds.length - 1;
+      const { parent } = await sdk.store.cart.deleteLineItem(
+        cart.id,
+        itemId,
+        last ? { fields: CART_FIELDS } : undefined
+      );
+      if (last) updated = parent ?? (await getCart());
+    }
+  } catch (err) {
+    if (isCartGone(err)) {
+      const fresh = await getCart();
+      revalidatePath("/cart");
+      return fresh;
+    }
+    throw err;
   }
   await writeCartId(cart.id); // sliding expiry
   revalidatePath("/cart");
-  return getCart();
+  return updated;
 }

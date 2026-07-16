@@ -248,6 +248,25 @@ async function getRegionId(): Promise<string | undefined> {
   return cachedRegionId;
 }
 
+/**
+ * Catalog caches (module scope, per server instance).
+ *
+ * Products/prices are seed data that effectively never change at runtime, yet
+ * every /products and /products/[slug] navigation was re-fetching them from
+ * Medusa — a full backend round-trip that made "Place Order" feel slow (the
+ * detail page fetches TWICE: generateMetadata + the page). A short TTL keeps a
+ * re-seed from wedging a long-lived instance with stale data. Only SUCCESSFUL
+ * backend responses are cached — a transient failure must not stick.
+ */
+const CATALOG_TTL_MS = 5 * 60 * 1000;
+type Cached<T> = { data: T; at: number };
+function fresh<T>(entry: Cached<T> | null | undefined): T | undefined {
+  return entry && Date.now() - entry.at < CATALOG_TTL_MS ? entry.data : undefined;
+}
+let listProductsCache: Cached<ProductSummary[]> | null = null;
+const productBySlugCache = new Map<string, Cached<Product | null>>();
+let crossSellCache: Cached<CrossSellProduct[]> | null = null;
+
 /** Internal service products (e.g. the print-setup fee) are purchasable but
  *  never browsed directly. */
 function isServiceProduct(p: HttpTypes.StoreProduct): boolean {
@@ -280,6 +299,8 @@ const DETAIL_FIELDS =
 /** Fetch a single product by handle (slug) for the detail page. Returns null
  *  on miss or backend error. */
 export async function getProductBySlug(slug: string): Promise<Product | null> {
+  const cached = fresh(productBySlugCache.get(slug));
+  if (cached !== undefined) return cached;
   try {
     const region_id = await getRegionId();
     const { products: live } = await sdk.store.product.list({
@@ -289,11 +310,12 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
       limit: 1,
     });
     const p = live[0];
-    if (!p || isServiceProduct(p)) return null;
-    return toFullProduct(p);
+    const result = !p || isServiceProduct(p) ? null : toFullProduct(p);
+    productBySlugCache.set(slug, { data: result, at: Date.now() });
+    return result;
   } catch (err) {
     console.error(`[getProductBySlug] failed for "${slug}":`, err);
-    return null;
+    return null; // transient — don't cache
   }
 }
 
@@ -449,6 +471,8 @@ export interface CrossSellProduct {
  *  backend is unreachable or the accessories aren't seeded — the cart section
  *  hides itself in that case. */
 export async function listCrossSellProducts(): Promise<CrossSellProduct[]> {
+  const cached = fresh(crossSellCache);
+  if (cached !== undefined) return cached;
   try {
     const region_id = await getRegionId();
     const { products: live } = await sdk.store.product.list({
@@ -458,7 +482,7 @@ export async function listCrossSellProducts(): Promise<CrossSellProduct[]> {
         "id,title,handle,description,metadata,*variants,variants.calculated_price",
       limit: CROSS_SELL_HANDLES.length,
     });
-    return live
+    const result = live
       .map((p): CrossSellProduct | null => {
         const variant = p.variants?.[0];
         if (!variant) return null;
@@ -475,9 +499,11 @@ export async function listCrossSellProducts(): Promise<CrossSellProduct[]> {
         };
       })
       .filter((p): p is CrossSellProduct => p !== null);
+    crossSellCache = { data: result, at: Date.now() };
+    return result;
   } catch (err) {
     console.error("[listCrossSellProducts] failed:", err);
-    return [];
+    return []; // transient — don't cache
   }
 }
 
@@ -500,6 +526,8 @@ const SAMPLE_PRODUCTS: ProductSummary[] = products.map((p) => ({
  *  is never empty in dev or when Medusa is down. Service products (print-setup
  *  fee) are excluded. */
 export async function listProducts(): Promise<ProductSummary[]> {
+  const cached = fresh(listProductsCache);
+  if (cached !== undefined) return cached;
   try {
     const region_id = await getRegionId();
     const { products: live } = await sdk.store.product.list({
@@ -509,7 +537,10 @@ export async function listProducts(): Promise<ProductSummary[]> {
       limit: 100,
     });
     const browsable = live.filter((p) => !isServiceProduct(p));
-    return browsable.length ? browsable.map(toSummary) : SAMPLE_PRODUCTS;
+    const result = browsable.length ? browsable.map(toSummary) : SAMPLE_PRODUCTS;
+    // Only cache real catalog data — not the empty→sample fallback.
+    if (browsable.length) listProductsCache = { data: result, at: Date.now() };
+    return result;
   } catch (err) {
     console.error("[listProducts] Medusa unreachable; using sample products:", err);
     return SAMPLE_PRODUCTS;

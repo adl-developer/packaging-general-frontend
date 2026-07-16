@@ -65,6 +65,11 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
   const [geoError, setGeoError] = React.useState<string | null>(null);
   const [manualOpen, setManualOpen] = React.useState(false);
 
+  // Warm the payment step so the post-save navigation is instant.
+  React.useEffect(() => {
+    router.prefetch("/checkout/payment");
+  }, [router]);
+
   // Bumped (with coords) whenever the pin moves via something other than
   // Places Autocomplete — drag, click, "Use My Current Location", or manual
   // lat/lng entry — so `DeliveryLocation` reverse-geocodes and writes the
@@ -176,6 +181,38 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
     [requestGeocode]
   );
 
+  // Gate "Continue to Payment" until every required (*) field has *some*
+  // content — the button stays inactive on an empty form. This is a light
+  // presence check only; the detailed rules (phone/email format, coords
+  // present) still run in `onSubmit` with their own messages.
+  const formRef = React.useRef<HTMLFormElement | null>(null);
+  const [canContinue, setCanContinue] = React.useState(false);
+  const revalidate = React.useCallback(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const data = new FormData(form);
+    const filled = (name: string) =>
+      String(data.get(name) ?? "").trim().length > 0;
+    // The Delivery Address input is filled programmatically by Google Places /
+    // reverse-geocoding (direct DOM write, no input event), and that always
+    // rides along with a coords update — so treat coords being set as
+    // satisfying the address requirement.
+    const addressOk = filled("address") || coords != null;
+    setCanContinue(
+      filled("contactName") &&
+        filled("phone") &&
+        filled("email") &&
+        filled("instructions") &&
+        addressOk
+    );
+  }, [coords]);
+  // Runs on mount (picks up any prefilled `initial` values) and whenever
+  // `coords` change (Places pick, current location, map drag/click, manual
+  // lat/lng) — the input `onInput` handler covers ordinary typing.
+  React.useEffect(() => {
+    revalidate();
+  }, [revalidate]);
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -237,10 +274,12 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
       </Link>
 
       <motion.form
+        ref={formRef}
         initial={{ y: 12 }}
         animate={{ y: 0 }}
         transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
         onSubmit={onSubmit}
+        onInput={revalidate}
         className="mx-auto flex max-w-2xl flex-col gap-6 rounded-card border border-line bg-surface p-6"
       >
         <div className="flex flex-col gap-1">
@@ -417,7 +456,7 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
 
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || !canContinue}
           className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isPending && <Loader2 className="size-4 animate-spin" aria-hidden />}

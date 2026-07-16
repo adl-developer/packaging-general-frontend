@@ -30,6 +30,10 @@ import type { ActivePromotion } from "@/lib/promotions";
 
 export type { CartItem } from "./map-cart";
 
+// Idle window before a line's quantity change is written to the (slow) backend.
+// Rapid +/− clicks within this window collapse into a single write.
+const QTY_DEBOUNCE_MS = 450;
+
 const lineSubtotal = (item: CartItem) => item.unitPrice * item.quantity;
 const lineTotal = (item: CartItem) =>
   lineSubtotal(item) * (1 + item.taxRate);
@@ -146,14 +150,15 @@ function ConfirmDialog({
 function QtyStepper({
   qty,
   min = 1,
-  onChange,
-  disabled,
+  onStep,
   label,
 }: {
   qty: number;
   min?: number;
-  onChange: (n: number) => void;
-  disabled?: boolean;
+  /** Emits a delta (+1 / −1). The parent updates instantly and syncs the
+   *  backend on its own debounced, serialized schedule — the buttons never
+   *  block on the network, so there's no "stop" cursor / dead-click delay. */
+  onStep: (delta: number) => void;
   label: string;
 }) {
   return (
@@ -161,8 +166,8 @@ function QtyStepper({
       <button
         type="button"
         aria-label={`Decrease ${label}`}
-        onClick={() => onChange(Math.max(min, qty - 1))}
-        disabled={disabled || qty <= min}
+        onClick={() => onStep(-1)}
+        disabled={qty <= min}
         className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color] duration-200 hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Minus className="size-4" aria-hidden />
@@ -185,8 +190,7 @@ function QtyStepper({
       <button
         type="button"
         aria-label={`Increase ${label}`}
-        onClick={() => onChange(qty + 1)}
-        disabled={disabled}
+        onClick={() => onStep(1)}
         className="grid size-9 place-items-center rounded-button border border-line bg-background text-brand transition-[color,background-color] duration-200 hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Plus className="size-4" aria-hidden />
@@ -199,12 +203,12 @@ function CartLine({
   item,
   pending,
   onRemove,
-  onQty,
+  onStep,
 }: {
   item: CartItem;
   pending: boolean;
   onRemove: (id: string) => void;
-  onQty: (id: string, n: number) => void;
+  onStep: (id: string, delta: number) => void;
 }) {
   return (
     <div className="rounded-card border border-line bg-surface p-6">
@@ -261,8 +265,7 @@ function CartLine({
                   </span>
                   <QtyStepper
                     qty={item.quantity}
-                    onChange={(n) => onQty(item.id, n)}
-                    disabled={pending}
+                    onStep={(delta) => onStep(item.id, delta)}
                     label={item.name}
                   />
                 </>
@@ -351,28 +354,114 @@ export function CartClient({
   // Optimistic remove → server action → on error, restore.
   const remove = (id: string) => {
     const snapshot = items;
+    forgetQty(id); // cancel any in-flight/pending qty sync for this line
     setItems((xs) => xs.filter((x) => x.id !== id));
     startTransition(async () => {
       const cart = await removeLineItem(id);
       if (!cart && id.startsWith("li_")) {
         // Server lost it — revert
         setItems(snapshot);
+        qtyTarget.current.set(id, snapshot.find((x) => x.id === id)!.quantity);
+        qtyConfirmed.current.set(id, snapshot.find((x) => x.id === id)!.quantity);
       }
     });
   };
 
-  const setQty = (id: string, n: number) => {
-    const snapshot = items;
-    setItems((xs) =>
-      xs.map((x) => (x.id === id ? { ...x, quantity: n } : x)),
-    );
-    startTransition(async () => {
-      const cart = await updateLineItemQuantity(id, n);
-      if (!cart && id.startsWith("li_")) {
-        setItems(snapshot);
+  // --- Seamless quantity changes -------------------------------------------
+  // The backend is slow (~3–4s per cart mutation) and Medusa locks the cart
+  // per mutation — concurrent writes 409 / can drop the cart (see
+  // actions/cart.ts). So quantity edits must feel instant WITHOUT blocking the
+  // buttons or firing a request per click:
+  //   • optimistic — the displayed qty + totals update on click, no spinner;
+  //   • debounced — rapid +/− collapse into ONE write of the final value;
+  //   • serialized — a single global drain sends writes one-at-a-time, never
+  //     in parallel, even across different lines.
+  // Latest intended qty per line (source of truth for clicks — read/written
+  // synchronously so back-to-back clicks accumulate regardless of render).
+  const qtyTarget = React.useRef<Map<string, number>>(
+    new Map(initialItems.map((x) => [x.id, x.quantity])),
+  );
+  // Last qty the server confirmed — used to skip no-op writes and to revert.
+  const qtyConfirmed = React.useRef<Map<string, number>>(
+    new Map(initialItems.map((x) => [x.id, x.quantity])),
+  );
+  // Lines whose target differs from what the server has → pending a write.
+  const qtyDirty = React.useRef<Map<string, number>>(new Map());
+  const draining = React.useRef(false);
+  const drainTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Send pending quantity writes one at a time until the queue is empty.
+  const drainQty = React.useCallback(async () => {
+    if (draining.current) return; // a drain is already running
+    draining.current = true;
+    try {
+      while (qtyDirty.current.size > 0) {
+        const next = qtyDirty.current.entries().next().value as
+          | [string, number]
+          | undefined;
+        if (!next) break;
+        const [id, target] = next;
+        qtyDirty.current.delete(id); // re-added below if it changes mid-flight
+        if (qtyConfirmed.current.get(id) === target) continue; // nothing to do
+        const cart = await updateLineItemQuantity(id, target);
+        if (!cart && id.startsWith("li_")) {
+          // Server lost the cart/line — revert this line to last good value,
+          // unless the user has since queued another change for it.
+          const good = qtyConfirmed.current.get(id);
+          if (good != null && !qtyDirty.current.has(id)) {
+            qtyTarget.current.set(id, good);
+            setItems((xs) =>
+              xs.map((x) => (x.id === id ? { ...x, quantity: good } : x)),
+            );
+          }
+        } else if (cart) {
+          qtyConfirmed.current.set(id, target);
+        }
       }
-    });
-  };
+    } finally {
+      draining.current = false;
+      // A click may have landed after the loop's last size-check. Those items
+      // are already past their debounce, so drain again immediately (with the
+      // request channel now free) rather than waiting another debounce window.
+      if (qtyDirty.current.size > 0) void drainQty();
+    }
+  }, []);
+
+  const scheduleDrainQty = React.useCallback(() => {
+    if (drainTimer.current) clearTimeout(drainTimer.current);
+    drainTimer.current = setTimeout(() => {
+      drainTimer.current = null;
+      void drainQty();
+    }, QTY_DEBOUNCE_MS);
+  }, [drainQty]);
+
+  const stepQty = React.useCallback(
+    (id: string, delta: number) => {
+      const current = qtyTarget.current.get(id) ?? 1;
+      const nextQty = Math.max(1, current + delta);
+      if (nextQty === current) return;
+      qtyTarget.current.set(id, nextQty);
+      qtyDirty.current.set(id, nextQty);
+      setItems((xs) =>
+        xs.map((x) => (x.id === id ? { ...x, quantity: nextQty } : x)),
+      );
+      scheduleDrainQty();
+    },
+    [scheduleDrainQty],
+  );
+
+  // Drop any pending quantity sync for a line (e.g. it's being removed).
+  const forgetQty = React.useCallback((id: string) => {
+    qtyDirty.current.delete(id);
+    qtyTarget.current.delete(id);
+    qtyConfirmed.current.delete(id);
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (drainTimer.current) clearTimeout(drainTimer.current);
+    };
+  }, []);
 
   // A cross-sell product whose variant is already a cart line is hidden from
   // the recommended section — derived from the live cart, so it stays hidden
@@ -405,7 +494,15 @@ export function CartClient({
     startTransition(async () => {
       const cart = await addLineItem(c.variantId, 1);
       if (cart) {
-        setItems((cart.items ?? []).map(mapLineItem));
+        const mapped = (cart.items ?? []).map(mapLineItem);
+        setItems(mapped);
+        // The real li_… ids arrive here — seed the qty maps so their steppers
+        // sync correctly and don't false-revert.
+        for (const it of mapped) {
+          if (!qtyTarget.current.has(it.id))
+            qtyTarget.current.set(it.id, it.quantity);
+          qtyConfirmed.current.set(it.id, it.quantity);
+        }
       } else {
         // Server rejected the add — drop the optimistic line (the
         // items.length effect re-syncs the badge).
@@ -415,6 +512,12 @@ export function CartClient({
   };
 
   const doEmptyCart = () => {
+    // Cancel any pending quantity writes so a debounced sync doesn't fire
+    // against lines we're about to delete.
+    if (drainTimer.current) clearTimeout(drainTimer.current);
+    qtyDirty.current.clear();
+    qtyTarget.current.clear();
+    qtyConfirmed.current.clear();
     setItems([]);
     setConfirmEmpty(false);
     startTransition(async () => {
@@ -481,7 +584,7 @@ export function CartClient({
             item={item}
             pending={isPending}
             onRemove={remove}
-            onQty={setQty}
+            onStep={stepQty}
           />
         ))}
       </div>

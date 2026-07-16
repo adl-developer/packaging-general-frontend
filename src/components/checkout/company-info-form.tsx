@@ -38,6 +38,36 @@ export function CompanyInfoForm({ initial }: { initial?: CompanyInfoInitial }) {
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
 
+  // Warm the next step so the post-save navigation is instant.
+  React.useEffect(() => {
+    router.prefetch("/checkout/delivery");
+  }, [router]);
+
+  // Gate "Continue to Delivery" until every required (*) field has *some*
+  // content — the button stays inactive on an empty form. This is a light
+  // presence check only; the detailed rules (phone/email format) still run in
+  // `onSubmit` with their own messages.
+  const formRef = React.useRef<HTMLFormElement | null>(null);
+  const [canContinue, setCanContinue] = React.useState(false);
+  const revalidate = React.useCallback(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const data = new FormData(form);
+    const filled = (name: string) =>
+      String(data.get(name) ?? "").trim().length > 0;
+    setCanContinue(
+      filled("companyName") &&
+        filled("contactPerson") &&
+        filled("phone") &&
+        filled("email")
+    );
+  }, []);
+  // Runs on mount to pick up any prefilled `initial` values; the form
+  // `onInput` handler covers ordinary typing.
+  React.useEffect(() => {
+    revalidate();
+  }, [revalidate]);
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -82,10 +112,12 @@ export function CompanyInfoForm({ initial }: { initial?: CompanyInfoInitial }) {
       </Link>
 
       <motion.form
+        ref={formRef}
         initial={{ y: 12 }}
         animate={{ y: 0 }}
         transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
         onSubmit={onSubmit}
+        onInput={revalidate}
         className="mx-auto flex max-w-2xl flex-col gap-6 rounded-card border border-line bg-surface p-6"
       >
         <div className="flex items-start gap-3">
@@ -135,7 +167,7 @@ export function CompanyInfoForm({ initial }: { initial?: CompanyInfoInitial }) {
 
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || !canContinue}
           className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isPending && <Loader2 className="size-4 animate-spin" aria-hidden />}
