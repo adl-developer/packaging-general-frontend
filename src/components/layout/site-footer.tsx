@@ -1,13 +1,12 @@
 import Link from "next/link";
-import { Users } from "lucide-react";
+import { Mail } from "lucide-react";
 
 const companyLinks = [
   { label: "About Us", href: "/about" },
   { label: "Contact", href: "/contact" },
 ];
 
-const supportLinks = [
-  { label: "Contact Support", href: "/support" },
+const legalLinks = [
   { label: "Terms & Conditions", href: "/terms" },
   { label: "Privacy Policy", href: "/privacy" },
 ];
@@ -61,8 +60,8 @@ export function SiteFooter() {
           </div>
 
           <div className="flex flex-col gap-3">
-            <FooterHeading>Support</FooterHeading>
-            <LinkList links={supportLinks} />
+            <FooterHeading>Legal</FooterHeading>
+            <LinkList links={legalLinks} />
           </div>
 
           <div className="flex flex-col gap-3">
@@ -70,13 +69,13 @@ export function SiteFooter() {
             <p className="text-xs text-muted">
               Join packaging professionals across West Africa
             </p>
-            <Link
-              href="/community"
+            <a
+              href="mailto:support@packaginggeneral.com"
               className="inline-flex h-8 items-center justify-center gap-2 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-colors hover:bg-brand/90"
             >
-              <Users className="size-4" aria-hidden />
-              Join our community
-            </Link>
+              <Mail className="size-4" aria-hidden />
+              Contact Support
+            </a>
             <div className="mt-2 flex flex-col gap-1 border-t border-line pt-4">
               <p className="text-sm font-semibold text-brand">
                 Business Hours
