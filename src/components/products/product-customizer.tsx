@@ -143,7 +143,11 @@ export function ProductCustomizer({ product }: { product: Product }) {
         // Reconcile the badge to the server truth (lines may merge when the
         // same variant is added twice). cart:set — no second toast.
         notifyCartCount(cart?.items?.length ?? 0);
-        if (kind === "buy") router.push("/cart");
+        // Both actions land on the cart page — navigate once the line is
+        // committed (so /cart renders it). The optimistic "✓ Added" + toast
+        // already fired on click, so the ~1s pre-nav wait doesn't read as a
+        // dead click; the /cart route is prefetched + has a loading skeleton.
+        router.push("/cart");
       } catch (err) {
         console.error("[customizer] add to cart failed:", err);
         // Roll back the optimistic UI.
