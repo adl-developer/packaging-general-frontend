@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Package, ShoppingBag } from "lucide-react";
+import { ArrowLeft, Package, Settings, ShoppingBag } from "lucide-react";
 import { getCustomer } from "@/lib/actions/auth";
 import { listMyOrders } from "@/lib/actions/orders";
 import { formatGhs } from "@/lib/format";
@@ -58,9 +58,18 @@ export default async function AccountOrdersPage() {
       </div>
 
       <Reveal className="flex flex-col gap-1">
-        <h1 className="text-3xl font-semibold leading-9 text-brand">
-          My Orders
-        </h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-3xl font-semibold leading-9 text-brand">
+            My Orders
+          </h1>
+          <Link
+            href="/account/settings"
+            className="inline-flex h-9 items-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+          >
+            <Settings className="size-4" aria-hidden />
+            Account Settings
+          </Link>
+        </div>
         <p className="text-base leading-6 text-muted">
           Signed in as {customer.email}
         </p>

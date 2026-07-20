@@ -177,15 +177,7 @@ function QtyStepper({
         aria-live="polite"
         aria-label={`${label} quantity`}
       >
-        <motion.span
-          key={qty}
-          initial={{ scale: 0.7, opacity: 0.6 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={SPRING_TAP}
-          className="inline-block"
-        >
-          {qty}
-        </motion.span>
+        {qty}
       </span>
       <button
         type="button"

@@ -20,6 +20,7 @@ import {
 import { motion } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
+import { CartSkeleton } from "@/app/(shop)/cart/cart-skeleton";
 
 /**
  * Product customizer — Figma frame 404:1371. A single scrollable "Customize
@@ -54,6 +55,12 @@ export function ProductCustomizer({ product }: { product: Product }) {
   // Optimistic "✓ Added" confirmation on the Add to Cart button.
   const [justAdded, setJustAdded] = React.useState(false);
   const addedResetRef = React.useRef<number | null>(null);
+  // While the add commits + we navigate, a full-screen cart skeleton overlay
+  // makes the user "arrive" at the loading cart instantly — the wait no longer
+  // happens visibly on the product page. Cleared only on failure; on success
+  // the navigation unmounts this component (and /cart's loading.tsx shows the
+  // identical skeleton, so the handoff is seamless).
+  const [goingToCart, setGoingToCart] = React.useState(false);
 
   // Warm the cart route (Buy Now lands there) so the navigation is instant.
   React.useEffect(() => {
@@ -128,6 +135,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
     if (addedResetRef.current) window.clearTimeout(addedResetRef.current);
     addedResetRef.current = window.setTimeout(() => setJustAdded(false), 1800);
     setPendingKind(kind);
+    setGoingToCart(true);
 
     startTransition(async () => {
       try {
@@ -151,6 +159,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
       } catch (err) {
         console.error("[customizer] add to cart failed:", err);
         // Roll back the optimistic UI.
+        setGoingToCart(false);
         setJustAdded(false);
         try {
           notifyCartCount(await getCartLineCount());
@@ -184,6 +193,18 @@ export function ProductCustomizer({ product }: { product: Product }) {
 
   return (
     <div className="mx-auto w-full max-w-7xl">
+      {/* Instant "arriving at the cart" overlay: covers the page (below the
+          site header, z-50) with the same skeleton /cart's loading.tsx shows,
+          so Add to Cart / Buy Now feels like an immediate navigation while the
+          line item commits in the background. */}
+      {goingToCart && (
+        <div
+          aria-hidden
+          className="fixed inset-0 z-[45] overflow-hidden bg-background pt-[121px]"
+        >
+          <CartSkeleton />
+        </div>
+      )}
       {/* Sticky progress header */}
       <div className="sticky top-[121px] z-40 border-b border-line bg-surface">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 sm:px-6 lg:px-8">

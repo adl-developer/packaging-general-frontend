@@ -9,6 +9,7 @@ import {
   MapPin,
   Menu,
   Package,
+  Settings,
   User,
   UserPlus,
 } from "lucide-react";
@@ -95,6 +96,10 @@ export function AccountMenu({ user }: { user?: AccountUser }) {
               <Link href="/track-order" role="menuitem" className={menuItem} onClick={() => setOpen(false)}>
                 <MapPin className="size-4 text-muted" aria-hidden />
                 Track Order
+              </Link>
+              <Link href="/account/settings" role="menuitem" className={menuItem} onClick={() => setOpen(false)}>
+                <Settings className="size-4 text-muted" aria-hidden />
+                Account Settings
               </Link>
               <div className="my-1 h-px bg-line" aria-hidden />
               <form action={logout}>

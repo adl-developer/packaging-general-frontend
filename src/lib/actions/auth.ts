@@ -459,6 +459,21 @@ export async function resetPassword(
     /* fall through to manual sign-in */
   }
 
+  // Security notice: "your password has been updated". The backend has no
+  // event for an emailpass update, so the storefront triggers it — the route
+  // requires this account's bearer token and mails only the account's own
+  // address. Best-effort: a mail failure must not fail the reset.
+  if (authToken) {
+    try {
+      await sdk.client.fetch("/store/account/password-changed-notice", {
+        method: "POST",
+        headers: authHeaders(authToken),
+      });
+    } catch (err) {
+      console.error("[auth] password-changed notice failed:", err);
+    }
+  }
+
   // redirect() throws NEXT_REDIRECT, so it must live outside any try/catch.
   if (authToken) {
     await setAuthToken(authToken);
@@ -467,4 +482,94 @@ export async function resetPassword(
     redirect("/account/orders");
   }
   redirect("/sign-in?reset=success");
+}
+
+/* ─── Account settings (change email / delete account) ─── */
+
+export type AccountSettingsState = { ok: boolean; error: string | null };
+
+/** Map backend errors to a user-facing message without leaking internals.
+ *  401 = the re-entered password was wrong; 400s carry user-safe validation
+ *  text ("That email address is already in use."). */
+function settingsError(err: unknown, fallback: string): string {
+  const status = (err as { status?: number })?.status;
+  if (status === 401) return "Incorrect password.";
+  const msg = (err as { message?: string })?.message;
+  if (status === 400 && msg) return msg;
+  return fallback;
+}
+
+export async function changeAccountEmail(
+  _prev: AccountSettingsState,
+  formData: FormData
+): Promise<AccountSettingsState> {
+  const newEmail = String(formData.get("new_email") || "")
+    .trim()
+    .toLowerCase();
+  const password = String(formData.get("password") || "");
+  if (!isValidEmail(newEmail)) return { ok: false, error: EMAIL_ERROR };
+  if (!password) {
+    return { ok: false, error: "Please enter your current password." };
+  }
+
+  const token = await getAuthToken();
+  if (!token) redirect("/sign-in");
+
+  try {
+    await sdk.client.fetch("/store/account/email", {
+      method: "POST",
+      body: { new_email: newEmail, password },
+      headers: authHeaders(token),
+    });
+  } catch (err) {
+    console.error("[auth] change email failed:", err);
+    return {
+      ok: false,
+      error: settingsError(
+        err,
+        "We couldn't update your email. Please try again."
+      ),
+    };
+  }
+
+  revalidatePath("/", "layout");
+  return { ok: true, error: null };
+}
+
+export async function deleteAccount(
+  _prev: AccountSettingsState,
+  formData: FormData
+): Promise<AccountSettingsState> {
+  const password = String(formData.get("password") || "");
+  if (!password) {
+    return { ok: false, error: "Please enter your password to confirm." };
+  }
+
+  const token = await getAuthToken();
+  if (!token) redirect("/sign-in");
+
+  try {
+    await sdk.client.fetch("/store/account", {
+      method: "DELETE",
+      body: { password },
+      headers: authHeaders(token),
+    });
+  } catch (err) {
+    console.error("[auth] account deletion failed:", err);
+    return {
+      ok: false,
+      error: settingsError(
+        err,
+        "We couldn't delete your account. Please try again."
+      ),
+    };
+  }
+
+  // The backend already revoked the JWT and deleted the login; drop the local
+  // session + cart cookies (the cart belonged to the deleted customer).
+  const store = await cookies();
+  store.delete(AUTH_COOKIE);
+  store.delete(CART_COOKIE);
+  revalidatePath("/", "layout");
+  redirect("/");
 }
