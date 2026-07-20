@@ -12,7 +12,11 @@ import {
   type Product,
 } from "@/lib/products";
 import { formatGhs } from "@/lib/format";
-import { addConfiguredLineItem } from "@/lib/actions/cart";
+import {
+  addConfiguredLineItem,
+  getCartLineCount,
+  warmCart,
+} from "@/lib/actions/cart";
 import { motion } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
@@ -40,14 +44,38 @@ export function ProductCustomizer({ product }: { product: Product }) {
   const [printing, setPrinting] = React.useState(product.printing[0]?.id ?? "");
   const [quantity, setQuantity] = React.useState(product.moq || 1);
   const [notes, setNotes] = React.useState("");
-  const [isPending, startTransition] = React.useTransition();
+  const [, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
+  // Which action is mid-flight (drives the Buy Now spinner + blocks a second
+  // concurrent mutation — Medusa locks the cart per mutation).
+  const [pendingKind, setPendingKind] = React.useState<null | "add" | "buy">(
+    null,
+  );
+  // Optimistic "✓ Added" confirmation on the Add to Cart button.
+  const [justAdded, setJustAdded] = React.useState(false);
+  const addedResetRef = React.useRef<number | null>(null);
 
-  // Warm the cart route (Add to Cart / Buy Now both land there) so the post-add
-  // navigation is instant instead of paying for the route on click.
+  // Warm the cart route (Buy Now lands there) so the navigation is instant.
   React.useEffect(() => {
     router.prefetch("/cart");
   }, [router]);
+
+  // Eager cart creation: on the shopper's first interaction, ensure a cart
+  // exists in the background so their first Add to Cart is a single write, not
+  // create-cart + create-line. Runs at most once; no-op if a cart already
+  // exists. This is the "eager loading" that shaves the fresh-guest first add.
+  const warmedRef = React.useRef(false);
+  const warm = React.useCallback(() => {
+    if (warmedRef.current) return;
+    warmedRef.current = true;
+    void warmCart();
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (addedResetRef.current) window.clearTimeout(addedResetRef.current);
+    };
+  }, []);
 
   // Section layout adapts to the product (accessories have no material or
   // printing choices). Indices feed the scroll-spy refs + heading numbers.
@@ -72,7 +100,10 @@ export function ProductCustomizer({ product }: { product: Product }) {
   const setupFee = selectedPrinting?.setupFee ?? 0;
   const estimatedTotal = unitPrice * quantity + setupFee;
 
-  const addToCart = (onSuccess?: () => void) => {
+  const addToCart = (kind: "add" | "buy") => {
+    // One mutation at a time — Medusa locks the cart per mutation, so a second
+    // concurrent add would 409. Ignore extra clicks while one is in flight.
+    if (pendingKind) return;
     if (!size) {
       setError("Please select a size before adding to cart.");
       return;
@@ -86,6 +117,18 @@ export function ProductCustomizer({ product }: { product: Product }) {
       return;
     }
     setError(null);
+
+    // ── Optimistic: confirm instantly, before the backend round-trip. ──
+    // Fire the "Added to cart!" toast + bump the header badge (+1 line) now,
+    // and flip the button to its "✓ Added" state — so the click feels
+    // immediate instead of waiting ~1s on the network. Reconciled/rolled back
+    // once the server responds below.
+    notifyCartAdd({ lines: 1 });
+    setJustAdded(true);
+    if (addedResetRef.current) window.clearTimeout(addedResetRef.current);
+    addedResetRef.current = window.setTimeout(() => setJustAdded(false), 1800);
+    setPendingKind(kind);
+
     startTransition(async () => {
       try {
         const cart = await addConfiguredLineItem({
@@ -97,20 +140,22 @@ export function ProductCustomizer({ product }: { product: Product }) {
               : undefined,
           notes,
         });
-        // Sync the header badge to the real line-item count from the server
-        // (line items may merge when the same variant is added twice).
+        // Reconcile the badge to the server truth (lines may merge when the
+        // same variant is added twice). cart:set — no second toast.
         notifyCartCount(cart?.items?.length ?? 0);
-        // Trigger the global "Added to cart!" toast (CartToast listens for
-        // cart:add; cart:set is set-by-the-page and fires on remove too, so
-        // we explicitly fire :add here to keep toast/badge events separable).
-        // lines: 0 — the badge was just set to the server truth above; the
-        // badge counts LINES, so passing the unit quantity here would show
-        // e.g. "50" for a single 50-carton line.
-        notifyCartAdd({ lines: 0 });
-        onSuccess?.();
+        if (kind === "buy") router.push("/cart");
       } catch (err) {
         console.error("[customizer] add to cart failed:", err);
+        // Roll back the optimistic UI.
+        setJustAdded(false);
+        try {
+          notifyCartCount(await getCartLineCount());
+        } catch {
+          // Best-effort badge reconcile; the next navigation re-syncs it.
+        }
         setError("Couldn't add to cart. Please try again.");
+      } finally {
+        setPendingKind(null);
       }
     });
   };
@@ -190,7 +235,10 @@ export function ProductCustomizer({ product }: { product: Product }) {
                 <OptionCard
                   key={s.id}
                   selected={size === s.id}
-                  onSelect={() => setSize(s.id)}
+                  onSelect={() => {
+                    warm();
+                    setSize(s.id);
+                  }}
                   title={s.label}
                   description={s.dimensions}
                 />
@@ -209,7 +257,10 @@ export function ProductCustomizer({ product }: { product: Product }) {
                   <OptionCard
                     key={m.id}
                     selected={material === m.id}
-                    onSelect={() => setMaterial(m.id)}
+                    onSelect={() => {
+                      warm();
+                      setMaterial(m.id);
+                    }}
                     title={m.label}
                     description={m.description}
                   />
@@ -229,7 +280,10 @@ export function ProductCustomizer({ product }: { product: Product }) {
                   <OptionCard
                     key={p.id}
                     selected={printing === p.id}
-                    onSelect={() => setPrinting(p.id)}
+                    onSelect={() => {
+                      warm();
+                      setPrinting(p.id);
+                    }}
                     title={p.label}
                     description={p.description}
                     meta={
@@ -255,6 +309,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
                   min={product.moq || 1}
                   value={quantity}
                   onChange={(e) => {
+                    warm();
                     // Drop leading zeros so "088" reads "88" — React skips the
                     // DOM rewrite on number inputs when values match numerically.
                     const cleaned = e.target.value.replace(/^0+(?=\d)/, "");
@@ -336,23 +391,31 @@ export function ProductCustomizer({ product }: { product: Product }) {
               </Link>
               <button
                 type="button"
-                onClick={() => addToCart(() => router.push("/cart"))}
-                disabled={isPending || !size}
-                className="order-1 inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2"
+                onClick={() => addToCart("add")}
+                disabled={!size}
+                className={cn(
+                  "order-1 inline-flex h-10 items-center justify-center gap-2 rounded-button border px-6 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2",
+                  justAdded
+                    ? "border-[rgba(22,163,74,0.35)] bg-[rgba(22,163,74,0.12)] text-[#15803d]"
+                    : "border-line bg-background text-brand hover:bg-line/30",
+                )}
               >
-                {isPending ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                {justAdded ? (
+                  <Check className="size-4" aria-hidden />
                 ) : (
                   <ShoppingCart className="size-4" aria-hidden />
                 )}
-                Add to Cart
+                {justAdded ? "Added" : "Add to Cart"}
               </button>
               <button
                 type="button"
-                onClick={() => addToCart(() => router.push("/cart"))}
-                disabled={isPending || !size}
+                onClick={() => addToCart("buy")}
+                disabled={!size}
                 className="order-2 inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3"
               >
+                {pendingKind === "buy" && (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                )}
                 Buy Now
               </button>
             </div>

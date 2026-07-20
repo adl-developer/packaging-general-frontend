@@ -230,16 +230,53 @@ async function getGhanaRegionId(): Promise<string> {
   return region.id;
 }
 
-/** Internal: return current cart or create a fresh one bound to the Ghana region. */
-async function ensureCart(): Promise<HttpTypes.StoreCart> {
-  const existing = await getCart();
+/**
+ * Cart id for the add path — WITHOUT a full getCart() retrieve.
+ *
+ * Adding a line only needs the cart id, and the id is already in the cookie, so
+ * a full retrieve (~1 backend round-trip, the heavy CART_FIELDS payload) was
+ * pure latency on every Add to Cart. This reads the cookie (zero round-trips)
+ * and creates a cart only when there's no cookie. A stale cookie — a completed
+ * or workflow-compensation-deleted cart — surfaces as a 4xx on the subsequent
+ * createLineItem; the mutation's catch clears the cookie so the user's retry
+ * starts clean (see `clearStaleCartOn4xx`).
+ */
+async function ensureCartId(): Promise<string> {
+  const existing = await readCartId();
   if (existing) return existing;
-
   const { cart } = await sdk.store.cart.create({
     region_id: await getGhanaRegionId(),
   });
   await writeCartId(cart.id);
-  return cart;
+  return cart.id;
+}
+
+/**
+ * On an add failure, clear the cart cookie ONLY for a definitive 4xx (the
+ * cookie'd cart is gone / completed / invalid) so the retry starts fresh.
+ * Network blips (no HTTP status — `fetch failed`/ECONNRESET) keep the cookie:
+ * the cart is almost certainly fine, and clearing it would lose the shopper's
+ * cart over a transient error.
+ */
+async function clearStaleCartOn4xx(err: unknown): Promise<void> {
+  const status = (err as { status?: number })?.status;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    await clearCartId();
+  }
+}
+
+/**
+ * Eagerly ensure a cart exists — fire-and-forget from the product page on the
+ * shopper's first interaction, so their first Add to Cart is a single
+ * createLineItem rather than create-cart + create-line on the click path.
+ * No-op when a cart cookie already exists.
+ */
+export async function warmCart(): Promise<void> {
+  try {
+    await ensureCartId();
+  } catch {
+    // Non-fatal — the real add will create the cart if this didn't.
+  }
 }
 
 /** Add a variant to the cart (creating the cart if needed). Returns the updated cart. */
@@ -247,24 +284,23 @@ export async function addLineItem(
   variantId: string,
   quantity = 1
 ): Promise<HttpTypes.StoreCart | null> {
-  const cart = await ensureCart();
+  const cartId = await ensureCartId();
   let updated: HttpTypes.StoreCart;
   try {
     // createLineItem returns the updated cart — asking for CART_FIELDS here
     // saves the extra retrieve we used to do after the mutation.
     ({ cart: updated } = await sdk.store.cart.createLineItem(
-      cart.id,
+      cartId,
       { variant_id: variantId, quantity },
       { fields: CART_FIELDS }
     ));
   } catch (err) {
-    // A 404 here is either a vanished cart or a missing variant. getCart()
-    // tells them apart: it clears the cookie only when the cart itself is
-    // gone, so the user's retry starts a fresh cart. Callers show error UI.
-    if (isCartGone(err)) await getCart();
+    // A 4xx means the cookie'd cart is gone/completed/invalid — clear it so
+    // the retry starts a fresh cart. Callers show error UI.
+    await clearStaleCartOn4xx(err);
     throw err;
   }
-  await writeCartId(cart.id); // sliding expiry
+  await writeCartId(cartId); // sliding expiry
   revalidatePath("/cart");
   revalidatePath("/checkout");
   return updated;
@@ -312,7 +348,7 @@ export async function addConfiguredLineItem(input: {
   setupPrintingValue?: string | null;
   notes?: string;
 }): Promise<HttpTypes.StoreCart | null> {
-  const cart = await ensureCart();
+  const cartId = await ensureCartId();
   const notes = input.notes?.trim();
 
   // The setup-fee lookup doesn't depend on the carton line — run it while the
@@ -327,7 +363,7 @@ export async function addConfiguredLineItem(input: {
   let updated: HttpTypes.StoreCart;
   try {
     ({ cart: updated } = await sdk.store.cart.createLineItem(
-      cart.id,
+      cartId,
       {
         variant_id: input.variantId,
         quantity: input.quantity,
@@ -343,20 +379,20 @@ export async function addConfiguredLineItem(input: {
       );
       if (!alreadyCharged) {
         ({ cart: updated } = await sdk.store.cart.createLineItem(
-          cart.id,
+          cartId,
           { variant_id: setupVariantId, quantity: 1 },
           { fields: CART_FIELDS }
         ));
       }
     }
   } catch (err) {
-    // Same vanished-cart recovery as addLineItem (the customizer shows its
-    // "Couldn't add to cart" message; the retry then works).
-    if (isCartGone(err)) await getCart();
+    // A 4xx means the cookie'd cart is gone/completed/invalid — clear it so the
+    // retry (the customizer shows "Couldn't add to cart") starts fresh.
+    await clearStaleCartOn4xx(err);
     throw err;
   }
 
-  await writeCartId(cart.id); // sliding expiry
+  await writeCartId(cartId); // sliding expiry
   revalidatePath("/cart");
   revalidatePath("/checkout");
   return updated;
