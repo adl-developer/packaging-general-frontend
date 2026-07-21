@@ -39,7 +39,15 @@ const AUTH_COOKIE_OPTS = {
   path: "/",
 };
 
-export type AuthState = { error: string | null };
+export type AuthState = {
+  error: string | null;
+  /** Set when sign-in/sign-up must pause for email verification — the auth
+   *  card swaps to the "verify your email" panel for this address. */
+  unverifiedEmail?: string;
+  /** True when the pause follows a fresh signup (a link was JUST sent by the
+   *  backend), so the panel opens in its "link sent" state. */
+  verificationJustSent?: boolean;
+};
 
 // Deliberately generic: confirming "this email is already registered" lets
 // anyone test which emails have accounts (enumeration). Same wording for
@@ -236,10 +244,10 @@ export async function authenticate(
       return fieldError(outcome.error);
     }
 
-    await setAuthToken(outcome.token);
-    await transferGuestCart(outcome.token);
-    revalidatePath("/", "layout");
-    redirect("/account/orders");
+    // New accounts start unverified (the backend's customer.created subscriber
+    // marks them and emails the link). No session until the email is verified
+    // — signing them in here would make the login gate below meaningless.
+    return { error: null, unverifiedEmail: email, verificationJustSent: true };
   }
 
   // mode === "signin"
@@ -254,6 +262,24 @@ export async function authenticate(
   }
   if (typeof result !== "string") {
     return fieldError("Additional verification is required to sign in.");
+  }
+
+  // Verification gate — only reached with CORRECT credentials, so showing the
+  // "not verified" state here reveals nothing a wrong-password attempt could
+  // learn (those get the generic error above). Legacy accounts have no
+  // email_verified flag and pass straight through; only an explicit `false`
+  // (accounts created since the verification feature) blocks.
+  try {
+    const { customer } = await sdk.store.customer.retrieve(
+      { fields: "+metadata" },
+      authHeaders(result)
+    );
+    if (customer?.metadata?.email_verified === false) {
+      return { error: null, unverifiedEmail: email };
+    }
+  } catch {
+    // Transient failure — fall through and sign in as before; the gate only
+    // acts on a positive "unverified" read.
   }
 
   await setAuthToken(result);
@@ -275,10 +301,13 @@ export type OrderSignupState = {
  * "Create Your Account" dialog on the order-confirmation page. Registers the
  * customer with the order's email (passed via hidden fields — tampering gains
  * nothing: anyone can register any unclaimed email via /sign-up, and the
- * claim route re-verifies email ownership server-side), signs them in, then
- * links the just-placed order to the account via POST /store/order-lookup/
- * claim (authenticated; the backend checks the token's customer email matches
- * the order email). No redirect — the dialog shows the outcome in place.
+ * claim route re-verifies email ownership server-side), then links the
+ * just-placed order via POST /store/order-lookup/claim. The account starts
+ * UNVERIFIED (the backend emails the verification link on creation), so no
+ * session cookie is set — the dialog tells them to check their email instead.
+ * The claim still runs with the ephemeral registration token: the order's own
+ * email on the account is the claim route's proof, and any other guest orders
+ * get adopted when they verify.
  */
 export async function createAccountFromOrder(
   _prev: OrderSignupState,
@@ -321,8 +350,8 @@ export async function createAccountFromOrder(
     return fail(outcome.error);
   }
 
-  await setAuthToken(outcome.token);
-  await transferGuestCart(outcome.token);
+  // Deliberately NOT signed in — the account must verify its email first
+  // (same gate as /sign-in). The token below is used once for the claim.
 
   // Best-effort: a linking failure must not read as "account creation failed"
   // — the account exists and the user is signed in; the order can still be
@@ -339,8 +368,111 @@ export async function createAccountFromOrder(
     console.error("[auth] order claim failed:", err);
   }
 
-  revalidatePath("/", "layout");
   return { status: "created", linked, error: null };
+}
+
+/* ─── Email verification ─── */
+
+export type VerificationRequestState = { sent: boolean; error: string | null };
+
+/**
+ * "Verify email" CTA — asks the backend to (re)send the verification link.
+ * The backend answers { sent: true } whether or not the email has an account
+ * (anti-enumeration) and enforces a one-per-minute per-email cooldown (429).
+ */
+export async function requestVerificationEmail(
+  _prev: VerificationRequestState,
+  formData: FormData
+): Promise<VerificationRequestState> {
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  if (!isValidEmail(email)) return { sent: false, error: EMAIL_ERROR };
+
+  try {
+    await sdk.client.fetch("/store/email-verification/request", {
+      method: "POST",
+      body: { email },
+    });
+    return { sent: true, error: null };
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status === 429) {
+      return {
+        sent: false,
+        error:
+          "A link was sent recently. Please wait a minute before requesting another.",
+      };
+    }
+    console.error("[auth] requestVerificationEmail failed:", err);
+    return {
+      sent: false,
+      error: "We couldn't send the verification link right now. Please try again.",
+    };
+  }
+}
+
+/**
+ * /verify-email page — redeem the emailed token. A 400 means the link is bad
+ * or expired (the page offers a resend); anything else is transport trouble.
+ */
+export async function confirmEmailVerification(
+  email: string,
+  token: string
+): Promise<{ ok: boolean; error: string | null }> {
+  if (!email || !token) {
+    return {
+      ok: false,
+      error: "This verification link is invalid or has expired. Please request a new one.",
+    };
+  }
+  try {
+    await sdk.client.fetch("/store/email-verification/confirm", {
+      method: "POST",
+      body: { email: email.trim().toLowerCase(), token },
+    });
+    return { ok: true, error: null };
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    const msg = (err as { message?: string })?.message;
+    if (status === 400) {
+      return {
+        ok: false,
+        error:
+          msg ||
+          "This verification link is invalid or has expired. Please request a new one.",
+      };
+    }
+    console.error("[auth] confirmEmailVerification failed:", err);
+    return {
+      ok: false,
+      error: "We couldn't verify your email right now. Please try again.",
+    };
+  }
+}
+
+export type OrderEmailAccountStatus = "none" | "unverified" | "verified";
+
+/**
+ * Post-checkout dialog branch: does the order's email already have an account,
+ * and is it verified? Gated server-side behind the order_number + email pair
+ * (the order-lookup shared secret), so it isn't an open enumeration oracle.
+ * Any failure degrades to "none" — the plain create-account form.
+ */
+export async function getOrderEmailAccountStatus(
+  orderNumber: string,
+  email: string
+): Promise<OrderEmailAccountStatus> {
+  try {
+    const { status } = await sdk.client.fetch<{
+      status: OrderEmailAccountStatus;
+    }>("/store/email-verification/status", {
+      method: "POST",
+      body: { order_number: orderNumber, email: email.trim().toLowerCase() },
+    });
+    return status === "unverified" || status === "verified" ? status : "none";
+  } catch (err) {
+    console.error("[auth] verification status lookup failed:", err);
+    return "none";
+  }
 }
 
 export async function logout() {
@@ -471,6 +603,24 @@ export async function resetPassword(
       });
     } catch (err) {
       console.error("[auth] password-changed notice failed:", err);
+    }
+  }
+
+  // Same verification gate as sign-in — without this, resetting the password
+  // would quietly bypass the unverified-login block. (Placed after the notice
+  // send so the security email still goes out.) They land on /sign-in, where
+  // signing in shows the verify-email panel.
+  if (authToken) {
+    try {
+      const { customer } = await sdk.store.customer.retrieve(
+        { fields: "+metadata" },
+        authHeaders(authToken)
+      );
+      if (customer?.metadata?.email_verified === false) {
+        authToken = null;
+      }
+    } catch {
+      /* transient read failure — keep the token, gate only on a positive read */
     }
   }
 

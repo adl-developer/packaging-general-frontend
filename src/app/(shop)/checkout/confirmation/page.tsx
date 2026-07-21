@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { OrderConfirmation } from "@/components/checkout/order-confirmation";
 import { sdk } from "@/lib/medusa";
 import { formatOrderNumber } from "@/lib/order-number";
-import { getCustomer } from "@/lib/actions/auth";
+import { getCustomer, getOrderEmailAccountStatus } from "@/lib/actions/auth";
 
 export const metadata: Metadata = {
   title: "Order Confirmed",
@@ -62,6 +62,14 @@ export default async function ConfirmationPage({
   // so they must not see the post-checkout "Create Your Account" dialog.
   const isLoggedIn = !!(await getCustomer());
 
+  // Which account dialog the guest sees: create-account (no account for this
+  // email), verify-email (unverified account exists), or sign-in (verified
+  // account exists). Order number + email gate the lookup server-side.
+  const accountStatus =
+    !isLoggedIn && email
+      ? await getOrderEmailAccountStatus(formatted, email)
+      : "none";
+
   return (
     <OrderConfirmation
       orderNumber={formatted}
@@ -72,6 +80,7 @@ export default async function ConfirmationPage({
       paymentProviderId={paymentProviderId}
       deliveryOption={deliveryOption}
       isLoggedIn={isLoggedIn}
+      accountStatus={accountStatus}
     />
   );
 }

@@ -3,11 +3,23 @@
 import * as React from "react";
 import Link from "next/link";
 import { useActionState } from "react";
-import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  MailCheck,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { SPRING_SOFT } from "@/lib/motion";
-import { authenticate, type AuthState } from "@/lib/actions/auth";
+import {
+  authenticate,
+  requestVerificationEmail,
+  type AuthState,
+  type VerificationRequestState,
+} from "@/lib/actions/auth";
 import { GH_PHONE_PATTERN, PHONE_ERROR } from "@/lib/validation";
 
 /**
@@ -45,6 +57,17 @@ export function AuthCard({
     authenticate,
     initialAuthState,
   );
+
+  // Sign-in with correct credentials on an unverified account (or a fresh
+  // signup) pauses here: verify-email panel instead of the form.
+  if (state.unverifiedEmail) {
+    return (
+      <UnverifiedPanel
+        email={state.unverifiedEmail}
+        justSent={!!state.verificationJustSent}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-[448px] flex-col gap-8 px-4 pt-8">
@@ -246,6 +269,103 @@ export function AuthCard({
           </Link>
         </p>
       </div>
+    </div>
+  );
+}
+
+const INITIAL_VERIFY_STATE: VerificationRequestState = {
+  sent: false,
+  error: null,
+};
+
+/**
+ * Shown when sign-in (correct password) or a fresh signup hits an unverified
+ * account. Primary CTA sends a new verification link; secondary continues as a
+ * guest ("place order with no account").
+ */
+function UnverifiedPanel({
+  email,
+  justSent,
+}: {
+  email: string;
+  justSent: boolean;
+}) {
+  const [state, formAction, pending] = useActionState(
+    requestVerificationEmail,
+    INITIAL_VERIFY_STATE,
+  );
+  const sent = state.sent || justSent;
+
+  return (
+    <div className="mx-auto flex w-full max-w-[448px] flex-col gap-8 px-4 pt-8">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <span className="grid size-16 place-items-center rounded-full bg-rust/10">
+          <MailCheck className="size-8 text-rust" aria-hidden />
+        </span>
+        <div className="flex flex-col gap-2">
+          <h1 className="text-2xl font-bold leading-8 text-brand">
+            Verify your email address
+          </h1>
+          <p className="text-base leading-6 text-muted">
+            {justSent
+              ? "Your account has been created — one more step."
+              : "Your email address hasn't been verified yet. Verify it to activate your account and sign in."}
+          </p>
+        </div>
+      </div>
+
+      {sent && (
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-button border border-[#bbe5c8] bg-[#dcfce7] px-3 py-2 text-sm text-[#166534]"
+        >
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            A verification link has been sent to <strong>{email}</strong>.
+            Check your email and click the link to verify your account.
+          </span>
+        </p>
+      )}
+
+      {state.error && (
+        <p
+          role="alert"
+          aria-live="polite"
+          className="flex items-start gap-2 rounded-button border border-rust/30 bg-rust/10 px-3 py-2 text-sm text-rust"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>{state.error}</span>
+        </p>
+      )}
+
+      <div className="flex flex-col gap-3">
+        <form action={formAction}>
+          <input type="hidden" name="email" value={email} />
+          <button
+            type="submit"
+            disabled={pending}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:opacity-60"
+          >
+            {pending && <Loader2 className="size-4 animate-spin" aria-hidden />}
+            {sent ? "Resend Verification Email" : "Verify Email"}
+          </button>
+        </form>
+
+        <Link href="/products" className={cn(socialButton, "no-underline")}>
+          Place Order Without an Account
+        </Link>
+      </div>
+
+      <p className="text-center text-sm text-muted">
+        Verified already?{" "}
+        {/* plain <a>: a full reload is what resets the action state */}
+        <a
+          href="/sign-in"
+          className="font-medium text-brand underline-offset-2 hover:underline"
+        >
+          Back to sign in
+        </a>
+      </p>
     </div>
   );
 }

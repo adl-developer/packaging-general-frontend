@@ -2,7 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { CheckCircle2, Eye, EyeOff, Loader2, ShieldCheck, X } from "lucide-react";
+import {
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Loader2,
+  MailCheck,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -16,6 +24,8 @@ import { formatGhs } from "@/lib/format";
 import { updateNotificationPreferences } from "@/lib/actions/orders";
 import {
   createAccountFromOrder,
+  requestVerificationEmail,
+  type OrderEmailAccountStatus,
   type OrderSignupState,
 } from "@/lib/actions/auth";
 
@@ -27,11 +37,12 @@ import {
  * Shows the success state, real order total/payment/delivery pulled from the
  * order (omitted when the guest order.retrieve call can't read them), a
  * "What's Next?" checklist, and the notification-channel preference toggles
- * (persisted server-side onto order.metadata). The create-account dialog
- * (open by default when the order's email is readable, dismissible) pre-fills
- * the order's company/contact/email, asks for a password + confirmation, and
- * submits to the createAccountFromOrder server action, which registers the
- * customer, signs them in, and links this order to the new account.
+ * (persisted server-side onto order.metadata). The account dialog (open by
+ * default when the order's email is readable, dismissible) branches on
+ * `accountStatus`: no account → create-account form (registers the customer,
+ * links this order, and prompts them to verify their email); unverified
+ * account → auto-sends a fresh verification link; verified account → "you
+ * already have an account, sign in".
  */
 const WHATS_NEXT = [
   "Our team will contact you within 24 hours if needed",
@@ -57,6 +68,9 @@ interface OrderConfirmationProps {
    *  "Create Your Account" dialog (they already have an account, and the
    *  order is linked to it server-side). */
   isLoggedIn?: boolean;
+  /** Whether the order's email already has an account and whether it's
+   *  verified — picks which dialog the guest sees. */
+  accountStatus?: OrderEmailAccountStatus;
 }
 
 export function OrderConfirmation({
@@ -68,6 +82,7 @@ export function OrderConfirmation({
   paymentProviderId,
   deliveryOption,
   isLoggedIn,
+  accountStatus = "none",
 }: OrderConfirmationProps) {
   // Guests get the create-account dialog; signed-in customers never do.
   const [showModal, setShowModal] = React.useState(!isLoggedIn);
@@ -171,6 +186,7 @@ export function OrderConfirmation({
             email={email}
             company={company}
             contactPerson={contactPerson}
+            accountStatus={accountStatus}
             onClose={() => setShowModal(false)}
           />
         )}
@@ -260,17 +276,38 @@ const INITIAL_SIGNUP_STATE: OrderSignupState = {
   error: null,
 };
 
+/** Header copy per branch of the post-checkout account dialog. */
+const MODAL_HEADERS: Record<
+  OrderEmailAccountStatus,
+  { title: string; subtitle: string }
+> = {
+  none: {
+    title: "Create Your Account",
+    subtitle: "Save time on future orders and track all your orders",
+  },
+  unverified: {
+    title: "Verify Your Email",
+    subtitle: "Your account just needs one more step",
+  },
+  verified: {
+    title: "Welcome Back",
+    subtitle: "You already have an account with this email",
+  },
+};
+
 function CreateAccountModal({
   orderNumber,
   email,
   company,
   contactPerson,
+  accountStatus,
   onClose,
 }: {
   orderNumber: string;
   email: string;
   company?: string;
   contactPerson?: string;
+  accountStatus: OrderEmailAccountStatus;
   onClose: () => void;
 }) {
   const [password, setPassword] = React.useState("");
@@ -321,17 +358,21 @@ function CreateAccountModal({
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[rgba(150,64,34,0.1)]">
-              <ShieldCheck className="size-5 text-rust" aria-hidden />
+              {accountStatus === "unverified" ? (
+                <MailCheck className="size-5 text-rust" aria-hidden />
+              ) : (
+                <ShieldCheck className="size-5 text-rust" aria-hidden />
+              )}
             </span>
             <div className="flex flex-col gap-1">
               <h2
                 id="create-account-title"
                 className="text-xl font-semibold leading-7 text-brand"
               >
-                Create Your Account
+                {MODAL_HEADERS[accountStatus].title}
               </h2>
               <p className="text-sm text-muted">
-                Save time on future orders and track all your orders
+                {MODAL_HEADERS[accountStatus].subtitle}
               </p>
             </div>
           </div>
@@ -345,34 +386,36 @@ function CreateAccountModal({
           </button>
         </div>
 
-        {state.status === "created" ? (
+        {accountStatus === "verified" ? (
+          <SignInBody onClose={onClose} />
+        ) : accountStatus === "unverified" ? (
+          <VerificationSentBody
+            email={email}
+            orderNumber={orderNumber}
+            onClose={onClose}
+          />
+        ) : state.status === "created" ? (
           <>
             <div className="flex flex-col items-center gap-3 rounded-option border border-[#b9f8cf] bg-[#dcfce7]/40 px-4 py-6 text-center">
               <CheckCircle2 className="size-10 text-[#16a34a]" aria-hidden />
               <p className="text-base font-semibold text-brand">
-                Account created — you&apos;re signed in
+                Account created — verify your email
               </p>
               <p className="text-sm text-muted">
+                We&apos;ve sent a verification link to <strong>{email}</strong>.
+                Check your email and click the link to activate your account.{" "}
                 {state.linked
-                  ? `Order #${orderNumber} is now linked to your account.`
-                  : `Your account is ready. We couldn't link order #${orderNumber} automatically — you can still track it with your order number and email.`}
+                  ? `Order #${orderNumber} is linked to your account.`
+                  : `We couldn't link order #${orderNumber} automatically — you can still track it with your order number and email.`}
               </p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={onClose}
-                className="inline-flex h-9 flex-1 items-center justify-center rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
-              >
-                Done
-              </button>
-              <Link
-                href="/account/orders"
-                className="inline-flex h-9 flex-1 items-center justify-center rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust"
-              >
-                View My Orders
-              </Link>
-            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-9 w-full items-center justify-center rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+            >
+              Done
+            </button>
           </>
         ) : (
           <>
@@ -475,6 +518,111 @@ function CreateAccountModal({
         )}
       </motion.div>
     </motion.div>
+  );
+}
+
+/**
+ * Dialog body when the order's email belongs to an UNVERIFIED account: a
+ * fresh verification link is sent automatically when the dialog opens (the
+ * backend enforces a one-per-minute cooldown, so refreshes can't spam), and
+ * the body just reports where it went.
+ */
+function VerificationSentBody({
+  email,
+  orderNumber,
+  onClose,
+}: {
+  email: string;
+  orderNumber: string;
+  onClose: () => void;
+}) {
+  const [sendState, setSendState] = React.useState<
+    "sending" | "sent" | "error"
+  >("sending");
+  const fired = React.useRef(false);
+
+  React.useEffect(() => {
+    if (fired.current) return; // strict-mode double-mount guard
+    fired.current = true;
+    const fd = new FormData();
+    fd.set("email", email);
+    requestVerificationEmail({ sent: false, error: null }, fd).then((result) =>
+      // A 429 means a link was already sent moments ago (e.g. at signup) —
+      // that still reads as "sent" for this dialog's purposes.
+      setSendState(
+        result.sent || result.error?.includes("sent recently")
+          ? "sent"
+          : "error"
+      )
+    );
+  }, [email]);
+
+  return (
+    <>
+      <div className="flex flex-col items-center gap-3 rounded-option border border-[#b9f8cf] bg-[#dcfce7]/40 px-4 py-6 text-center">
+        {sendState === "sending" ? (
+          <Loader2 className="size-10 animate-spin text-brand" aria-hidden />
+        ) : (
+          <CheckCircle2 className="size-10 text-[#16a34a]" aria-hidden />
+        )}
+        <p className="text-base font-semibold text-brand">
+          {sendState === "sending"
+            ? "Sending verification link…"
+            : sendState === "sent"
+              ? "Verification link sent"
+              : "We couldn't send the link right now"}
+        </p>
+        <p className="text-sm text-muted">
+          {sendState === "error" ? (
+            <>
+              Please try again from the Sign In page. You can still track order
+              #{orderNumber} with your order number and email.
+            </>
+          ) : (
+            <>
+              You already have an account for <strong>{email}</strong> that
+              hasn&apos;t been verified. We&apos;ve sent a verification link to
+              that address — click it to activate your account. Order #
+              {orderNumber} will be added to your account once verified.
+            </>
+          )}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        className="inline-flex h-9 w-full items-center justify-center rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+      >
+        Done
+      </button>
+    </>
+  );
+}
+
+/** Dialog body when the order's email already has a VERIFIED account. */
+function SignInBody({ onClose }: { onClose: () => void }) {
+  return (
+    <>
+      <p className="rounded-option border border-[#e2e1e0] bg-mist p-3.5 text-sm text-muted">
+        You already have an account, so log in to see your orders in one place
+        and check out faster next time.
+      </p>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex h-9 flex-1 items-center justify-center rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+        >
+          Skip for Now
+        </button>
+        <Link
+          href="/sign-in"
+          className="inline-flex h-9 flex-1 items-center justify-center rounded-button bg-rust/90 px-4 text-sm font-medium text-white transition-colors hover:bg-rust"
+        >
+          Sign In
+        </Link>
+      </div>
+    </>
   );
 }
 
