@@ -17,9 +17,11 @@ import {
 
 /**
  * /verify-email landing page — the destination of the emailed link
- * (?token=…&email=…). Redeems the token once on mount, then shows success
- * (with a Sign In CTA) or failure (with a "send a new link" resend, since the
- * usual failure is an expired link).
+ * (?token=…&email=…). Redeems the token once on mount. A first-time confirm
+ * also signs the customer in (the server action sets the auth cookie), so
+ * success shows "Go to My Orders"; a re-clicked link verifies without a
+ * session and falls back to the Sign In CTA. Failure offers a resend, since
+ * the usual failure is an expired link.
  */
 type Phase = "verifying" | "success" | "error";
 
@@ -36,16 +38,19 @@ export function VerifyEmailCard({
   email?: string;
 }) {
   const [phase, setPhase] = React.useState<Phase>("verifying");
+  const [signedIn, setSignedIn] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const fired = React.useRef(false);
 
   React.useEffect(() => {
     // Strict-mode double-mount guard — the confirm call must run exactly once
-    // (it's idempotent server-side, but no point racing it against itself).
+    // (it's idempotent server-side, but no point racing it against itself —
+    // and only the FIRST confirm carries the auto-login).
     if (fired.current) return;
     fired.current = true;
     confirmEmailVerification(email ?? "", token ?? "").then((result) => {
       if (result.ok) {
+        setSignedIn(result.signedIn);
         setPhase("success");
       } else {
         setError(result.error);
@@ -83,15 +88,25 @@ export function VerifyEmailCard({
                 ) : null}
                 . Any orders you placed with this email have been added to your
                 account.
+                {signedIn ? " You're signed in and ready to go." : ""}
               </p>
             </div>
           </div>
-          <Link
-            href="/sign-in"
-            className="flex h-11 w-full items-center justify-center rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
-          >
-            Sign In
-          </Link>
+          {signedIn ? (
+            <Link
+              href="/account/orders"
+              className="flex h-11 w-full items-center justify-center rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
+            >
+              Go to My Orders
+            </Link>
+          ) : (
+            <Link
+              href="/sign-in"
+              className="flex h-11 w-full items-center justify-center rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
+            >
+              Sign In
+            </Link>
+          )}
         </>
       )}
 

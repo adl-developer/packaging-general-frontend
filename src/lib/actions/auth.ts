@@ -411,31 +411,47 @@ export async function requestVerificationEmail(
 }
 
 /**
- * /verify-email page — redeem the emailed token. A 400 means the link is bad
- * or expired (the page offers a resend); anything else is transport trouble.
+ * /verify-email page — redeem the emailed token. On the FIRST successful
+ * confirm the backend also returns a real login JWT (email ownership was just
+ * proven by the single-use link), which we drop into the httpOnly auth cookie
+ * so the customer lands signed in — no second "now sign in" step. A repeat
+ * click verifies fine but gets no token (signedIn: false → Sign In CTA).
+ * A 400 means the link is bad or expired (the page offers a resend);
+ * anything else is transport trouble.
  */
 export async function confirmEmailVerification(
   email: string,
   token: string
-): Promise<{ ok: boolean; error: string | null }> {
+): Promise<{ ok: boolean; signedIn: boolean; error: string | null }> {
   if (!email || !token) {
     return {
       ok: false,
+      signedIn: false,
       error: "This verification link is invalid or has expired. Please request a new one.",
     };
   }
   try {
-    await sdk.client.fetch("/store/email-verification/confirm", {
+    const { token: loginToken } = await sdk.client.fetch<{
+      verified: boolean;
+      token?: string;
+    }>("/store/email-verification/confirm", {
       method: "POST",
       body: { email: email.trim().toLowerCase(), token },
     });
-    return { ok: true, error: null };
+    if (loginToken) {
+      await setAuthToken(loginToken);
+      await transferGuestCart(loginToken);
+      revalidatePath("/", "layout");
+      return { ok: true, signedIn: true, error: null };
+    }
+    return { ok: true, signedIn: false, error: null };
   } catch (err) {
     const status = (err as { status?: number })?.status;
     const msg = (err as { message?: string })?.message;
     if (status === 400) {
       return {
         ok: false,
+        signedIn: false,
         error:
           msg ||
           "This verification link is invalid or has expired. Please request a new one.",
@@ -444,6 +460,7 @@ export async function confirmEmailVerification(
     console.error("[auth] confirmEmailVerification failed:", err);
     return {
       ok: false,
+      signedIn: false,
       error: "We couldn't verify your email right now. Please try again.",
     };
   }

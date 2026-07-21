@@ -149,8 +149,16 @@ export default async function AccountOrdersPage() {
                         {formatGhs(Number(order.total ?? 0))}
                       </span>
                     </span>
+                    {/* Keep the customer's email out of the URL — the track
+                        page auto-applies the signed-in email. Only a claimed
+                        guest order placed under a DIFFERENT address still
+                        needs its email as an explicit param. */}
                     <Link
-                      href={`/track-order?order=${formatOrderNumber(order.display_id, order.created_at, order.id)}&email=${encodeURIComponent(order.email ?? customer.email)}`}
+                      href={`/track-order?order=${formatOrderNumber(order.display_id, order.created_at, order.id)}${
+                        order.email && order.email !== customer.email
+                          ? `&email=${encodeURIComponent(order.email)}`
+                          : ""
+                      }`}
                       className="inline-flex h-9 items-center rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
                     >
                       Track Order

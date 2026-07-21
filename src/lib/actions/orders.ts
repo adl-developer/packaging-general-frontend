@@ -105,6 +105,28 @@ export async function lookupOrder(
 }
 
 /**
+ * Token variant of the lookup — the opaque tracking token from emailed/SMS
+ * links (`/track-order?t=…`). The backend validates the HMAC and resolves the
+ * order; no customer email or order number ever appears in the URL.
+ */
+export async function lookupOrderByToken(
+  token: string
+): Promise<OrderLookupOutcome> {
+  try {
+    const { order } = await sdk.client.fetch<{ order: OrderLookupResult }>(
+      "/store/order-lookup",
+      { method: "GET", query: { t: token } }
+    );
+    return { status: "found", order };
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status === 404 || status === 400) return { status: "not_found" };
+    console.error("[orders] token lookup failed:", err);
+    return { status: "error" };
+  }
+}
+
+/**
  * Ask the backend to email the order's invoice to the email it was placed
  * with (POST /store/order-lookup/email — same shared-secret rule as the
  * lookup; the backend only ever mails the order's own address).

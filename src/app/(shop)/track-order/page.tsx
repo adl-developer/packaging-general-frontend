@@ -15,13 +15,16 @@ export const dynamic = "force-dynamic";
 export default async function TrackOrderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ order?: string; email?: string }>;
+  searchParams: Promise<{ t?: string; order?: string; email?: string }>;
 }) {
-  const { order, email } = await searchParams;
+  // `t` is the opaque tracking token from emailed/SMS links (no PII in the
+  // URL); `order`/`email` remain for the in-site links and old emails.
+  const { t, order, email } = await searchParams;
   // Public page — never let an auth hiccup break it; fall back to logged-out.
   const customer = await getCustomer().catch(() => null);
   return (
     <TrackOrder
+      initialToken={t}
       initialQuery={order}
       initialEmail={email}
       loggedInEmail={customer?.email}

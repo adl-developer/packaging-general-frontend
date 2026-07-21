@@ -18,7 +18,11 @@ import {
 import { cn } from "@/lib/utils";
 import { formatGhs } from "@/lib/format";
 import { isValidEmail } from "@/lib/validation";
-import { lookupOrder, type OrderLookupResult } from "@/lib/actions/orders";
+import {
+  lookupOrder,
+  lookupOrderByToken,
+  type OrderLookupResult,
+} from "@/lib/actions/orders";
 import { motion, AnimatePresence } from "motion/react";
 import {
   DURATION,
@@ -263,10 +267,14 @@ function carrierLabel(providerId: string | null): string {
 }
 
 export function TrackOrder({
+  initialToken,
   initialQuery,
   initialEmail,
   loggedInEmail,
 }: {
+  /** Opaque tracking token from emailed/SMS links (?t=…) — looked up
+   *  immediately; no email/order number needed in the URL. */
+  initialToken?: string;
   initialQuery?: string;
   initialEmail?: string;
   /** When set (signed-in customer), the email is applied automatically and the
@@ -318,13 +326,58 @@ export function TrackOrder({
     [],
   );
 
-  // Auto-run when arriving with ?order=… (e.g. the "My Orders" link), using the
-  // URL email if present, otherwise the signed-in customer's email.
+  // Token links (?t=…) resolve on the backend and come back with the order's
+  // number + email, which then pre-fill the form so View Invoice / re-lookups
+  // keep working exactly as if the customer had typed them.
+  const runTokenLookup = React.useCallback(
+    (token: string) => {
+      startTransition(async () => {
+        const outcome = await lookupOrderByToken(token);
+        if (outcome.status === "found") {
+          const number = outcome.order.number;
+          const emailValue = outcome.order.customer.email ?? "";
+          lookedUpRef.current = { order: number, email: emailValue };
+          setQuery(number);
+          setEmail(emailValue);
+          setResult(mapToTracked(outcome.order));
+          setNotFound(null);
+          setLookupError(false);
+        } else if (outcome.status === "not_found") {
+          // Bad/expired token — empty string renders the generic "link
+          // invalid" copy and the manual form remains as the fallback.
+          setResult(null);
+          setNotFound("");
+          setLookupError(false);
+        } else {
+          setResult(null);
+          setNotFound(null);
+          setLookupError(true);
+        }
+      });
+    },
+    [],
+  );
+
+  // Auto-run when arriving with ?t=… (emailed/SMS links) or ?order=… (the
+  // "My Orders" link), using the URL email if present, otherwise the
+  // signed-in customer's email.
   React.useEffect(() => {
+    const t = (initialToken ?? "").trim();
+    if (t) {
+      runTokenLookup(t);
+      return;
+    }
     const o = (initialQuery ?? "").trim();
     const e = (initialEmail ?? loggedInEmail ?? "").trim();
     if (o && e) runLookup(o, e);
-  }, [initialQuery, initialEmail, loggedInEmail, runLookup]);
+  }, [
+    initialToken,
+    initialQuery,
+    initialEmail,
+    loggedInEmail,
+    runLookup,
+    runTokenLookup,
+  ]);
 
   // Scroll the result/not-found section into view after a successful submit.
   // Respects reduced-motion via `behavior: "smooth"` (browsers honor the pref).
@@ -513,7 +566,7 @@ export function TrackOrder({
             <LookupErrorAlert />
           </motion.div>
         )}
-        {notFound && (
+        {notFound !== null && (
           <motion.div
             key="not-found"
             initial={{ opacity: 0, y: 8 }}
@@ -576,8 +629,9 @@ function NotFoundAlert({ query }: { query: string }) {
           Order Not Found
         </h2>
         <p className="break-words text-sm leading-5 text-[#ca3500]">
-          We couldn&apos;t find an order with the number &quot;{query}&quot;.
-          Please check the order number and try again.
+          {query
+            ? `We couldn't find an order with the number "${query}". Please check the order number and try again.`
+            : "This tracking link is invalid or has expired. Enter your order number and email above to find your order."}
         </p>
       </div>
     </section>
