@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import QRCode from "qrcode";
 import { formatGhs } from "@/lib/format";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { emailInvoice } from "@/lib/actions/orders";
@@ -23,19 +24,32 @@ import { emailInvoice } from "@/lib/actions/orders";
  * Download opens a print-friendly copy (the browser's print dialog offers
  * "Save as PDF"). Email Invoice posts to the backend, which mails the order's
  * own email address.
+ *
+ * ⚠ The emailed invoice (backend `modules/email/templates/order-invoice.ts`)
+ * mirrors this layout section for section. Change one, change the other.
  */
+
+/** One invoiced line — every charged line, fee/service lines included, so the
+ *  line amounts always sum to the Subtotal below. */
 export interface InvoiceLine {
   name: string;
-  specs: string; // e.g. "Standard • Standard • No Printing"
+  specs: string; // e.g. "Standard • Kraft • No Printing"
   quantity: string;
+  unitPrice: number;
+  amount: number;
+}
+
+/** The charge column under the lines — mirrors the backend's
+ *  `utils/invoice-breakdown.ts`; keep the two in step. */
+export interface InvoiceCharges {
   subtotal: number;
   platformFee: number;
   deliveryFee: number;
+  discount: number;
   totalBeforeTax: number;
   vat: number;
   nhil: number;
   getfund: number;
-  itemTotal: number;
 }
 
 export interface InvoiceData {
@@ -47,7 +61,8 @@ export interface InvoiceData {
     phone: string;
     address: string;
   };
-  line: InvoiceLine;
+  lines: InvoiceLine[];
+  charges: InvoiceCharges;
   totalAmount: number;
   eVat: {
     sdcId: string;
@@ -58,7 +73,8 @@ export interface InvoiceData {
     dateTime: string;
     lineItemCount: string;
   };
-  /** Payload encoded inside the QR (E-VAT verification URL/string). */
+  /** Payload encoded inside the QR — the signed `?t=…&invoice=1` link, so a
+   *  scan reopens this invoice. Empty until the backend supplies it. */
   qrPayload: string;
 }
 
@@ -195,48 +211,74 @@ export function InvoiceDialog({
 
               <hr className="border-[#c4bcb0]" />
 
-              {/* Items */}
+              {/* Items — every charged line, so the amounts sum to Subtotal. */}
               <section className="flex flex-col gap-4">
                 <h3 className="text-base font-semibold text-brand">
                   Items
                 </h3>
                 <div className="flex flex-col gap-3 rounded-card border border-[#c4bcb0] p-4">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-base font-medium text-brand">
-                      {invoice.line.name}
-                    </p>
-                    <p className="text-sm text-muted">{invoice.line.specs}</p>
-                    <p className="text-sm text-muted">
-                      Quantity: {invoice.line.quantity}
-                    </p>
-                  </div>
+                  <ul className="flex flex-col gap-3">
+                    {invoice.lines.map((line, i) => (
+                      <li
+                        key={`${line.name}-${i}`}
+                        className={
+                          i > 0 ? "border-t border-[#c4bcb0] pt-3" : undefined
+                        }
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-base font-medium text-brand">
+                            {line.name}
+                          </p>
+                          <p className="shrink-0 text-base font-medium text-brand">
+                            {formatGhs(line.amount)}
+                          </p>
+                        </div>
+                        {line.specs && (
+                          <p className="text-sm text-muted">{line.specs}</p>
+                        )}
+                        <p className="text-sm text-muted">
+                          Quantity: {line.quantity} × {formatGhs(line.unitPrice)}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                  <hr className="border-[#c4bcb0]" />
                   <dl className="flex flex-col gap-2 text-sm">
-                    <Row label="Subtotal" value={invoice.line.subtotal} />
+                    <Row label="Subtotal" value={invoice.charges.subtotal} />
                     <Row
                       label="Platform Fee"
-                      value={invoice.line.platformFee}
+                      value={invoice.charges.platformFee}
                     />
                     <Row
                       label="Delivery Fee"
-                      value={invoice.line.deliveryFee}
+                      value={invoice.charges.deliveryFee}
                     />
+                    {invoice.charges.discount > 0 && (
+                      <Row
+                        label="Discount"
+                        value={-invoice.charges.discount}
+                      />
+                    )}
                     <hr className="border-[#c4bcb0]" />
                     <Row
                       label="Total Before Tax"
-                      value={invoice.line.totalBeforeTax}
+                      value={invoice.charges.totalBeforeTax}
                       bold
                     />
                     <hr className="border-[#c4bcb0]" />
-                    <Row label="VAT (15%)" value={invoice.line.vat} />
-                    <Row label="NHIL (2.5%)" value={invoice.line.nhil} />
-                    <Row label="GETFund (2.5%)" value={invoice.line.getfund} />
+                    <Row label="VAT (15%)" value={invoice.charges.vat} />
+                    <Row label="NHIL (2.5%)" value={invoice.charges.nhil} />
+                    <Row
+                      label="GETFund (2.5%)"
+                      value={invoice.charges.getfund}
+                    />
                     <hr className="border-[#c4bcb0]" />
                     <div className="flex items-center justify-between pt-2">
                       <dt className="text-base font-semibold text-brand">
-                        Item Total
+                        Total
                       </dt>
                       <dd className="text-base font-semibold text-rust">
-                        {formatGhs(invoice.line.itemTotal)}
+                        {formatGhs(invoice.totalAmount)}
                       </dd>
                     </div>
                   </dl>
@@ -289,11 +331,16 @@ export function InvoiceDialog({
                     value={invoice.eVat.lineItemCount}
                   />
                 </dl>
-                <div className="mt-6 grid place-items-center">
-                  <div className="grid size-[165px] place-items-center rounded-card border border-[#c4bcb0] bg-white p-3">
-                    <QrPlaceholder payload={invoice.qrPayload} />
+                {invoice.qrPayload && (
+                  <div className="mt-6 flex flex-col items-center gap-2">
+                    <div className="grid size-[165px] place-items-center rounded-card border border-[#c4bcb0] bg-white p-3">
+                      <InvoiceQr payload={invoice.qrPayload} />
+                    </div>
+                    <p className="text-xs text-muted">
+                      Scan to open this invoice on your phone
+                    </p>
                   </div>
-                </div>
+                )}
               </section>
 
               <div className="flex flex-col gap-3">
@@ -460,18 +507,29 @@ function printInvoice(invoice: InvoiceData) {
 
   <h2>Items</h2>
   <div class="items">
-    <p style="font-weight:600">${esc(invoice.line.name)}</p>
-    ${invoice.line.specs ? `<p class="muted">${esc(invoice.line.specs)}</p>` : ""}
-    <p class="muted">Quantity: ${esc(invoice.line.quantity)}</p>
-    <table style="margin-top:8px">
-      ${row("Subtotal", invoice.line.subtotal)}
-      ${row("Platform Fee", invoice.line.platformFee)}
-      ${row("Delivery Fee", invoice.line.deliveryFee)}
-      ${row("Total Before Tax", invoice.line.totalBeforeTax, { bold: true, rule: true })}
-      ${row("VAT (15%)", invoice.line.vat)}
-      ${row("NHIL (2.5%)", invoice.line.nhil)}
-      ${row("GETFund (2.5%)", invoice.line.getfund)}
-      ${row("Item Total", invoice.line.itemTotal, { bold: true, rule: true })}
+    ${invoice.lines
+      .map(
+        (line, i) => `
+    <div${i > 0 ? ' style="margin-top:10px;padding-top:10px;border-top:1px solid #c4bcb0"' : ""}>
+      <table><tr>
+        <td style="font-weight:600">${esc(line.name)}</td>
+        <td style="text-align:right;font-weight:600">${money(line.amount)}</td>
+      </tr></table>
+      ${line.specs ? `<p class="muted">${esc(line.specs)}</p>` : ""}
+      <p class="muted">Quantity: ${esc(line.quantity)} × ${money(line.unitPrice)}</p>
+    </div>`
+      )
+      .join("")}
+    <table style="margin-top:12px">
+      ${row("Subtotal", invoice.charges.subtotal, { rule: true })}
+      ${row("Platform Fee", invoice.charges.platformFee)}
+      ${row("Delivery Fee", invoice.charges.deliveryFee)}
+      ${invoice.charges.discount > 0 ? row("Discount", -invoice.charges.discount) : ""}
+      ${row("Total Before Tax", invoice.charges.totalBeforeTax, { bold: true, rule: true })}
+      ${row("VAT (15%)", invoice.charges.vat)}
+      ${row("NHIL (2.5%)", invoice.charges.nhil)}
+      ${row("GETFund (2.5%)", invoice.charges.getfund)}
+      ${row("Total", invoice.totalAmount, { bold: true, rule: true })}
     </table>
   </div>
 
@@ -495,52 +553,44 @@ function printInvoice(invoice: InvoiceData) {
   w.focus();
 }
 
-/** Placeholder QR — visually evokes a QR code so the layout is correct.
- *  TODO(medusa): swap for a real QR generated from `payload` (e.g. `qrcode`
- *  lib server-side or a client lib like `qrcode.react`). */
-function QrPlaceholder({ payload }: { payload: string }) {
-  // Deterministic dot pattern from the payload so different orders render
-  // visually distinct placeholders without pulling in a QR lib.
-  const cells = React.useMemo(() => {
-    const seed = Array.from(payload).reduce(
-      (acc, c) => (acc * 31 + c.charCodeAt(0)) >>> 0,
-      7,
-    );
-    const out: boolean[] = [];
-    for (let i = 0, s = seed || 1; i < 13 * 13; i++) {
-      s = (s * 1664525 + 1013904223) >>> 0;
-      out.push(s % 2 === 0);
+/**
+ * The invoice QR, encoding the signed `?t=…&invoice=1` link — scanning it on a
+ * phone reopens this invoice. Rendered as inline SVG from `QRCode.create()`,
+ * which is synchronous, so there's no async state or layout shift.
+ *
+ * One `<path>` of module rectangles rather than N `<rect>` elements: a v5 QR
+ * is 37×37, so that's up to ~700 filled modules — as separate nodes it bloats
+ * the DOM and shows hairline seams between adjacent modules at some zoom
+ * levels, which can break a scan.
+ */
+function InvoiceQr({ payload }: { payload: string }) {
+  const qr = React.useMemo(() => {
+    try {
+      const { modules } = QRCode.create(payload, { errorCorrectionLevel: "M" });
+      const size = modules.size;
+      let d = "";
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          if (modules.data[y * size + x]) d += `M${x} ${y}h1v1h-1z`;
+        }
+      }
+      return { size, d };
+    } catch {
+      return null;
     }
-    return out;
   }, [payload]);
+
+  if (!qr) return null;
 
   return (
     <svg
-      viewBox="0 0 13 13"
+      viewBox={`0 0 ${qr.size} ${qr.size}`}
       className="size-full"
-      aria-label="Invoice QR code"
+      shapeRendering="crispEdges"
+      aria-label="QR code — scan to open this invoice"
       role="img"
     >
-      {cells.map((on, i) => {
-        const x = i % 13;
-        const y = Math.floor(i / 13);
-        // Force the three finder squares (top-left, top-right, bottom-left).
-        const isFinder =
-          (x < 3 && y < 3) || (x > 9 && y < 3) || (x < 3 && y > 9);
-        const isFinderInner =
-          (x === 1 && y === 1) || (x === 11 && y === 1) || (x === 1 && y === 11);
-        if (isFinder) {
-          // Outer 3x3 black, inner 1x1 black, surrounded by white — handled below.
-        }
-        const fill = isFinder
-          ? isFinderInner || x === 0 || y === 0 || x === 12 || y === 12
-            ? "#3d3428"
-            : "#ffffff"
-          : on
-            ? "#3d3428"
-            : "transparent";
-        return <rect key={i} x={x} y={y} width="1" height="1" fill={fill} />;
-      })}
+      <path d={qr.d} fill="#3d3428" />
     </svg>
   );
 }

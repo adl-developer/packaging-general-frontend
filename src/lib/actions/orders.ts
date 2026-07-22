@@ -41,6 +41,12 @@ export interface OrderLookupResult {
   current_step: number;
   currency_code: string | null;
   customer: { name: string; phone: string; email: string };
+  /** Signed, PII-free tracking link minted by the backend (we can't mint the
+   *  HMAC here). Null only if the backend omitted the order id. */
+  track_url?: string | null;
+  /** Same link with `invoice=1` — what the invoice QR encodes and where every
+   *  "View Invoice" link points. */
+  invoice_url?: string | null;
   address: string;
   delivery_instructions: string;
   items: {

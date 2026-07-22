@@ -69,12 +69,26 @@ interface TrackedOrder {
     quantity: string;
   }[];
   address: string;
+  /** Every CHARGED line — fee/service lines included, unlike `products` above
+   *  (which describes goods). The invoice itemizes these so the line amounts
+   *  sum to the Subtotal. */
+  invoiceLines: {
+    name: string;
+    specs: string;
+    quantity: string;
+    unitPrice: number;
+    amount: number;
+  }[];
+  /** Signed `?t=…&invoice=1` deep link minted by the backend — what the
+   *  invoice QR encodes. Empty string when the backend didn't supply one. */
+  invoiceUrl: string;
   pricing: {
     itemName: string;
     itemQty: string;
     itemPrice: number;
     fees: number;
     taxes: number;
+    discount: number;
     total: number;
   };
   /** Carrier tracking info from the order's active fulfillment (Yango, etc.).
@@ -89,25 +103,27 @@ interface TrackedOrder {
 
 const cardClass = "rounded-card border-2 border-[#e2e1e0] bg-surface";
 
-/** Build the invoice payload from a looked-up order's REAL totals: subtotal,
- *  delivery and total come straight from the order; the single tax_total is
- *  split across the Ghana levy lines proportionally (VAT 15 / NHIL 2.5 /
- *  GETFund 2.5 of the 20-point bundle) so the lines always sum to the actual
- *  amount charged. E-VAT receipt fields stay blank until the backend issues
- *  real GRA e-invoicing data. */
+/**
+ * Build the invoice payload from a looked-up order's REAL totals: subtotal,
+ * delivery and total come straight from the order; the single tax_total is
+ * split across the Ghana levy lines proportionally (VAT 15 / NHIL 2.5 /
+ * GETFund 2.5 of the 20-point bundle), with GETFund taking the rounding
+ * remainder so the three lines always sum to the amount actually charged.
+ * `totalBeforeTax` is derived as total − tax so any discount is absorbed and
+ * the column foots to the total. E-VAT receipt fields stay blank until the
+ * backend issues real GRA e-invoicing data.
+ *
+ * ⚠ This mirrors the backend's `utils/invoice-breakdown.ts`, which computes
+ * the same figures for the emailed invoice. Separate repos, no shared module —
+ * change both together or the email will disagree with this dialog.
+ */
 function buildInvoice(order: TrackedOrder): InvoiceData {
-  const subtotal = order.pricing.itemPrice;
-  const deliveryFee = order.pricing.fees;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
   const taxes = order.pricing.taxes;
   const total = order.pricing.total;
-  const totalBeforeTax = +(total - taxes).toFixed(2);
-  const vat = +((taxes * 15) / 20).toFixed(2);
-  const nhil = +((taxes * 2.5) / 20).toFixed(2);
-  const getfund = +(taxes - vat - nhil).toFixed(2);
-  const mainProduct = order.products[0];
-  const specs = [mainProduct?.size, mainProduct?.material, mainProduct?.printing]
-    .filter((s): s is string => Boolean(s) && s !== "—")
-    .join(" • ");
+  const vat = round2((taxes * 15) / 20);
+  const nhil = round2((taxes * 2.5) / 20);
+  const getfund = round2(taxes - vat - nhil);
   return {
     orderNumber: order.number,
     invoiceDate: order.placedOn.replace(/^Placed on /, ""),
@@ -117,18 +133,16 @@ function buildInvoice(order: TrackedOrder): InvoiceData {
       phone: order.customer.phone,
       address: order.address,
     },
-    line: {
-      name: order.pricing.itemName,
-      specs,
-      quantity: order.pricing.itemQty,
-      subtotal,
+    lines: order.invoiceLines,
+    charges: {
+      subtotal: order.pricing.itemPrice,
       platformFee: 0,
-      deliveryFee,
-      totalBeforeTax,
+      deliveryFee: order.pricing.fees,
+      discount: order.pricing.discount,
+      totalBeforeTax: round2(total - taxes),
       vat,
       nhil,
       getfund,
-      itemTotal: total,
     },
     totalAmount: total,
     eVat: {
@@ -140,7 +154,7 @@ function buildInvoice(order: TrackedOrder): InvoiceData {
       dateTime: "—",
       lineItemCount: "—",
     },
-    qrPayload: `pg-invoice:${order.number}`,
+    qrPayload: order.invoiceUrl,
   };
 }
 
@@ -237,6 +251,28 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
       };
     }),
     address: o.address || "—",
+    // Invoice lines cover EVERY charged item, service/fee lines included, so
+    // the amounts sum to item_total (the invoice's Subtotal). Amount is
+    // unit_price × quantity — `item.total` carries tax and would double-count
+    // against the levy lines below it.
+    invoiceLines: o.items.map((item) => {
+      const opts = item.options ?? {};
+      const specs = item.is_service
+        ? "One-time printing setup fee"
+        : ([opts["Size"], opts["Material"], opts["Printing"]]
+            .filter((s): s is string => Boolean(s) && s !== "—")
+            .join(" • ") ||
+          item.variant_title ||
+          "");
+      return {
+        name: item.title || "Item",
+        specs,
+        quantity: `${item.quantity}`,
+        unitPrice: item.unit_price,
+        amount: item.unit_price * item.quantity,
+      };
+    }),
+    invoiceUrl: o.invoice_url ?? "",
     pricing: {
       itemName:
         (mainItem?.title ?? "Order") +
@@ -245,6 +281,7 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
       itemPrice: o.totals.item_total,
       fees: o.totals.shipping_total,
       taxes: o.totals.tax_total,
+      discount: o.totals.discount_total,
       total: o.totals.total,
     },
     carrier: o.carrier
@@ -270,6 +307,7 @@ export function TrackOrder({
   initialToken,
   initialQuery,
   initialEmail,
+  openInvoice,
   loggedInEmail,
 }: {
   /** Opaque tracking token from emailed/SMS links (?t=…) — looked up
@@ -277,6 +315,9 @@ export function TrackOrder({
   initialToken?: string;
   initialQuery?: string;
   initialEmail?: string;
+  /** From `?invoice=1` (every "View Invoice" CTA and the invoice QR) — pops
+   *  the invoice dialog once the auto-lookup resolves. */
+  openInvoice?: boolean;
   /** When set (signed-in customer), the email is applied automatically and the
    *  email field is hidden — the user only enters an order number. */
   loggedInEmail?: string;
@@ -330,7 +371,7 @@ export function TrackOrder({
   // number + email, which then pre-fill the form so View Invoice / re-lookups
   // keep working exactly as if the customer had typed them.
   const runTokenLookup = React.useCallback(
-    (token: string) => {
+    (token: string, openInvoiceOnFound = false) => {
       startTransition(async () => {
         const outcome = await lookupOrderByToken(token);
         if (outcome.status === "found") {
@@ -342,6 +383,7 @@ export function TrackOrder({
           setResult(mapToTracked(outcome.order));
           setNotFound(null);
           setLookupError(false);
+          if (openInvoiceOnFound) setInvoiceOpen(true);
         } else if (outcome.status === "not_found") {
           // Bad/expired token — empty string renders the generic "link
           // invalid" copy and the manual form remains as the fallback.
@@ -364,16 +406,17 @@ export function TrackOrder({
   React.useEffect(() => {
     const t = (initialToken ?? "").trim();
     if (t) {
-      runTokenLookup(t);
+      runTokenLookup(t, openInvoice);
       return;
     }
     const o = (initialQuery ?? "").trim();
     const e = (initialEmail ?? loggedInEmail ?? "").trim();
-    if (o && e) runLookup(o, e);
+    if (o && e) runLookup(o, e, openInvoice);
   }, [
     initialToken,
     initialQuery,
     initialEmail,
+    openInvoice,
     loggedInEmail,
     runLookup,
     runTokenLookup,

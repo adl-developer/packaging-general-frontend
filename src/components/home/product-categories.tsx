@@ -9,28 +9,30 @@ import { Stagger, StaggerItem } from "@/components/motion/stagger";
 const categories = [
   {
     emoji: "📦",
-    title: "Shipping Cartons",
-    description: "Durable single and double-wall cartons for general shipping needs",
-    href: "/products?category=shipping-cartons",
-  },
-  {
-    emoji: "📮",
-    title: "Mailer Boxes",
+    title: "RSC Cartons",
     description:
-      "Custom-designed boxes perfect for e-commerce and subscription brands",
-    href: "/products?category=mailer-boxes",
+      "Regular Slotted Containers in single and double wall — the workhorse shipping carton",
+    href: "/products?category=rsc-cartons",
   },
   {
-    emoji: "📄",
-    title: "Folding Cartons (FMCG)",
-    description: "Retail-ready packaging for food and consumer goods",
-    href: "/products?category=folding-cartons",
+    emoji: "🥭",
+    title: "Die Cut Boxes",
+    description:
+      "Yam, mango and vegetable cartons, archive boxes, trays and custom shapes",
+    href: "/products?category=die-cut-boxes",
   },
   {
-    emoji: "🚚",
-    title: "Export/Agro Boxes",
-    description: "Heavy-duty packaging for agricultural exports and produce",
-    href: "/products?category=export-agro-boxes",
+    emoji: "🍕",
+    title: "Food Packaging",
+    description: "Pizza boxes and takeaway food boxes in a full range of sizes",
+    href: "/products?category=food-packaging",
+  },
+  {
+    emoji: "📼",
+    title: "Packaging Accessories",
+    description:
+      "BOPP tape, stretch wrap, bubble wrap and void fill to complete every shipment",
+    href: "/products?category=packaging-accessories",
   },
 ];
 
