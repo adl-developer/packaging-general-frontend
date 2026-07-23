@@ -40,12 +40,16 @@ export const metadata: Metadata = {
       "Browse and buy quality packaging supplies online. Built for SMEs and growing brands across West Africa.",
     url: siteUrl,
     locale: "en_GH",
+    images: [{ url: "/logo.png", width: 154, height: 188, alt: "Packaging General" }],
   },
   twitter: {
-    card: "summary_large_image",
+    // "summary" renders the logo as a compact square thumbnail; the logo is
+    // portrait, so the large-image card would letterbox it badly.
+    card: "summary",
     title: "Packaging General — Digital-First Packaging in West Africa",
     description:
       "Browse and buy quality packaging supplies online. Built for West Africa.",
+    images: ["/logo.png"],
   },
   robots: { index: true, follow: true },
 };

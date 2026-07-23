@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { SectionHeading, SectionSubtitle } from "./section-heading";
 import { Reveal } from "@/components/motion/reveal";
@@ -9,30 +8,26 @@ import { Stagger, StaggerItem } from "@/components/motion/stagger";
 const categories = [
   {
     emoji: "📦",
-    title: "RSC Cartons",
+    title: "Shipping Cartons",
     description:
-      "Regular Slotted Containers in single and double wall — the workhorse shipping carton",
-    href: "/products?category=rsc-cartons",
+      "Durable single and double-wall cartons for general shipping needs",
   },
   {
-    emoji: "🥭",
-    title: "Die Cut Boxes",
+    emoji: "📮",
+    title: "Mailer Boxes",
     description:
-      "Yam, mango and vegetable cartons, archive boxes, trays and custom shapes",
-    href: "/products?category=die-cut-boxes",
+      "Custom-designed boxes perfect for e-commerce and subscription brands",
   },
   {
-    emoji: "🍕",
-    title: "Food Packaging",
-    description: "Pizza boxes and takeaway food boxes in a full range of sizes",
-    href: "/products?category=food-packaging",
+    emoji: "📄",
+    title: "Folding Cartons (FMCG)",
+    description: "Retail-ready packaging for food and consumer goods",
   },
   {
-    emoji: "📼",
-    title: "Packaging Accessories",
+    emoji: "🚚",
+    title: "Export/Agro Boxes",
     description:
-      "BOPP tape, stretch wrap, bubble wrap and void fill to complete every shipment",
-    href: "/products?category=packaging-accessories",
+      "Heavy-duty packaging for agricultural exports and produce",
   },
 ];
 
@@ -52,19 +47,17 @@ export function ProductCategories() {
         <Stagger className="mx-auto grid max-w-4xl grid-cols-1 gap-6 sm:grid-cols-2">
           {categories.map((c) => (
             <StaggerItem key={c.title} className="h-full">
-              <Link href={c.href} className="group block h-full">
-                <Card className="flex h-full flex-col items-start gap-4 border-2 border-[rgba(165,154,135,0.3)] p-8 transition-colors group-hover:border-[rgba(61,52,40,0.4)]">
-                  <span className="text-4xl leading-none" aria-hidden>
-                    {c.emoji}
-                  </span>
-                  <span className="text-xl font-semibold leading-7 text-brand">
-                    {c.title}
-                  </span>
-                  <span className="text-sm leading-relaxed text-muted">
-                    {c.description}
-                  </span>
-                </Card>
-              </Link>
+              <Card className="flex h-full flex-col items-start gap-4 border-2 border-[rgba(165,154,135,0.3)] p-8">
+                <span className="text-4xl leading-none" aria-hidden>
+                  {c.emoji}
+                </span>
+                <span className="text-xl font-semibold leading-7 text-brand">
+                  {c.title}
+                </span>
+                <span className="text-sm leading-relaxed text-muted">
+                  {c.description}
+                </span>
+              </Card>
             </StaggerItem>
           ))}
         </Stagger>
