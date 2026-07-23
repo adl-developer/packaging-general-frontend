@@ -217,13 +217,19 @@ export function ProductCustomizer({ product }: { product: Product }) {
       <div className="sticky top-[121px] z-40 border-b border-line bg-surface">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <Link
-              href={`/products/${product.slug}`}
+            <button
+              type="button"
+              onClick={() => {
+                // Return to wherever the shopper came from; fall back to the
+                // catalog when there's no in-app history (direct load / new tab).
+                if (window.history.length > 1) router.back();
+                else router.push("/products");
+              }}
               className="inline-flex items-center gap-1.5 rounded-button px-3 text-sm font-medium text-brand transition-colors hover:text-brand/70"
             >
               <ArrowLeft className="size-4" aria-hidden />
               Back
-            </Link>
+            </button>
             <span className="text-sm text-muted">Step {step} of {sectionCount}</span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#f3f4f6]">
