@@ -11,13 +11,22 @@ export const metadata: Metadata = {
 };
 
 export default async function CartPage() {
-  const [cart, crossSell, promo] = await Promise.all([
-    getCart(),
+  // NOT awaited — the cart fetch (the slow call) streams to the client instead
+  // of blocking the page render. Arrivals from Add to Cart never wait on it at
+  // all: the add flow hands its mutation response over via cart-handoff, and
+  // CartClient paints from that instantly. Direct visits resolve this promise
+  // client-side (same wait as before, now behind the page shell, not the
+  // route-level skeleton).
+  const itemsPromise: Promise<CartItem[]> = getCart().then((cart) =>
+    (cart?.items ?? []).map(mapLineItem)
+  );
+  // Both module-cached (5 min / 60 s) — cheap to await, and the sections they
+  // fill render in the first paint.
+  const [crossSell, promo] = await Promise.all([
     listCrossSellProducts(),
     getActivePromotion(),
   ]);
-  const initialItems: CartItem[] = (cart?.items ?? []).map(mapLineItem);
   return (
-    <CartClient initialItems={initialItems} crossSell={crossSell} promo={promo} />
+    <CartClient itemsPromise={itemsPromise} crossSell={crossSell} promo={promo} />
   );
 }

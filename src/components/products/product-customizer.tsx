@@ -17,6 +17,8 @@ import {
   getCartLineCount,
   warmCart,
 } from "@/lib/actions/cart";
+import { setCartHandoff } from "@/lib/cart-handoff";
+import { mapLineItem } from "@/app/(shop)/cart/map-cart";
 import { motion } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
@@ -151,6 +153,9 @@ export function ProductCustomizer({ product }: { product: Product }) {
         // Reconcile the badge to the server truth (lines may merge when the
         // same variant is added twice). cart:set — no second toast.
         notifyCartCount(cart?.items?.length ?? 0);
+        // Hand the mutation's cart payload to the /cart page so it paints the
+        // items instantly instead of re-fetching the same cart on arrival.
+        setCartHandoff((cart?.items ?? []).map(mapLineItem));
         // Both actions land on the cart page — navigate once the line is
         // committed (so /cart renders it). The optimistic "✓ Added" + toast
         // already fired on click, so the ~1s pre-nav wait doesn't read as a

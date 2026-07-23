@@ -25,6 +25,8 @@ import {
   updateLineItemQuantity,
 } from "@/lib/actions/cart";
 import { mapLineItem, TAX_RATE, type CartItem } from "./map-cart";
+import { CartSkeleton } from "./cart-skeleton";
+import { takeCartHandoff } from "@/lib/cart-handoff";
 import type { CrossSellProduct } from "@/lib/products";
 import type { ActivePromotion } from "@/lib/promotions";
 
@@ -324,24 +326,32 @@ function CrossSellCard({
 }
 
 export function CartClient({
-  initialItems,
+  itemsPromise,
   crossSell,
   promo,
 }: {
-  initialItems: CartItem[];
+  /** The live cart's mapped items, streamed from the server render — NOT
+   *  awaited there, so the page shell paints without waiting on the backend. */
+  itemsPromise: Promise<CartItem[]>;
   crossSell: CrossSellProduct[];
   promo: ActivePromotion | null;
 }) {
-  const [items, setItems] = React.useState<CartItem[]>(initialItems);
+  const [items, setItems] = React.useState<CartItem[]>([]);
+  // False until the first real cart snapshot is adopted (handoff or promise);
+  // the skeleton renders meanwhile so the pre-adoption [] never flashes as an
+  // empty cart. See the adoption effect below the qty refs.
+  const [hydrated, setHydrated] = React.useState(false);
+  const adoptedRef = React.useRef(false);
   const [confirmEmpty, setConfirmEmpty] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
 
   // Keep the header cart badge in sync with the cart's line-item count.
-  // Fires on mount (real total from server) and whenever the count changes —
-  // i.e. on remove, on empty, on cross-sell add, and on quantity drops to 0.
+  // Fires once hydrated (real total from server) and whenever the count
+  // changes — i.e. on remove, on empty, on cross-sell add, and on quantity
+  // drops to 0. Gated on hydrated so the pre-adoption [] can't zero the badge.
   React.useEffect(() => {
-    notifyCartCount(items.length);
-  }, [items.length]);
+    if (hydrated) notifyCartCount(items.length);
+  }, [items.length, hydrated]);
 
   // Optimistic remove → server action → on error, restore.
   const remove = (id: string) => {
@@ -370,17 +380,54 @@ export function CartClient({
   //     in parallel, even across different lines.
   // Latest intended qty per line (source of truth for clicks — read/written
   // synchronously so back-to-back clicks accumulate regardless of render).
-  const qtyTarget = React.useRef<Map<string, number>>(
-    new Map(initialItems.map((x) => [x.id, x.quantity])),
-  );
+  // Seeded by the adoption effect below once the first cart snapshot lands.
+  const qtyTarget = React.useRef<Map<string, number>>(new Map());
   // Last qty the server confirmed — used to skip no-op writes and to revert.
-  const qtyConfirmed = React.useRef<Map<string, number>>(
-    new Map(initialItems.map((x) => [x.id, x.quantity])),
-  );
+  const qtyConfirmed = React.useRef<Map<string, number>>(new Map());
   // Lines whose target differs from what the server has → pending a write.
   const qtyDirty = React.useRef<Map<string, number>>(new Map());
   const draining = React.useRef(false);
   const drainTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // First real cart snapshot. Arrivals from Add to Cart hand the mutation's
+  // response over via cart-handoff → adopted synchronously, zero fetch wait
+  // (this is what killed the long /cart skeleton). Everyone else adopts the
+  // streamed server fetch when it resolves. Adopt-once: a later RSC re-render
+  // swaps itemsPromise, but must not clobber optimistic local state.
+  React.useEffect(() => {
+    if (adoptedRef.current) return;
+    const adopt = (list: CartItem[]) => {
+      if (adoptedRef.current) return;
+      adoptedRef.current = true;
+      for (const it of list) {
+        qtyTarget.current.set(it.id, it.quantity);
+        qtyConfirmed.current.set(it.id, it.quantity);
+      }
+      setItems(list);
+      setHydrated(true);
+    };
+    const handed = takeCartHandoff();
+    if (handed) {
+      adopt(handed);
+      return;
+    }
+    let alive = true;
+    // Promise.resolve is REQUIRED: React streams the server promise as a bare
+    // thenable whose .then() returns undefined — chaining .catch straight off
+    // it throws. Wrapping normalizes it into a real chainable Promise.
+    Promise.resolve(itemsPromise)
+      .then((server) => {
+        if (alive) adopt(server);
+      })
+      .catch(() => {
+        // getCart() already degrades to null internally; this only guards a
+        // streaming hiccup. Show the (empty) cart rather than a stuck skeleton.
+        if (alive) adopt([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [itemsPromise]);
 
   // Send pending quantity writes one at a time until the queue is empty.
   const drainQty = React.useCallback(async () => {
@@ -518,6 +565,11 @@ export function CartClient({
   };
 
   const total = items.reduce((sum, x) => sum + lineTotal(x), 0);
+
+  // Still waiting on the first cart snapshot (direct visit, promise pending).
+  // The add→cart path adopts its handoff in the mount effect, so this shows
+  // for at most one frame there.
+  if (!hydrated) return <CartSkeleton />;
 
   if (items.length === 0)
     return (
