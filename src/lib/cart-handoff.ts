@@ -3,35 +3,84 @@
 import type { CartItem } from "@/app/(shop)/cart/map-cart";
 
 /**
- * Client-side cart handoff: Add to Cart → /cart without re-fetching.
+ * Optimistic add-to-cart channel: product page → /cart, decoupled from the
+ * backend commit.
  *
- * The add-to-cart server actions already return the FULL updated cart in the
- * mutation response, yet the /cart page used to re-fetch that same cart from
- * the backend on arrival — the entire "skeleton hangs before items appear"
- * wait. Instead, the add flow deposits the mapped line items here (a plain
- * module-level variable — it survives a client-side router.push because no
- * page reload happens) and the cart page picks them up on mount and paints
- * instantly, skipping its own fetch.
+ * Add to Cart no longer waits for Medusa before navigating. The customizer
+ * (1) deposits the just-configured line(s) here as optimistic items (temp
+ * `opt-…` ids, built entirely from on-screen state — option ids ARE the
+ * backend option values, so they render identically to committed lines),
+ * (2) navigates to /cart immediately, and (3) commits the real mutation in
+ * the background, settling this channel with the server truth (or a failure).
  *
- * Freshness: the handoff is single-use (taking it clears it) and expires after
- * a few seconds — it only exists to cover the add → navigate hop. Any other
- * entry to /cart (deep link, reload, back-button after long idle) finds no
- * handoff and does its normal fetch.
+ * The cart page paints the optimistic items instantly, merges the server's
+ * pre-existing items underneath when its own fetch lands, and swaps in the
+ * committed cart when the settle event fires. On failure it drops the
+ * optimistic lines and shows an error — the shopper never sees a dead click
+ * or a skeleton.
+ *
+ * Module-level state survives the client-side router.push (no reload).
+ * Take-once + expiry keep any other /cart entry (deep link, reload, back
+ * after idle) on the normal fetch path.
  */
-let handoff: { items: CartItem[]; at: number } | null = null;
 
-/** How long a deposited cart stays valid. Generous vs the ~instant router.push
- *  it needs to survive, but far too short to ever serve a stale cart. */
-const MAX_AGE_MS = 15_000;
+export type AddSettleResult = { ok: true; items: CartItem[] } | { ok: false };
 
-export function setCartHandoff(items: CartItem[]): void {
-  handoff = { items, at: Date.now() };
+type PendingAdd = {
+  optimisticItems: CartItem[];
+  at: number;
+  /** Set when the background commit finishes before /cart mounts. */
+  result: AddSettleResult | null;
+};
+
+let pending: PendingAdd | null = null;
+const listeners = new Set<(r: AddSettleResult) => void>();
+
+/** Covers the instant push → mount hop plus a slow commit; far too short to
+ *  ever resurrect a stale snapshot on a later, unrelated /cart visit. */
+const MAX_AGE_MS = 30_000;
+
+/** Product page, on click: stage the optimistic lines, then navigate.
+ *  Temp ids are assigned here (not by the caller) so component code stays
+ *  pure — `opt-…` marks a line whose commit is still in flight. */
+export function beginOptimisticAdd(lines: Omit<CartItem, "id">[]): void {
+  const stamp = Date.now();
+  pending = {
+    optimisticItems: lines.map((line, i) => ({ ...line, id: `opt-${stamp}-${i}` })),
+    at: stamp,
+    result: null,
+  };
 }
 
-/** Take (and clear) the handed-off cart, or null when absent/expired. */
-export function takeCartHandoff(): CartItem[] | null {
-  if (!handoff) return null;
-  const { items, at } = handoff;
-  handoff = null;
-  return Date.now() - at <= MAX_AGE_MS ? items : null;
+/** Product page, when the background mutation settles. Stores the result for
+ *  a not-yet-mounted cart page AND notifies a mounted one. */
+export function settleOptimisticAdd(result: AddSettleResult): void {
+  if (pending) pending.result = result;
+  for (const listener of [...listeners]) listener(result);
+}
+
+/** Cart page, on mount (take-once): the staged add, if fresh. `result` is
+ *  non-null when the commit already finished during the navigation. */
+export function takeOptimisticAdd(): {
+  optimisticItems: CartItem[];
+  result: AddSettleResult | null;
+} | null {
+  if (!pending) return null;
+  const taken = pending;
+  pending = null;
+  if (Date.now() - taken.at > MAX_AGE_MS) return null;
+  return { optimisticItems: taken.optimisticItems, result: taken.result };
+}
+
+/** Cart page: subscribe to the in-flight commit settling. */
+export function onAddSettled(fn: (r: AddSettleResult) => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+/** True for lines that exist only optimistically (commit still in flight). */
+export function isOptimisticLine(id: string): boolean {
+  return id.startsWith("opt-");
 }

@@ -17,8 +17,15 @@ import {
   getCartLineCount,
   warmCart,
 } from "@/lib/actions/cart";
-import { setCartHandoff } from "@/lib/cart-handoff";
-import { mapLineItem } from "@/app/(shop)/cart/map-cart";
+import {
+  beginOptimisticAdd,
+  settleOptimisticAdd,
+} from "@/lib/cart-handoff";
+import {
+  mapLineItem,
+  TAX_RATE,
+  type CartItem,
+} from "@/app/(shop)/cart/map-cart";
 import { motion } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
@@ -127,18 +134,53 @@ export function ProductCustomizer({ product }: { product: Product }) {
     }
     setError(null);
 
-    // ── Optimistic: confirm instantly, before the backend round-trip. ──
-    // Fire the "Added to cart!" toast + bump the header badge (+1 line) now,
-    // and flip the button to its "✓ Added" state — so the click feels
-    // immediate instead of waiting ~1s on the network. Reconciled/rolled back
-    // once the server responds below.
+    // ── Fully optimistic: render first, commit in the background. ──
+    // We already know everything the cart page will show — the option ids ARE
+    // the backend option values, and unitPrice is the tier-discounted price —
+    // so we stage the new line(s) client-side, navigate to /cart immediately,
+    // and let the mutation settle behind it (the cart page reconciles to the
+    // server truth, or rolls the lines back with an error, via cart-handoff).
+    const optimisticLines: Omit<CartItem, "id">[] = [
+      {
+        variantId: combo.variantId,
+        name: product.name,
+        specs: [
+          size ? `Size: ${size}` : null,
+          material ? `Material: ${material}` : null,
+          printing ? `Printing: ${printing}` : null,
+        ].filter((s): s is string => !!s),
+        unitPrice,
+        taxRate: TAX_RATE,
+        quantity,
+        productSlug: product.slug,
+        isService: false,
+      },
+      ...(selectedPrinting && setupFee > 0
+        ? [
+            {
+              name: "Printing Setup Fee",
+              specs: [`${selectedPrinting.id} · one-time charge`],
+              unitPrice: setupFee,
+              taxRate: TAX_RATE,
+              quantity: 1,
+              isService: true,
+            } satisfies Omit<CartItem, "id">,
+          ]
+        : []),
+    ];
+
     notifyCartAdd({ lines: 1 });
     setJustAdded(true);
     if (addedResetRef.current) window.clearTimeout(addedResetRef.current);
     addedResetRef.current = window.setTimeout(() => setJustAdded(false), 1800);
     setPendingKind(kind);
     setGoingToCart(true);
+    beginOptimisticAdd(optimisticLines);
+    router.push("/cart");
 
+    // This component unmounts when the navigation lands; the commit keeps
+    // running and reports through the cart-handoff channel (state setters on
+    // an unmounted component are safe no-ops).
     startTransition(async () => {
       try {
         const cart = await addConfiguredLineItem({
@@ -153,24 +195,19 @@ export function ProductCustomizer({ product }: { product: Product }) {
         // Reconcile the badge to the server truth (lines may merge when the
         // same variant is added twice). cart:set — no second toast.
         notifyCartCount(cart?.items?.length ?? 0);
-        // Hand the mutation's cart payload to the /cart page so it paints the
-        // items instantly instead of re-fetching the same cart on arrival.
-        setCartHandoff((cart?.items ?? []).map(mapLineItem));
-        // Both actions land on the cart page — navigate once the line is
-        // committed (so /cart renders it). The optimistic "✓ Added" + toast
-        // already fired on click, so the ~1s pre-nav wait doesn't read as a
-        // dead click; the /cart route is prefetched + has a loading skeleton.
-        router.push("/cart");
+        settleOptimisticAdd({
+          ok: true,
+          items: (cart?.items ?? []).map(mapLineItem),
+        });
       } catch (err) {
         console.error("[customizer] add to cart failed:", err);
-        // Roll back the optimistic UI.
-        setGoingToCart(false);
-        setJustAdded(false);
+        settleOptimisticAdd({ ok: false });
         try {
           notifyCartCount(await getCartLineCount());
         } catch {
           // Best-effort badge reconcile; the next navigation re-syncs it.
         }
+        // If we somehow haven't navigated yet, surface the inline error too.
         setError("Couldn't add to cart. Please try again.");
       } finally {
         setPendingKind(null);

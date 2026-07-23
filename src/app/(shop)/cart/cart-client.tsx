@@ -26,7 +26,11 @@ import {
 } from "@/lib/actions/cart";
 import { mapLineItem, TAX_RATE, type CartItem } from "./map-cart";
 import { CartSkeleton } from "./cart-skeleton";
-import { takeCartHandoff } from "@/lib/cart-handoff";
+import {
+  isOptimisticLine,
+  onAddSettled,
+  takeOptimisticAdd,
+} from "@/lib/cart-handoff";
 import type { CrossSellProduct } from "@/lib/products";
 import type { ActivePromotion } from "@/lib/promotions";
 
@@ -146,6 +150,19 @@ function ConfirmDialog({
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+/** Shown when a background add commit failed and its lines were rolled back. */
+function AddFailedBanner() {
+  return (
+    <div
+      role="alert"
+      className="rounded-card border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive"
+    >
+      We couldn&apos;t add your item to the cart. Please go back to the product
+      and try again.
+    </div>
   );
 }
 
@@ -342,6 +359,12 @@ export function CartClient({
   // empty cart. See the adoption effect below the qty refs.
   const [hydrated, setHydrated] = React.useState(false);
   const adoptedRef = React.useRef(false);
+  // An optimistic add's commit failed → its lines were rolled back; tell the
+  // shopper instead of silently losing the item.
+  const [addFailed, setAddFailed] = React.useState(false);
+  // True once committed server truth has been adopted — the (possibly slower)
+  // base-items fetch must not overwrite it with a pre-commit snapshot.
+  const addSettledRef = React.useRef(false);
   const [confirmEmpty, setConfirmEmpty] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
 
@@ -355,6 +378,7 @@ export function CartClient({
 
   // Optimistic remove → server action → on error, restore.
   const remove = (id: string) => {
+    if (isOptimisticLine(id)) return; // no server id yet; button is disabled
     const snapshot = items;
     forgetQty(id); // cancel any in-flight/pending qty sync for this line
     setItems((xs) => xs.filter((x) => x.id !== id));
@@ -389,45 +413,111 @@ export function CartClient({
   const draining = React.useRef(false);
   const drainTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // First real cart snapshot. Arrivals from Add to Cart hand the mutation's
-  // response over via cart-handoff → adopted synchronously, zero fetch wait
-  // (this is what killed the long /cart skeleton). Everyone else adopts the
-  // streamed server fetch when it resolves. Adopt-once: a later RSC re-render
-  // swaps itemsPromise, but must not clobber optimistic local state.
+  // First cart snapshot + optimistic-add handling. Adopt-once (a later RSC
+  // re-render swaps itemsPromise but must not clobber local state). Modes:
+  //  1. Arrived from Add to Cart, commit in flight → paint the staged
+  //     optimistic line(s) INSTANTLY; when the streamed fetch lands, merge
+  //     the pre-existing server items underneath. The settle subscription
+  //     below swaps in the committed truth (or rolls back on failure).
+  //  2. Arrived from Add to Cart, commit already settled → adopt its result.
+  //  3. Deep link / reload / back → adopt the streamed server fetch.
   React.useEffect(() => {
     if (adoptedRef.current) return;
-    const adopt = (list: CartItem[]) => {
-      if (adoptedRef.current) return;
-      adoptedRef.current = true;
+    adoptedRef.current = true;
+    // The synchronous setStates below are deliberate: this adopts a one-shot
+    // external snapshot (the optimistic handoff) on mount, and the extra
+    // render happens before paint — that's what makes the arrival instant.
+    /* eslint-disable react-hooks/set-state-in-effect */
+
+    const seedQty = (list: CartItem[]) => {
       for (const it of list) {
-        qtyTarget.current.set(it.id, it.quantity);
+        if (isOptimisticLine(it.id)) continue; // temp ids never sync qty
+        if (!qtyDirty.current.has(it.id)) {
+          qtyTarget.current.set(it.id, it.quantity);
+        }
         qtyConfirmed.current.set(it.id, it.quantity);
       }
-      setItems(list);
-      setHydrated(true);
     };
-    const handed = takeCartHandoff();
-    if (handed) {
-      adopt(handed);
-      return;
-    }
+
     let alive = true;
-    // Promise.resolve is REQUIRED: React streams the server promise as a bare
-    // thenable whose .then() returns undefined — chaining .catch straight off
-    // it throws. Wrapping normalizes it into a real chainable Promise.
-    Promise.resolve(itemsPromise)
-      .then((server) => {
-        if (alive) adopt(server);
-      })
-      .catch(() => {
-        // getCart() already degrades to null internally; this only guards a
-        // streaming hiccup. Show the (empty) cart rather than a stuck skeleton.
-        if (alive) adopt([]);
-      });
+    const adoptServerFetch = () => {
+      // Promise.resolve is REQUIRED: React streams the server promise as a
+      // bare thenable whose .then() returns undefined — chaining .catch
+      // straight off it throws. Wrapping normalizes it into a real Promise.
+      Promise.resolve(itemsPromise)
+        .then((server) => {
+          if (!alive || addSettledRef.current) return;
+          seedQty(server);
+          // Keep any still-pending optimistic lines on top of the fetched base.
+          setItems((xs) => [
+            ...server,
+            ...xs.filter((x) => isOptimisticLine(x.id)),
+          ]);
+          setHydrated(true);
+        })
+        .catch(() => {
+          // getCart() already degrades to null internally; this only guards a
+          // streaming hiccup. Show the cart rather than a stuck skeleton.
+          if (alive && !addSettledRef.current) setHydrated(true);
+        });
+    };
+
+    const pending = takeOptimisticAdd();
+    if (!pending) {
+      adoptServerFetch(); // mode 3
+    } else if (pending.result?.ok) {
+      // Mode 2 — commit finished during the navigation hop.
+      addSettledRef.current = true;
+      seedQty(pending.result.items);
+      setItems(pending.result.items);
+      setHydrated(true);
+    } else if (pending.result) {
+      // Mode 2, failed — nothing to show optimistically; explain + fetch base.
+      setAddFailed(true);
+      adoptServerFetch();
+    } else {
+      // Mode 1 — instant paint, base merge behind it.
+      setItems(pending.optimisticItems);
+      setHydrated(true);
+      adoptServerFetch();
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
     return () => {
       alive = false;
     };
   }, [itemsPromise]);
+
+  // The in-flight commit settling while we're mounted (the normal case).
+  React.useEffect(
+    () =>
+      onAddSettled((result) => {
+        if (result.ok) {
+          addSettledRef.current = true;
+          for (const it of result.items) {
+            if (!qtyDirty.current.has(it.id)) {
+              qtyTarget.current.set(it.id, it.quantity);
+            }
+            qtyConfirmed.current.set(it.id, it.quantity);
+          }
+          // Server truth, re-applying any qty edits made during the commit.
+          setItems(
+            result.items.map((it) => {
+              const dirty = qtyDirty.current.get(it.id);
+              return dirty != null ? { ...it, quantity: dirty } : it;
+            })
+          );
+          setHydrated(true);
+          setAddFailed(false);
+        } else {
+          // Roll the optimistic lines back; the base fetch (if still pending)
+          // may continue and fill in the real cart.
+          setItems((xs) => xs.filter((x) => !isOptimisticLine(x.id)));
+          setHydrated(true);
+          setAddFailed(true);
+        }
+      }),
+    []
+  );
 
   // Send pending quantity writes one at a time until the queue is empty.
   const drainQty = React.useCallback(async () => {
@@ -476,6 +566,9 @@ export function CartClient({
 
   const stepQty = React.useCallback(
     (id: string, delta: number) => {
+      // A line whose commit is still in flight has no server id to write to —
+      // its controls are disabled, but guard the callback path too.
+      if (isOptimisticLine(id)) return;
       const current = qtyTarget.current.get(id) ?? 1;
       const nextQty = Math.max(1, current + delta);
       if (nextQty === current) return;
@@ -574,6 +667,11 @@ export function CartClient({
   if (items.length === 0)
     return (
       <>
+        {addFailed && (
+          <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
+            <AddFailedBanner />
+          </div>
+        )}
         <EmptyCart />
         <ConfirmDialog
           open={confirmEmpty}
@@ -600,7 +698,9 @@ export function CartClient({
           <button
             type="button"
             onClick={() => setConfirmEmpty(true)}
-            disabled={isPending}
+            // Also frozen while an add commit is in flight — emptying then
+            // would race the commit and resurrect the new line afterwards.
+            disabled={isPending || items.some((x) => isOptimisticLine(x.id))}
             className="inline-flex h-9 items-center gap-2 rounded-button bg-rust px-3 text-sm font-medium text-white transition-colors hover:bg-rust/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isPending ? (
@@ -621,12 +721,16 @@ export function CartClient({
         </div>
       </div>
 
+      {addFailed && <AddFailedBanner />}
+
       <div className="flex flex-col gap-4">
         {items.map((item) => (
           <CartLine
             key={item.id}
             item={item}
-            pending={isPending}
+            // Optimistic lines have no server id yet — freeze their controls
+            // for the ~1s until the commit settles and swaps in the real id.
+            pending={isPending || isOptimisticLine(item.id)}
             onRemove={remove}
             onStep={stepQty}
           />
