@@ -1,7 +1,10 @@
 // Browse (/products) and the detail customizer are wired to the live Medusa
-// catalog. Since seed model_version 2, carton products carry Size × Material ×
-// Printing variants with native quantity-tier prices; materials/printing/tier
-// descriptors are mirrored in product metadata (see backend seed-ghana.ts).
+// catalog (backend import-catalog.ts). One product = one FAMILY (Pizza Box,
+// Packaging Tape, …); every variation — size, width, colour, window, board —
+// is an option. Option titles stay Size/Material (the combo lookup relies on
+// them) while metadata.option_labels carries the display names; materials/
+// printing/tier descriptors are mirrored in product metadata. Combos can be
+// SPARSE (White RSC only in 400³) — the customizer disables unavailable ones.
 // The static `products` array remains ONLY as a browse fallback when the
 // backend is unreachable.
 
@@ -47,6 +50,16 @@ export interface VariantCombo {
   unitPrice: number;
 }
 
+/** Human labels for the customizer's option sections. The backend keeps the
+ *  Medusa option TITLES fixed (Size / Material — the combo lookup relies on
+ *  them) and mirrors display labels into metadata.option_labels, so one
+ *  product can present "Width × Colour" (tape) and another "Size × Window"
+ *  (food box). */
+export interface OptionLabels {
+  size: string;
+  material: string;
+}
+
 export interface Product {
   id: string;
   slug: string;
@@ -56,6 +69,7 @@ export interface Product {
   startingPrice: number;
   moq: number;
   features: string[];
+  optionLabels: OptionLabels;
   sizes: SizeOption[];
   /** Empty for products without material choices (accessories, legacy). */
   materials: MaterialOption[];
@@ -151,6 +165,11 @@ const CARTON_PRINTING: PrintingOption[] = [
   },
 ];
 
+const DEFAULT_OPTION_LABELS: OptionLabels = {
+  size: "Size",
+  material: "Material",
+};
+
 const CARTON_TIERS: PriceTier[] = [
   { minQuantity: 50, label: "Base pricing", discountPct: 0 },
   { minQuantity: 200, label: "Bulk discount", discountPct: 5 },
@@ -168,6 +187,7 @@ export const products: Product[] = [
     startingPrice: 3.5,
     moq: 50,
     features: ["3 sizes available", "3 print options"],
+    optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
     printing: CARTON_PRINTING,
@@ -183,6 +203,7 @@ export const products: Product[] = [
     startingPrice: 4.2,
     moq: 50,
     features: ["3 sizes available", "3 print options"],
+    optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
     printing: CARTON_PRINTING,
@@ -198,6 +219,7 @@ export const products: Product[] = [
     startingPrice: 2.8,
     moq: 100,
     features: ["3 sizes available", "3 print options"],
+    optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
     printing: CARTON_PRINTING,
@@ -213,6 +235,7 @@ export const products: Product[] = [
     startingPrice: 6.5,
     moq: 50,
     features: ["3 sizes available", "3 print options"],
+    optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
     printing: CARTON_PRINTING,
@@ -336,6 +359,20 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
   const meta = (p.metadata ?? {}) as Record<string, unknown>;
   const variants = p.variants ?? [];
 
+  // Display labels for the option sections ("Width"/"Colour"/"Window" …) —
+  // mirrored by the catalog import; option TITLES stay Size/Material.
+  const metaLabels = (meta.option_labels ?? {}) as Record<string, unknown>;
+  const optionLabels: OptionLabels = {
+    size:
+      typeof metaLabels.Size === "string" && metaLabels.Size
+        ? metaLabels.Size
+        : DEFAULT_OPTION_LABELS.size,
+    material:
+      typeof metaLabels.Material === "string" && metaLabels.Material
+        ? metaLabels.Material
+        : DEFAULT_OPTION_LABELS.material,
+  };
+
   // ── Enriched model (seed model_version ≥ 2): options + metadata mirrors ──
   const metaMaterials = Array.isArray(meta.materials)
     ? (meta.materials as Array<{ value?: string; description?: string }>)
@@ -442,23 +479,32 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
     }
   }
 
-  return { ...summary, sizes, materials, printing, tiers, combos };
+  return { ...summary, optionLabels, sizes, materials, printing, tiers, combos };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // Cart cross-sell ("people also order") — live accessory products.
 // ─────────────────────────────────────────────────────────────────────────
 
-/** Accessory products surfaced on the cart page. Seeded by seed-ghana.ts. */
-export const CROSS_SELL_HANDLES = [
-  "packaging-tape-brown",
-  "packaging-tape-clear",
-  "bubble-wrap",
+/** Accessory VARIANTS surfaced on the cart page. Since the catalog family
+ *  consolidation, tape colours/widths are variants of one `packaging-tape`
+ *  product — each cross-sell card targets a specific variant by SKU (no sku =
+ *  the product's first variant). Seeded by import-catalog.ts. */
+export const CROSS_SELL_ITEMS: Array<{
+  handle: string;
+  sku?: string;
+  /** Card title override (product title alone is ambiguous across variants). */
+  name?: string;
+}> = [
+  { handle: "packaging-tape", sku: "PG-ACC-001", name: "Packaging Tape — Brown 48mm" },
+  { handle: "packaging-tape", sku: "PG-ACC-002", name: "Packaging Tape — Clear 48mm" },
+  { handle: "bubble-wrap" },
 ];
 
 export interface CrossSellProduct {
+  /** Unique per CARD — the variant id (two cards can share one product). */
   id: string;
-  /** The single sellable variant — what addLineItem() needs. */
+  /** The sellable variant — what addLineItem() needs. */
   variantId: string;
   slug: string;
   name: string;
@@ -467,38 +513,41 @@ export interface CrossSellProduct {
   unitLabel: string;
 }
 
-/** Fetch the cross-sell accessories with live GHS prices. Returns [] when the
- *  backend is unreachable or the accessories aren't seeded — the cart section
- *  hides itself in that case. */
+/** Fetch the cross-sell accessory variants with live GHS prices. Returns []
+ *  when the backend is unreachable or the accessories aren't seeded — the
+ *  cart section hides itself in that case. */
 export async function listCrossSellProducts(): Promise<CrossSellProduct[]> {
   const cached = fresh(crossSellCache);
   if (cached !== undefined) return cached;
   try {
     const region_id = await getRegionId();
+    const handles = [...new Set(CROSS_SELL_ITEMS.map((i) => i.handle))];
     const { products: live } = await sdk.store.product.list({
       region_id,
-      handle: CROSS_SELL_HANDLES,
+      handle: handles,
       fields:
         "id,title,handle,description,metadata,*variants,variants.calculated_price",
-      limit: CROSS_SELL_HANDLES.length,
+      limit: handles.length,
     });
-    const result = live
-      .map((p): CrossSellProduct | null => {
-        const variant = p.variants?.[0];
-        if (!variant) return null;
-        const meta = (p.metadata ?? {}) as Record<string, unknown>;
-        return {
-          id: p.id,
-          variantId: variant.id,
-          slug: p.handle ?? p.id,
-          name: p.title,
-          description: p.description ?? "",
-          pricePerUnit: variant.calculated_price?.calculated_amount ?? 0,
-          unitLabel:
-            typeof meta.unit_label === "string" ? meta.unit_label : "per unit",
-        };
-      })
-      .filter((p): p is CrossSellProduct => p !== null);
+    const result = CROSS_SELL_ITEMS.map((item): CrossSellProduct | null => {
+      const p = live.find((x) => x.handle === item.handle);
+      if (!p) return null;
+      const variant = item.sku
+        ? p.variants?.find((v) => v.sku === item.sku)
+        : p.variants?.[0];
+      if (!variant) return null;
+      const meta = (p.metadata ?? {}) as Record<string, unknown>;
+      return {
+        id: variant.id,
+        variantId: variant.id,
+        slug: p.handle ?? p.id,
+        name: item.name ?? p.title,
+        description: p.description ?? "",
+        pricePerUnit: variant.calculated_price?.calculated_amount ?? 0,
+        unitLabel:
+          typeof meta.unit_label === "string" ? meta.unit_label : "per unit",
+      };
+    }).filter((p): p is CrossSellProduct => p !== null);
     crossSellCache = { data: result, at: Date.now() };
     return result;
   } catch (err) {

@@ -41,6 +41,16 @@ export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
     if (title && o.value) byOption.set(title, o.value);
   }
 
+  // Display labels for option titles (metadata.option_labels, set by the
+  // catalog import) — lets a line read "Colour: Brown" / "Width: 48mm"
+  // instead of the raw Medusa option title "Material" / "Size".
+  const optionLabels = ((item.product?.metadata as Record<string, unknown> | null)
+    ?.option_labels ?? {}) as Record<string, unknown>;
+  const labelFor = (key: string) =>
+    typeof optionLabels[key] === "string" && optionLabels[key]
+      ? (optionLabels[key] as string)
+      : key;
+
   let specs: string[] = [];
   if (isService) {
     // e.g. "1-Color Print · one-time charge"
@@ -48,7 +58,7 @@ export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
     specs = printType ? [`${printType} · one-time charge`] : ["One-time charge"];
   } else if (byOption.size) {
     specs = SPEC_OPTIONS.filter((key) => byOption.has(key)).map(
-      (key) => `${key}: ${byOption.get(key)}`,
+      (key) => `${labelFor(key)}: ${byOption.get(key)}`,
     );
   } else if (item.variant_title && item.variant_title !== "Roll") {
     // Fallback for lines created before variant options were fetched.

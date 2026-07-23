@@ -85,6 +85,29 @@ export function ProductCustomizer({ product }: { product: Product }) {
   // printing choices). Indices feed the scroll-spy refs + heading numbers.
   const hasMaterials = product.materials.length > 0;
   const hasPrinting = product.printing.length > 0;
+  const labels = product.optionLabels;
+
+  // Combos can be SPARSE (e.g. White RSC exists only in 400×400×400) — a
+  // material with no variant for the selected size is shown disabled, and
+  // selecting a size auto-corrects an incompatible material selection.
+  const availableMaterials = React.useMemo(
+    () =>
+      new Set(
+        product.combos.filter((c) => c.sizeId === size).map((c) => c.materialId),
+      ),
+    [product.combos, size],
+  );
+  const pickSize = (sizeId: string) => {
+    setSize(sizeId);
+    if (!hasMaterials) return;
+    const forSize = new Set(
+      product.combos.filter((c) => c.sizeId === sizeId).map((c) => c.materialId),
+    );
+    if (!forSize.has(material)) {
+      const first = product.materials.find((m) => forSize.has(m.id));
+      if (first) setMaterial(first.id);
+    }
+  };
   let nextIndex = 0;
   const sizeIdx = nextIndex++;
   const materialIdx = hasMaterials ? nextIndex++ : -1;
@@ -133,8 +156,8 @@ export function ProductCustomizer({ product }: { product: Product }) {
         variantId: combo.variantId,
         name: product.name,
         specs: [
-          size ? `Size: ${size}` : null,
-          material ? `Material: ${material}` : null,
+          size ? `${labels.size}: ${size}` : null,
+          material ? `${labels.material}: ${material}` : null,
           printing ? `Printing: ${printing}` : null,
         ].filter((s): s is string => !!s),
         unitPrice,
@@ -262,9 +285,9 @@ export function ProductCustomizer({ product }: { product: Product }) {
           </div>
 
           <div className="flex flex-col gap-10 p-6">
-            {/* Select Size */}
+            {/* Select Size (label metadata-driven: Size / Width / Capacity …) */}
             <Section
-              title={`${sizeIdx + 1}. Select Size`}
+              title={`${sizeIdx + 1}. Select ${labels.size}`}
               info
               ref={(el) => {
                 sectionsRef.current[sizeIdx] = el;
@@ -276,7 +299,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
                   selected={size === s.id}
                   onSelect={() => {
                     warm();
-                    setSize(s.id);
+                    pickSize(s.id);
                   }}
                   title={s.label}
                   description={s.dimensions}
@@ -284,26 +307,35 @@ export function ProductCustomizer({ product }: { product: Product }) {
               ))}
             </Section>
 
-            {/* Choose Material */}
+            {/* Choose Material (label metadata-driven: Colour / Window / …) */}
             {hasMaterials && (
               <Section
-                title={`${materialIdx + 1}. Choose Material`}
+                title={`${materialIdx + 1}. Choose ${labels.material}`}
                 ref={(el) => {
                   sectionsRef.current[materialIdx] = el;
                 }}
               >
-                {product.materials.map((m) => (
-                  <OptionCard
-                    key={m.id}
-                    selected={material === m.id}
-                    onSelect={() => {
-                      warm();
-                      setMaterial(m.id);
-                    }}
-                    title={m.label}
-                    description={m.description}
-                  />
-                ))}
+                {product.materials.map((m) => {
+                  const available = availableMaterials.has(m.id);
+                  return (
+                    <OptionCard
+                      key={m.id}
+                      selected={material === m.id}
+                      disabled={!available}
+                      onSelect={() => {
+                        if (!available) return;
+                        warm();
+                        setMaterial(m.id);
+                      }}
+                      title={m.label}
+                      description={
+                        available
+                          ? m.description
+                          : `Not available in ${size || "this " + labels.size.toLowerCase()}`
+                      }
+                    />
+                  );
+                })}
               </Section>
             )}
 
@@ -499,12 +531,15 @@ function Section({
 
 function OptionCard({
   selected,
+  disabled,
   onSelect,
   title,
   description,
   meta,
 }: {
   selected: boolean;
+  /** Combination not available for the current selection (sparse combos). */
+  disabled?: boolean;
   onSelect: () => void;
   title: string;
   description: string;
@@ -515,12 +550,14 @@ function OptionCard({
       type="button"
       role="radio"
       aria-checked={selected}
+      aria-disabled={disabled || undefined}
       onClick={onSelect}
       className={cn(
         "flex items-center gap-4 rounded-option border p-4 text-left transition-[color,background-color,border-color] duration-200",
         selected
           ? "border-line bg-[rgba(196,188,176,0.3)]"
           : "border-input hover:border-brand/40",
+        disabled && "cursor-not-allowed opacity-45 hover:border-input",
       )}
     >
       <span
