@@ -33,6 +33,22 @@ const COOKIE_OPTS = {
 const CART_FIELDS =
   "id,email,currency_code,metadata,*items,*items.variant,*items.variant.options,items.variant.options.option.title,*items.product,region,*shipping_address,*billing_address,*shipping_methods,*promotions,*payment_collection,payment_collection.payment_sessions,total,subtotal,tax_total,discount_total,shipping_total,item_total,item_subtotal,item_tax_total,completed_at";
 
+/**
+ * Slim field set for LINE-ITEM MUTATIONS only (add / qty / remove / empty).
+ *
+ * Their consumers read exactly: item scalars (id, quantity, unit_price,
+ * titles, handles, variant_id), variant options (the "Size: …" spec lines),
+ * and product.metadata.service (service-line rendering) — see mapLineItem in
+ * cart/map-cart.ts. Asking the mutation to also compute totals, promotions,
+ * addresses, shipping methods, and payment sessions roughly doubled its
+ * response time (~1s measured), for data nothing on the cart page uses.
+ *
+ * READS stay on the full CART_FIELDS: getCart() feeds checkout, which needs
+ * the payment/shipping/promotion graph (see storefront/CLAUDE.md).
+ */
+const CART_MUTATION_FIELDS =
+  "id,completed_at,*items,*items.variant,*items.variant.options,items.variant.options.option.title,items.product.metadata";
+
 async function readCartId(): Promise<string | undefined> {
   const store = await cookies();
   return store.get(CART_COOKIE)?.value;
@@ -287,12 +303,12 @@ export async function addLineItem(
   const cartId = await ensureCartId();
   let updated: HttpTypes.StoreCart;
   try {
-    // createLineItem returns the updated cart — asking for CART_FIELDS here
-    // saves the extra retrieve we used to do after the mutation.
+    // createLineItem returns the updated cart — asking for the slim mutation
+    // fields saves both the extra retrieve AND the totals/payment decoration.
     ({ cart: updated } = await sdk.store.cart.createLineItem(
       cartId,
       { variant_id: variantId, quantity },
-      { fields: CART_FIELDS }
+      { fields: CART_MUTATION_FIELDS }
     ));
   } catch (err) {
     // A 4xx means the cookie'd cart is gone/completed/invalid — clear it so
@@ -369,7 +385,7 @@ export async function addConfiguredLineItem(input: {
         quantity: input.quantity,
         ...(notes ? { metadata: { notes } } : {}),
       },
-      { fields: CART_FIELDS }
+      { fields: CART_MUTATION_FIELDS }
     ));
 
     if (setupVariantPromise) {
@@ -381,7 +397,7 @@ export async function addConfiguredLineItem(input: {
         ({ cart: updated } = await sdk.store.cart.createLineItem(
           cartId,
           { variant_id: setupVariantId, quantity: 1 },
-          { fields: CART_FIELDS }
+          { fields: CART_MUTATION_FIELDS }
         ));
       }
     }
@@ -411,7 +427,7 @@ export async function updateLineItemQuantity(
       // The delete response carries the updated cart as `parent` (typed
       // optional) — fall back to a retrieve if it's ever absent.
       const { parent } = await sdk.store.cart.deleteLineItem(id, itemId, {
-        fields: CART_FIELDS,
+        fields: CART_MUTATION_FIELDS,
       });
       updated = parent ?? (await getCart());
     } else {
@@ -419,7 +435,7 @@ export async function updateLineItemQuantity(
         id,
         itemId,
         { quantity },
-        { fields: CART_FIELDS }
+        { fields: CART_MUTATION_FIELDS }
       ));
     }
   } catch (err) {
@@ -446,7 +462,7 @@ export async function removeLineItem(
   let updated: HttpTypes.StoreCart | null;
   try {
     const { parent } = await sdk.store.cart.deleteLineItem(id, itemId, {
-      fields: CART_FIELDS,
+      fields: CART_MUTATION_FIELDS,
     });
     updated = parent ?? (await getCart());
   } catch (err) {
@@ -480,7 +496,7 @@ export async function emptyCart(): Promise<HttpTypes.StoreCart | null> {
       const { parent } = await sdk.store.cart.deleteLineItem(
         cart.id,
         itemId,
-        last ? { fields: CART_FIELDS } : undefined
+        last ? { fields: CART_MUTATION_FIELDS } : undefined
       );
       if (last) updated = parent ?? (await getCart());
     }
