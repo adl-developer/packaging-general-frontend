@@ -12,23 +12,12 @@ import {
   type Product,
 } from "@/lib/products";
 import { formatGhs } from "@/lib/format";
-import {
-  addConfiguredLineItem,
-  getCartLineCount,
-  warmCart,
-} from "@/lib/actions/cart";
-import {
-  beginOptimisticAdd,
-  settleOptimisticAdd,
-} from "@/lib/cart-handoff";
-import {
-  mapLineItem,
-  TAX_RATE,
-  type CartItem,
-} from "@/app/(shop)/cart/map-cart";
+import { warmCart } from "@/lib/actions/cart";
+import { beginOptimisticAdd, requestAddCommit } from "@/lib/cart-handoff";
+import { TAX_RATE, type CartItem } from "@/app/(shop)/cart/map-cart";
 import { motion } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
-import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
+import { notifyCartAdd } from "@/lib/cart-events";
 import { CartSkeleton } from "@/app/(shop)/cart/cart-skeleton";
 
 /**
@@ -54,7 +43,6 @@ export function ProductCustomizer({ product }: { product: Product }) {
   const [printing, setPrinting] = React.useState(product.printing[0]?.id ?? "");
   const [quantity, setQuantity] = React.useState(product.moq || 1);
   const [notes, setNotes] = React.useState("");
-  const [, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
   // Which action is mid-flight (drives the Buy Now spinner + blocks a second
   // concurrent mutation — Medusa locks the cart per mutation).
@@ -176,43 +164,21 @@ export function ProductCustomizer({ product }: { product: Product }) {
     setPendingKind(kind);
     setGoingToCart(true);
     beginOptimisticAdd(optimisticLines);
-    router.push("/cart");
-
-    // This component unmounts when the navigation lands; the commit keeps
-    // running and reports through the cart-handoff channel (state setters on
-    // an unmounted component are safe no-ops).
-    startTransition(async () => {
-      try {
-        const cart = await addConfiguredLineItem({
-          variantId: combo.variantId,
-          quantity,
-          setupPrintingValue:
-            selectedPrinting && selectedPrinting.setupFee > 0
-              ? selectedPrinting.id
-              : undefined,
-          notes,
-        });
-        // Reconcile the badge to the server truth (lines may merge when the
-        // same variant is added twice). cart:set — no second toast.
-        notifyCartCount(cart?.items?.length ?? 0);
-        settleOptimisticAdd({
-          ok: true,
-          items: (cart?.items ?? []).map(mapLineItem),
-        });
-      } catch (err) {
-        console.error("[customizer] add to cart failed:", err);
-        settleOptimisticAdd({ ok: false });
-        try {
-          notifyCartCount(await getCartLineCount());
-        } catch {
-          // Best-effort badge reconcile; the next navigation re-syncs it.
-        }
-        // If we somehow haven't navigated yet, surface the inline error too.
-        setError("Couldn't add to cart. Please try again.");
-      } finally {
-        setPendingKind(null);
-      }
+    // The commit runs in CartAddAgent (mounted in the shop layout, survives
+    // this navigation) — NOT here: this component unmounts when the push
+    // lands, and Next drops a server-action dispatch whose component dies.
+    // Also NOT in startTransition — that would entangle with the navigation
+    // transition and hold the push until the action settled.
+    requestAddCommit({
+      variantId: combo.variantId,
+      quantity,
+      setupPrintingValue:
+        selectedPrinting && selectedPrinting.setupFee > 0
+          ? selectedPrinting.id
+          : undefined,
+      notes,
     });
+    router.push("/cart");
   };
 
   // "Step N of M" tracks the furthest section scrolled past the sticky header.

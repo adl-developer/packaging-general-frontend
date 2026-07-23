@@ -84,3 +84,43 @@ export function onAddSettled(fn: (r: AddSettleResult) => void): () => void {
 export function isOptimisticLine(id: string): boolean {
   return id.startsWith("opt-");
 }
+
+/**
+ * Commit-request channel: the product page must NOT run the server action
+ * itself — it unmounts when the instant navigation lands, and Next drops a
+ * server-action dispatch whose component dies (observed: the POST never
+ * reaches the backend and the promise never settles). Instead the customizer
+ * publishes the add input here and `CartAddAgent` — a tiny client component
+ * mounted in the (shop) layout, which SURVIVES the navigation — executes the
+ * action and settles the channel above.
+ */
+export interface AddCommitRequest {
+  variantId: string;
+  quantity: number;
+  setupPrintingValue?: string | null;
+  notes?: string;
+}
+
+let pendingRequest: AddCommitRequest | null = null;
+let requestListener: ((req: AddCommitRequest) => void) | null = null;
+
+/** Product page: hand the mutation input to the long-lived executor. */
+export function requestAddCommit(req: AddCommitRequest): void {
+  if (requestListener) requestListener(req);
+  else pendingRequest = req; // agent not mounted yet — deliver on subscribe
+}
+
+/** CartAddAgent: receive commit requests (drains any buffered one). */
+export function onAddCommitRequested(
+  fn: (req: AddCommitRequest) => void
+): () => void {
+  requestListener = fn;
+  if (pendingRequest) {
+    const buffered = pendingRequest;
+    pendingRequest = null;
+    fn(buffered);
+  }
+  return () => {
+    if (requestListener === fn) requestListener = null;
+  };
+}
