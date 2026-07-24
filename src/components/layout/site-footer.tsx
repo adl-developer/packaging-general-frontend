@@ -49,8 +49,8 @@ export function SiteFooter() {
           <div className="flex flex-col gap-3">
             <FooterHeading>Packaging General</FooterHeading>
             <p className="max-w-xs text-xs leading-relaxed text-muted">
-              West Africa&apos;s digital-first packaging platform for SMEs and
-              growing brands.
+              Standardized packaging for SMEs and growing brands across Ghana
+              &amp; West Africa.
             </p>
           </div>
 
