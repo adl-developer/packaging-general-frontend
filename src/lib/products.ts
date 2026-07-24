@@ -22,6 +22,19 @@ export interface MaterialOption {
   id: string; // option value, e.g. "Kraft Single Wall"
   label: string;
   description: string;
+  /** Per-facet values for composite materials (keys match
+   *  Product.materialFacets[].key), e.g. { board: "Single Wall",
+   *  colour: "Brown", flute: "C-Flute" }. */
+  facets?: Record<string, string>;
+}
+
+/** One customizer section splitting a composite Material axis — e.g. RSC's
+ *  "Single Wall — Brown" spec renders as separate Board Grade / Colour /
+ *  Flute Type sections. Selections always resolve back to a real material. */
+export interface MaterialFacet {
+  key: string;
+  label: string;
+  values: { id: string; description: string }[];
 }
 
 export interface PrintingOption {
@@ -34,19 +47,13 @@ export interface PrintingOption {
   perUnit: number;
 }
 
-export interface PriceTier {
-  minQuantity: number;
-  label: string; // e.g. "Bulk discount"
-  discountPct: number;
-}
-
 /** One sellable variant = a (size, material, printing) combination. */
 export interface VariantCombo {
   sizeId: string;
   materialId: string;
   printingId: string;
   variantId: string;
-  /** Base-tier GHS unit price for this combo (tier discounts apply on top). */
+  /** GHS unit price for this combo. */
   unitPrice: number;
 }
 
@@ -73,10 +80,11 @@ export interface Product {
   sizes: SizeOption[];
   /** Empty for products without material choices (accessories, legacy). */
   materials: MaterialOption[];
+  /** Non-empty when the Material axis renders as separate sections (RSC:
+   *  Board Grade / Colour / Flute Type). */
+  materialFacets: MaterialFacet[];
   /** Empty for products without printing choices. */
   printing: PrintingOption[];
-  /** Empty when the product has no volume pricing. */
-  tiers: PriceTier[];
   /** Lookup table mapping option selections → variant id + unit price. */
   combos: VariantCombo[];
 }
@@ -95,27 +103,6 @@ export function resolveCombo(
       c.materialId === materialId &&
       c.printingId === printingId,
   );
-}
-
-/** The tier a quantity falls into (highest matching minQuantity). */
-export function tierFor(
-  tiers: PriceTier[],
-  quantity: number,
-): PriceTier | undefined {
-  let match: PriceTier | undefined;
-  for (const t of [...tiers].sort((a, b) => a.minQuantity - b.minQuantity)) {
-    if (quantity >= t.minQuantity) match = t;
-  }
-  return match ?? tiers[0];
-}
-
-/** "50-199 units" / "1000+ units" — range label for a tier within its list. */
-export function tierRangeLabel(tiers: PriceTier[], tier: PriceTier): string {
-  const sorted = [...tiers].sort((a, b) => a.minQuantity - b.minQuantity);
-  const next = sorted[sorted.indexOf(tier) + 1];
-  return next
-    ? `${tier.minQuantity}-${next.minQuantity - 1} units`
-    : `${tier.minQuantity}+ units`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -170,13 +157,6 @@ const DEFAULT_OPTION_LABELS: OptionLabels = {
   material: "Material",
 };
 
-const CARTON_TIERS: PriceTier[] = [
-  { minQuantity: 50, label: "Base pricing", discountPct: 0 },
-  { minQuantity: 200, label: "Bulk discount", discountPct: 5 },
-  { minQuantity: 500, label: "Volume discount", discountPct: 10 },
-  { minQuantity: 1000, label: "Best pricing", discountPct: 15 },
-];
-
 export const products: Product[] = [
   {
     id: "1",
@@ -190,8 +170,8 @@ export const products: Product[] = [
     optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
+    materialFacets: [],
     printing: CARTON_PRINTING,
-    tiers: CARTON_TIERS,
     combos: [],
   },
   {
@@ -206,8 +186,8 @@ export const products: Product[] = [
     optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
+    materialFacets: [],
     printing: CARTON_PRINTING,
-    tiers: CARTON_TIERS,
     combos: [],
   },
   {
@@ -222,8 +202,8 @@ export const products: Product[] = [
     optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
+    materialFacets: [],
     printing: CARTON_PRINTING,
-    tiers: CARTON_TIERS,
     combos: [],
   },
   {
@@ -238,8 +218,8 @@ export const products: Product[] = [
     optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
+    materialFacets: [],
     printing: CARTON_PRINTING,
-    tiers: CARTON_TIERS,
     combos: [],
   },
 ];
@@ -375,7 +355,18 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
 
   // ── Enriched model (seed model_version ≥ 2): options + metadata mirrors ──
   const metaMaterials = Array.isArray(meta.materials)
-    ? (meta.materials as Array<{ value?: string; description?: string }>)
+    ? (meta.materials as Array<{
+        value?: string;
+        description?: string;
+        facets?: Record<string, string>;
+      }>)
+    : [];
+  const metaFacets = Array.isArray(meta.material_facets)
+    ? (meta.material_facets as Array<{
+        key?: string;
+        label?: string;
+        values?: Array<{ value?: string; description?: string }>;
+      }>)
     : [];
   const metaPrinting = Array.isArray(meta.printing)
     ? (meta.printing as Array<{
@@ -385,20 +376,33 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
         setup_fee?: number;
       }>)
     : [];
-  const metaTiers = Array.isArray(meta.tiers)
-    ? (meta.tiers as Array<{
-        min_quantity?: number;
-        label?: string;
-        discount_pct?: number;
-      }>)
-    : [];
-
   const materials: MaterialOption[] = metaMaterials
-    .filter((m): m is { value: string; description?: string } => !!m?.value)
+    .filter(
+      (
+        m,
+      ): m is {
+        value: string;
+        description?: string;
+        facets?: Record<string, string>;
+      } => !!m?.value,
+    )
     .map((m) => ({
       id: m.value,
       label: m.value,
       description: m.description ?? "",
+      ...(m.facets ? { facets: m.facets } : {}),
+    }));
+
+  const materialFacets: MaterialFacet[] = metaFacets
+    .filter((f): f is { key: string; label: string } & typeof f =>
+      Boolean(f?.key && f?.label && Array.isArray(f?.values)),
+    )
+    .map((f) => ({
+      key: f.key,
+      label: f.label,
+      values: (f.values ?? [])
+        .filter((v): v is { value: string; description?: string } => !!v?.value)
+        .map((v) => ({ id: v.value, description: v.description ?? "" })),
     }));
 
   const printing: PrintingOption[] = metaPrinting
@@ -409,14 +413,6 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
       description: pr.description ?? "",
       setupFee: Number(pr.setup_fee ?? 0),
       perUnit: Number(pr.per_unit ?? 0),
-    }));
-
-  const tiers: PriceTier[] = metaTiers
-    .filter((t) => typeof t?.min_quantity === "number")
-    .map((t) => ({
-      minQuantity: t.min_quantity as number,
-      label: t.label ?? "Pricing",
-      discountPct: Number(t.discount_pct ?? 0),
     }));
 
   // Sizes from the Size option values; dimensions from any variant carrying
@@ -430,7 +426,9 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
     const sizeValue = opts.Size;
     const price = v.calculated_price?.calculated_amount;
     combos.push({
-      sizeId: sizeValue ?? v.id,
+      // No Size axis (e.g. Wrap = Material/Type only) → "" so the customizer
+      // resolves combos with its empty size selection and skips the section.
+      sizeId: sizeValue ?? "",
       materialId: opts.Material ?? "",
       printingId: opts.Printing ?? "",
       variantId: v.id,
@@ -457,10 +455,11 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
     .sort((a, b) => a._len - b._len)
     .map((s) => ({ id: s.id, label: s.label, dimensions: s.dimensions }));
 
-  // Accessories (tape, bubble wrap) carry a "Unit" option rather than Size —
-  // fall back to one option per variant so the detail page can still add to
-  // cart. TODO: dedicated non-carton detail view.
-  if (!sizes.length) {
+  // Unit-only accessories (shredded paper) carry neither Size nor Material —
+  // fall back to one pseudo-size per variant so the detail page can still add
+  // to cart. Products WITH materials but no sizes (Wrap) keep sizes empty:
+  // the customizer skips the Size section and resolves combos on "".
+  if (!sizes.length && !materials.length) {
     sizes = variants.map((v) => ({
       id: v.id,
       label: v.title ?? "Standard",
@@ -479,7 +478,15 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
     }
   }
 
-  return { ...summary, optionLabels, sizes, materials, printing, tiers, combos };
+  return {
+    ...summary,
+    optionLabels,
+    sizes,
+    materials,
+    materialFacets,
+    printing,
+    combos,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────

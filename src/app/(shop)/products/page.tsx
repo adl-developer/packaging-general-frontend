@@ -52,8 +52,11 @@ export default function ProductsPage() {
                   cardHoverClass,
                 )}
               >
-                <span className="text-4xl leading-none" aria-hidden>
-                  {c.emoji}
+                <span
+                  className="flex size-12 items-center justify-center rounded-full bg-background"
+                  aria-hidden
+                >
+                  <c.icon className="size-5 text-brand" strokeWidth={1.5} />
                 </span>
                 <span className="text-xl font-semibold leading-7 text-brand">
                   {c.title}

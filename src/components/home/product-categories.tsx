@@ -6,9 +6,7 @@ import { Reveal } from "@/components/motion/reveal";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
 import { SHOP_CATEGORIES } from "@/lib/categories";
 
-// Colorful emoji icons (user preference — see shots/categories.png): richer
-// than the flat lucide set and match the playful look of the original build.
-// Titles/descriptions/links come from the real catalog categories.
+// Titles/descriptions/icons/links come from the real catalog categories.
 const categories = SHOP_CATEGORIES;
 
 export function ProductCategories() {
@@ -34,8 +32,11 @@ export function ProductCategories() {
                     cardHoverClass,
                   )}
                 >
-                  <span className="text-4xl leading-none" aria-hidden>
-                    {c.emoji}
+                  <span
+                    className="flex size-12 items-center justify-center rounded-full bg-background"
+                    aria-hidden
+                  >
+                    <c.icon className="size-5 text-brand" strokeWidth={1.5} />
                   </span>
                   <span className="text-xl font-semibold leading-7 text-brand">
                     {c.title}

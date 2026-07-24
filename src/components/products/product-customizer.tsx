@@ -7,8 +7,7 @@ import { ArrowLeft, Check, Info, Loader2, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   resolveCombo,
-  tierFor,
-  tierRangeLabel,
+  type MaterialOption,
   type Product,
 } from "@/lib/products";
 import { formatGhs } from "@/lib/format";
@@ -29,8 +28,8 @@ import { CartSkeleton } from "@/app/(shop)/cart/cart-skeleton";
  *
  * Since the enriched backend model, every section is live data: materials and
  * printing come from product metadata, the (size, material, printing) choice
- * resolves to a real Medusa variant, quantity tiers mirror the native
- * min_quantity prices, and printed options add a one-time setup-fee line.
+ * resolves to a real Medusa variant, and printed options add a one-time
+ * setup-fee line.
  * Products without material/printing choices (accessories) skip those
  * sections — the step count adapts.
  */
@@ -82,10 +81,17 @@ export function ProductCustomizer({ product }: { product: Product }) {
   }, []);
 
   // Section layout adapts to the product (accessories have no material or
-  // printing choices). Indices feed the scroll-spy refs + heading numbers.
+  // printing choices; Wrap has a Type choice but no Size axis). Indices feed
+  // the scroll-spy refs + heading numbers.
+  const hasSizes = product.sizes.length > 0;
   const hasMaterials = product.materials.length > 0;
   const hasPrinting = product.printing.length > 0;
   const labels = product.optionLabels;
+  // Faceted materials (RSC): the composite Material spec renders as one
+  // section PER FACET (Board Grade / Colour / Flute Type) — see
+  // Product.materialFacets. Selections still resolve to one real material.
+  const facetList = product.materialFacets;
+  const useFacets = hasMaterials && facetList.length > 0;
 
   // Combos can be SPARSE (e.g. White RSC exists only in 400×400×400) — a
   // material with no variant for the selected size is shown disabled, and
@@ -108,9 +114,40 @@ export function ProductCustomizer({ product }: { product: Product }) {
       if (first) setMaterial(first.id);
     }
   };
+
+  // ── Faceted-material helpers ──
+  const currentMaterial = product.materials.find((m) => m.id === material);
+  /** A facet value is offered when SOME material carrying it exists for the
+   *  selected size — cross-facet conflicts are auto-corrected on click, size
+   *  gaps (White only in 400³) are disabled. */
+  const facetAvailable = (key: string, value: string) =>
+    product.materials.some(
+      (m) => m.facets?.[key] === value && availableMaterials.has(m.id),
+    );
+  /** Select a facet value: switch to the available material that carries it
+   *  and agrees with the most other currently-selected facets (so picking
+   *  "Double Wall" keeps Brown, and picking "White" flips board back to
+   *  Single Wall — the only spec White exists in). */
+  const pickFacetValue = (key: string, value: string) => {
+    const candidates = product.materials.filter(
+      (m) => m.facets?.[key] === value && availableMaterials.has(m.id),
+    );
+    if (!candidates.length) return;
+    const current = currentMaterial?.facets ?? {};
+    const agreement = (m: MaterialOption) =>
+      Object.entries(current).filter(
+        ([k, v]) => k !== key && m.facets?.[k] === v,
+      ).length;
+    const best = candidates.reduce((a, b) =>
+      agreement(b) > agreement(a) ? b : a,
+    );
+    setMaterial(best.id);
+  };
+
   let nextIndex = 0;
-  const sizeIdx = nextIndex++;
-  const materialIdx = hasMaterials ? nextIndex++ : -1;
+  const sizeIdx = hasSizes ? nextIndex++ : -1;
+  const materialStart = hasMaterials ? nextIndex : -1;
+  if (hasMaterials) nextIndex += useFacets ? facetList.length : 1;
   const printingIdx = hasPrinting ? nextIndex++ : -1;
   const quantityIdx = nextIndex++;
   const reviewIdx = nextIndex++;
@@ -119,11 +156,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
   // Live selection → variant + pricing.
   const combo = resolveCombo(product, size, material, printing);
   const selectedPrinting = product.printing.find((p) => p.id === printing);
-  const tier = tierFor(product.tiers, quantity);
-  const discountPct = tier?.discountPct ?? 0;
-  const unitPrice = combo
-    ? Math.round(combo.unitPrice * (1 - discountPct / 100) * 100) / 100
-    : 0;
+  const unitPrice = combo?.unitPrice ?? 0;
   const setupFee = selectedPrinting?.setupFee ?? 0;
   const estimatedTotal = unitPrice * quantity + setupFee;
 
@@ -131,8 +164,10 @@ export function ProductCustomizer({ product }: { product: Product }) {
     // One mutation at a time — Medusa locks the cart per mutation, so a second
     // concurrent add would 409. Ignore extra clicks while one is in flight.
     if (pendingKind) return;
-    if (!size) {
-      setError("Please select a size before adding to cart.");
+    if (hasSizes && !size) {
+      setError(
+        `Please select a ${labels.size.toLowerCase()} before adding to cart.`,
+      );
       return;
     }
     if (product.moq && quantity < product.moq) {
@@ -147,7 +182,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
 
     // ── Fully optimistic: render first, commit in the background. ──
     // We already know everything the cart page will show — the option ids ARE
-    // the backend option values, and unitPrice is the tier-discounted price —
+    // the backend option values —
     // so we stage the new line(s) client-side, navigate to /cart immediately,
     // and let the mutation settle behind it (the cart page reconciles to the
     // server truth, or rolls the lines back with an error, via cart-handoff).
@@ -285,34 +320,71 @@ export function ProductCustomizer({ product }: { product: Product }) {
           </div>
 
           <div className="flex flex-col gap-10 p-6">
-            {/* Select Size (label metadata-driven: Size / Width / Capacity …) */}
-            <Section
-              title={`${sizeIdx + 1}. Select ${labels.size}`}
-              info
-              ref={(el) => {
-                sectionsRef.current[sizeIdx] = el;
-              }}
-            >
-              {product.sizes.map((s) => (
-                <OptionCard
-                  key={s.id}
-                  selected={size === s.id}
-                  onSelect={() => {
-                    warm();
-                    pickSize(s.id);
-                  }}
-                  title={s.label}
-                  description={s.dimensions}
-                />
-              ))}
-            </Section>
-
-            {/* Choose Material (label metadata-driven: Colour / Window / …) */}
-            {hasMaterials && (
+            {/* Select Size (label metadata-driven: Size / Width / Capacity …).
+                Skipped entirely for products without a Size axis (Wrap). */}
+            {hasSizes && (
               <Section
-                title={`${materialIdx + 1}. Choose ${labels.material}`}
+                title={`${sizeIdx + 1}. Select ${labels.size}`}
+                info
                 ref={(el) => {
-                  sectionsRef.current[materialIdx] = el;
+                  sectionsRef.current[sizeIdx] = el;
+                }}
+              >
+                {product.sizes.map((s) => (
+                  <OptionCard
+                    key={s.id}
+                    selected={size === s.id}
+                    onSelect={() => {
+                      warm();
+                      pickSize(s.id);
+                    }}
+                    title={s.label}
+                    description={s.dimensions}
+                  />
+                ))}
+              </Section>
+            )}
+
+            {/* Choose Material — either one section per FACET (RSC: Board
+                Grade / Colour / Flute Type) or a single metadata-labelled
+                section (Colour / Window / Type / …). */}
+            {useFacets &&
+              facetList.map((facet, fi) => (
+                <Section
+                  key={facet.key}
+                  title={`${materialStart + fi + 1}. Choose ${facet.label}`}
+                  ref={(el) => {
+                    sectionsRef.current[materialStart + fi] = el;
+                  }}
+                >
+                  {facet.values.map((v) => {
+                    const available = facetAvailable(facet.key, v.id);
+                    return (
+                      <OptionCard
+                        key={v.id}
+                        selected={currentMaterial?.facets?.[facet.key] === v.id}
+                        disabled={!available}
+                        onSelect={() => {
+                          if (!available) return;
+                          warm();
+                          pickFacetValue(facet.key, v.id);
+                        }}
+                        title={v.id}
+                        description={
+                          available
+                            ? v.description
+                            : `Not available in ${size || "this " + labels.size.toLowerCase()}`
+                        }
+                      />
+                    );
+                  })}
+                </Section>
+              ))}
+            {hasMaterials && !useFacets && (
+              <Section
+                title={`${materialStart + 1}. Choose ${labels.material}`}
+                ref={(el) => {
+                  sectionsRef.current[materialStart] = el;
                 }}
               >
                 {product.materials.map((m) => {
@@ -389,19 +461,6 @@ export function ProductCustomizer({ product }: { product: Product }) {
                   }}
                   className="h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand focus-visible:border-accent focus-visible:outline-none"
                 />
-                {tier && product.tiers.length > 0 && (
-                  <div className="rounded-option border border-line bg-[rgba(196,188,176,0.3)] px-3.5 py-3">
-                    <p className="text-sm font-medium text-brand">
-                      {tierRangeLabel(product.tiers, tier)} — {tier.label}
-                      {discountPct > 0 && ` (−${discountPct}%)`}
-                    </p>
-                    {combo && (
-                      <p className="text-sm text-muted">
-                        {formatGhs(unitPrice)}/unit
-                      </p>
-                    )}
-                  </div>
-                )}
                 {combo && combo.unitPrice > 0 && (
                   <div className="flex flex-col gap-1 rounded-option border border-line px-3.5 py-3 text-sm">
                     <span className="flex justify-between text-muted">
@@ -463,7 +522,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
               <button
                 type="button"
                 onClick={() => addToCart("add")}
-                disabled={!size}
+                disabled={hasSizes && !size}
                 className={cn(
                   "order-1 inline-flex h-10 items-center justify-center gap-2 rounded-button border px-6 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2",
                   justAdded
@@ -481,7 +540,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
               <button
                 type="button"
                 onClick={() => addToCart("buy")}
-                disabled={!size}
+                disabled={hasSizes && !size}
                 className="order-2 inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3"
               >
                 {pendingKind === "buy" && (

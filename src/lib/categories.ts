@@ -6,13 +6,17 @@
  * RSC Cartons is one configurable product, so its card skips the category
  * page and goes straight to the customizer.
  */
+import type { LucideIcon } from "lucide-react";
+import { Box, Layers, Scissors, UtensilsCrossed } from "lucide-react";
+
 export interface ShopCategory {
   slug: string;
   /** Medusa product_category name — matches `ProductSummary.category`. */
   medusaName: string;
   title: string;
   description: string;
-  emoji: string;
+  /** Line icon shown in the card's circular badge (design frame). */
+  icon: LucideIcon;
   /** Where the browse-page card leads. */
   href: string;
 }
@@ -24,7 +28,7 @@ export const SHOP_CATEGORIES: ShopCategory[] = [
     title: "RSC Cartons",
     description:
       "Regular slotted container cartons — 11 stock sizes in single or double wall, brown or white.",
-    emoji: "📦",
+    icon: Box,
     href: "/products/rsc-carton",
   },
   {
@@ -33,7 +37,7 @@ export const SHOP_CATEGORIES: ShopCategory[] = [
     title: "Die Cut Boxes",
     description:
       "Purpose-cut boxes for produce and storage — yam, vegetable, mango, archive boxes and trays.",
-    emoji: "🥭",
+    icon: Scissors,
     href: "/products/category/die-cut-boxes",
   },
   {
@@ -42,7 +46,7 @@ export const SHOP_CATEGORIES: ShopCategory[] = [
     title: "Food Packaging",
     description:
       "Food-safe boxes — pizza boxes from 10″ to 16″ and takeaway food boxes with or without window.",
-    emoji: "🍕",
+    icon: UtensilsCrossed,
     href: "/products/category/food-packaging",
   },
   {
@@ -51,7 +55,7 @@ export const SHOP_CATEGORIES: ShopCategory[] = [
     title: "Packaging Accessories",
     description:
       "Everything that seals and protects — BOPP tape, stretch and bubble wrap, shredded paper.",
-    emoji: "📼",
+    icon: Layers,
     href: "/products/category/packaging-accessories",
   },
 ];
