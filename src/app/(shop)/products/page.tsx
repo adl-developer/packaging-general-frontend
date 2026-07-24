@@ -1,23 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { ProductCard } from "@/components/products/product-card";
-import { listProducts } from "@/lib/products";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import { SHOP_CATEGORIES } from "@/lib/categories";
+import { Card, cardHoverClass } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { Reveal } from "@/components/motion/reveal";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
 
 export const metadata: Metadata = {
   title: "Browse Packaging Solutions",
   description:
-    "Browse and customize quality packaging — RSC cartons, die cut boxes, pizza and food boxes, tape and accessories. Instant pricing, built for West African markets.",
+    "Browse quality packaging by category — RSC cartons, die cut boxes, food packaging, and accessories. Instant pricing, built for West African markets.",
   alternates: { canonical: "/products" },
 };
 
-/** The browse grid is one card per PRODUCT FAMILY (Packaging Tape, Pizza Box,
- *  RSC Carton, …) — every variation (colour, width, window, size) is chosen
- *  inside the product's customize page, never a separate card. */
-export default async function ProductsPage() {
-  const products = await listProducts();
+/** The browse page shows ONLY the 4 top-level categories (manager's flow).
+ *  Each card leads to its category page of product cards — except RSC
+ *  Cartons, which is one configurable product and links straight to its
+ *  customizer. */
+export default function ProductsPage() {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
       <div>
@@ -35,26 +36,40 @@ export default async function ProductsPage() {
           Browse Our Packaging Solutions
         </h1>
         <p className="max-w-3xl text-lg leading-7 text-muted">
-          Select a packaging type to customize and get instant pricing. All
-          products meet quality standards for West African markets.
+          Pick a category to see its products, customize, and get instant
+          pricing. All products meet quality standards for West African
+          markets.
         </p>
       </Reveal>
 
-      {products.length === 0 ? (
-        <Reveal className="rounded-card border border-line bg-surface px-6 py-16 text-center">
-          <p className="text-base text-muted">
-            No products available right now. Please check back soon.
-          </p>
-        </Reveal>
-      ) : (
-        <Stagger className="grid grid-cols-1 gap-8 sm:grid-cols-2">
-          {products.map((p) => (
-            <StaggerItem key={p.id} className="h-full">
-              <ProductCard product={p} />
-            </StaggerItem>
-          ))}
-        </Stagger>
-      )}
+      <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        {SHOP_CATEGORIES.map((c) => (
+          <StaggerItem key={c.slug} className="h-full">
+            <Link href={c.href} className="block h-full">
+              <Card
+                className={cn(
+                  "flex h-full flex-col items-start gap-4 border-2 border-[rgba(165,154,135,0.3)] p-8",
+                  cardHoverClass,
+                )}
+              >
+                <span className="text-4xl leading-none" aria-hidden>
+                  {c.emoji}
+                </span>
+                <span className="text-xl font-semibold leading-7 text-brand">
+                  {c.title}
+                </span>
+                <span className="text-sm leading-relaxed text-muted">
+                  {c.description}
+                </span>
+                <span className="mt-auto inline-flex items-center gap-2 text-sm font-semibold text-brand">
+                  View products
+                  <ArrowRight className="size-4" aria-hidden />
+                </span>
+              </Card>
+            </Link>
+          </StaggerItem>
+        ))}
+      </Stagger>
     </div>
   );
 }

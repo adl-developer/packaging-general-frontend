@@ -498,7 +498,7 @@ export const CROSS_SELL_ITEMS: Array<{
 }> = [
   { handle: "packaging-tape", sku: "PG-ACC-001", name: "Packaging Tape — Brown 48mm" },
   { handle: "packaging-tape", sku: "PG-ACC-002", name: "Packaging Tape — Clear 48mm" },
-  { handle: "bubble-wrap" },
+  { handle: "wrap", sku: "PG-ACC-006", name: "Bubble Wrap" },
 ];
 
 export interface CrossSellProduct {
