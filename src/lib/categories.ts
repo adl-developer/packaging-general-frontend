@@ -6,8 +6,9 @@
  * RSC Cartons is one configurable product, so its card skips the category
  * page and goes straight to the customizer.
  */
-import type { LucideIcon } from "lucide-react";
-import { Box, Layers, Scissors, UtensilsCrossed } from "lucide-react";
+import type { ComponentType } from "react";
+import { Layers, Scissors, UtensilsCrossed } from "lucide-react";
+import { RscCartonIcon } from "@/components/ui/icons";
 
 export interface ShopCategory {
   slug: string;
@@ -16,7 +17,7 @@ export interface ShopCategory {
   title: string;
   description: string;
   /** Line icon shown in the card's circular badge (design frame). */
-  icon: LucideIcon;
+  icon: ComponentType<{ className?: string; strokeWidth?: number | string }>;
   /** Where the browse-page card leads. */
   href: string;
 }
@@ -28,7 +29,7 @@ export const SHOP_CATEGORIES: ShopCategory[] = [
     title: "RSC Cartons",
     description:
       "Regular slotted container cartons — 11 stock sizes in single or double wall, brown or white.",
-    icon: Box,
+    icon: RscCartonIcon,
     href: "/products/rsc-carton",
   },
   {

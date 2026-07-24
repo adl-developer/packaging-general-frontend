@@ -1,13 +1,8 @@
-import Link from "next/link";
-import { Card, cardHoverClass } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 import { SectionHeading, SectionSubtitle } from "./section-heading";
 import { Reveal } from "@/components/motion/reveal";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
+import { CategoryCard } from "@/components/products/category-card";
 import { SHOP_CATEGORIES } from "@/lib/categories";
-
-// Titles/descriptions/icons/links come from the real catalog categories.
-const categories = SHOP_CATEGORIES;
 
 export function ProductCategories() {
   return (
@@ -23,29 +18,9 @@ export function ProductCategories() {
         </Reveal>
 
         <Stagger className="mx-auto grid max-w-4xl grid-cols-1 gap-6 sm:grid-cols-2">
-          {categories.map((c) => (
-            <StaggerItem key={c.title} className="h-full">
-              <Link href={c.href} className="block h-full">
-                <Card
-                  className={cn(
-                    "flex h-full flex-col items-start gap-4 border-2 border-[rgba(165,154,135,0.3)] p-8",
-                    cardHoverClass,
-                  )}
-                >
-                  <span
-                    className="flex size-12 items-center justify-center rounded-full bg-background"
-                    aria-hidden
-                  >
-                    <c.icon className="size-5 text-brand" strokeWidth={1.5} />
-                  </span>
-                  <span className="text-xl font-semibold leading-7 text-brand">
-                    {c.title}
-                  </span>
-                  <span className="text-sm leading-relaxed text-muted">
-                    {c.description}
-                  </span>
-                </Card>
-              </Link>
+          {SHOP_CATEGORIES.map((c) => (
+            <StaggerItem key={c.slug} className="h-full">
+              <CategoryCard category={c} />
             </StaggerItem>
           ))}
         </Stagger>
