@@ -18,11 +18,21 @@ import { motion } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd } from "@/lib/cart-events";
 import { CartSkeleton } from "@/app/(shop)/cart/cart-skeleton";
+import { ProductGallery } from "@/components/products/product-gallery";
+import { getProductImages } from "@/lib/product-images";
 
 /**
- * Product customizer — Figma frame 404:1371. A single scrollable "Customize
- * Product" card with sections (Select Size, Choose Material, Printing Options,
- * Order Quantity + notes) and Keep Shopping / Add to Cart / Buy Now actions.
+ * Product customizer — Figma frames 404:1371 → 3933:25640 (the "New Product
+ * Page" redesign). Two columns on desktop: a PINNED product-image panel on the
+ * left (535fr) and the scrolling customizer card on the right (657fr, 24px
+ * gap). Product identity (category chip, title, description, starting price)
+ * moved into the card's header; Keep Shopping / Add to Cart / Buy Now moved out
+ * of the card into a bar pinned to the bottom of the viewport, so both the
+ * product shot and the actions stay reachable the whole way down the form.
+ * Below `lg` the panel stacks above the card and stops being sticky.
+ *
+ * Sections (Select Size, Choose Material, Printing Options, Order Quantity +
+ * notes) are unchanged.
  * Selected option cards use a taupe tint (rgba(196,188,176,0.3)) + line border.
  * The sticky "Step N of M" progress reflects scroll position through the form.
  *
@@ -160,6 +170,31 @@ export function ProductCustomizer({ product }: { product: Product }) {
   const setupFee = selectedPrinting?.setupFee ?? 0;
   const estimatedTotal = unitPrice * quantity + setupFee;
 
+  const images = React.useMemo(
+    () => getProductImages(product.slug, product.name),
+    [product.slug, product.name],
+  );
+
+  // The action bar is `fixed`, so it covers the last ~70px of the page — which
+  // would otherwise permanently hide the tail of the site footer. Reserve its
+  // real measured height (it grows when the error line shows, and is shorter on
+  // mobile) as body padding while this page is mounted.
+  const actionBarRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    const bar = actionBarRef.current;
+    if (!bar) return;
+    const apply = () => {
+      document.body.style.paddingBottom = `${bar.offsetHeight}px`;
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(bar);
+    return () => {
+      ro.disconnect();
+      document.body.style.paddingBottom = "";
+    };
+  }, []);
+
   const addToCart = (kind: "add" | "buy") => {
     // One mutation at a time — Medusa locks the cart per mutation, so a second
     // concurrent add would 409. Ignore extra clicks while one is in flight.
@@ -258,7 +293,9 @@ export function ProductCustomizer({ product }: { product: Product }) {
   }, [sectionCount]);
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    // Full-width root so the pinned action bar can run edge-to-edge; the
+    // progress header + body keep their own max-w-7xl wrapper.
+    <div className="w-full">
       {/* Instant "arriving at the cart" overlay: covers the page (below the
           site header, z-50) with the same skeleton /cart's loading.tsx shows,
           so Add to Cart / Buy Now feels like an immediate navigation while the
@@ -271,292 +308,337 @@ export function ProductCustomizer({ product }: { product: Product }) {
           <CartSkeleton />
         </div>
       )}
-      {/* Sticky progress header */}
-      <div className="sticky top-[121px] z-40 border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => {
-                // Return to wherever the shopper came from; fall back to the
-                // catalog when there's no in-app history (direct load / new tab).
-                if (window.history.length > 1) router.back();
-                else router.push("/products");
-              }}
-              className="inline-flex items-center gap-1.5 rounded-button px-3 text-sm font-medium text-brand transition-colors hover:text-brand/70"
-            >
-              <ArrowLeft className="size-4" aria-hidden />
-              Back
-            </button>
-            <span className="text-sm text-muted">Step {step} of {sectionCount}</span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#f3f4f6]">
-            <div
-              className="h-full rounded-full bg-brand transition-all"
-              style={{ width: `${(step / sectionCount) * 100}%` }}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold leading-9 text-brand">
-            {product.name}
-          </h1>
-          <p className="text-lg leading-7 text-muted">
-            {product.description}
-          </p>
-        </div>
-
-        <div className="overflow-hidden rounded-card border border-line bg-surface">
-          <div className="border-b border-line p-6">
-            <h2 className="text-2xl font-semibold text-brand">
-              Customize Product
-            </h2>
-            <p className="text-base text-muted">
-              Configure your packaging requirements
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-10 p-6">
-            {/* Select Size (label metadata-driven: Size / Width / Capacity …).
-                Skipped entirely for products without a Size axis (Wrap). */}
-            {hasSizes && (
-              <Section
-                title={`${sizeIdx + 1}. Select ${labels.size}`}
-                info
-                ref={(el) => {
-                  sectionsRef.current[sizeIdx] = el;
+      <div className="mx-auto w-full max-w-7xl">
+        {/* Sticky progress header */}
+        <div className="sticky top-[121px] z-40 border-b border-line bg-surface">
+          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  // Return to wherever the shopper came from; fall back to the
+                  // catalog when there's no in-app history (direct load / new tab).
+                  if (window.history.length > 1) router.back();
+                  else router.push("/products");
                 }}
+                className="inline-flex items-center gap-1.5 rounded-button px-3 text-sm font-medium text-brand transition-colors hover:text-brand/70"
               >
-                {product.sizes.map((s) => (
-                  <OptionCard
-                    key={s.id}
-                    selected={size === s.id}
-                    onSelect={() => {
-                      warm();
-                      pickSize(s.id);
-                    }}
-                    title={s.label}
-                    description={s.dimensions}
-                  />
-                ))}
-              </Section>
-            )}
+                <ArrowLeft className="size-4" aria-hidden />
+                Back
+              </button>
+              <span className="text-sm text-muted">Step {step} of {sectionCount}</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#f3f4f6]">
+              <div
+                className="h-full rounded-full bg-brand transition-all"
+                style={{ width: `${(step / sectionCount) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
 
-            {/* Choose Material — either one section per FACET (RSC: Board
-                Grade / Colour / Flute Type) or a single metadata-labelled
-                section (Colour / Window / Type / …). */}
-            {useFacets &&
-              facetList.map((facet, fi) => (
+        {/* Figma body container: 32px top / 96px bottom padding — the bottom
+            padding is the clearance for the pinned action bar. */}
+        <div className="mx-auto grid max-w-7xl gap-6 px-4 pb-24 pt-8 sm:px-6 lg:grid-cols-[535fr_657fr] lg:items-start lg:px-8">
+          {/* Left column — pinned product images. Sticky offset clears the site
+              header (121px) + the sticky progress header (99px) + 16px. */}
+          <div className="lg:sticky lg:top-[236px]">
+            <ProductGallery images={images} productName={product.name} />
+          </div>
+
+          {/* Right column — the scrolling customizer card. */}
+          <div className="overflow-hidden rounded-option border border-line bg-surface">
+            <div className="flex flex-col border-b border-line p-6">
+              {/* Several families are the only product in their category (RSC
+                  Cartons, Pizza Box …) — skip the chip rather than print the
+                  title twice. */}
+              {product.category &&
+                product.category.toLowerCase() !== product.name.toLowerCase() && (
+                  <span className="mb-4 w-fit rounded-full bg-[#ede9f7] px-3 py-1 text-xs font-semibold tracking-[1.2px] text-[#6c4db5]">
+                    {product.category}
+                  </span>
+                )}
+              <h1 className="text-2xl font-bold leading-[33px] text-brand">
+                {product.name}
+              </h1>
+              <p className="mt-1.5 text-xs font-semibold uppercase tracking-[1.2px] text-muted">
+                Description
+              </p>
+              <p className="mt-1 text-sm leading-[22.8px] text-muted">
+                {product.description}
+              </p>
+              {product.startingPrice > 0 && (
+                <>
+                  <p className="mt-2.5 text-xs font-semibold uppercase tracking-[1.2px] text-muted">
+                    Price
+                  </p>
+                  <p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted">
+                    Starting from
+                    <span className="text-lg font-bold text-brand">
+                      {formatGhs(product.startingPrice)}
+                    </span>
+                    / unit
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-10 p-6">
+              {/* Select Size (label metadata-driven: Size / Width / Capacity …).
+                  Skipped entirely for products without a Size axis (Wrap). */}
+              {hasSizes && (
                 <Section
-                  key={facet.key}
-                  title={`${materialStart + fi + 1}. Choose ${facet.label}`}
+                  title={`${sizeIdx + 1}. Select ${labels.size}`}
+                  info
                   ref={(el) => {
-                    sectionsRef.current[materialStart + fi] = el;
+                    sectionsRef.current[sizeIdx] = el;
                   }}
                 >
-                  {facet.values.map((v) => {
-                    const available = facetAvailable(facet.key, v.id);
+                  {product.sizes.map((s) => (
+                    <OptionCard
+                      key={s.id}
+                      selected={size === s.id}
+                      onSelect={() => {
+                        warm();
+                        pickSize(s.id);
+                      }}
+                      title={s.label}
+                      description={s.dimensions}
+                    />
+                  ))}
+                </Section>
+              )}
+
+              {/* Choose Material — either one section per FACET (RSC: Board
+                  Grade / Colour / Flute Type) or a single metadata-labelled
+                  section (Colour / Window / Type / …). */}
+              {useFacets &&
+                facetList.map((facet, fi) => (
+                  <Section
+                    key={facet.key}
+                    title={`${materialStart + fi + 1}. Choose ${facet.label}`}
+                    ref={(el) => {
+                      sectionsRef.current[materialStart + fi] = el;
+                    }}
+                  >
+                    {facet.values.map((v) => {
+                      const available = facetAvailable(facet.key, v.id);
+                      return (
+                        <OptionCard
+                          key={v.id}
+                          selected={currentMaterial?.facets?.[facet.key] === v.id}
+                          disabled={!available}
+                          onSelect={() => {
+                            if (!available) return;
+                            warm();
+                            pickFacetValue(facet.key, v.id);
+                          }}
+                          title={v.id}
+                          description={
+                            available
+                              ? v.description
+                              : `Not available in ${size || "this " + labels.size.toLowerCase()}`
+                          }
+                        />
+                      );
+                    })}
+                  </Section>
+                ))}
+              {hasMaterials && !useFacets && (
+                <Section
+                  title={`${materialStart + 1}. Choose ${labels.material}`}
+                  ref={(el) => {
+                    sectionsRef.current[materialStart] = el;
+                  }}
+                >
+                  {product.materials.map((m) => {
+                    const available = availableMaterials.has(m.id);
                     return (
                       <OptionCard
-                        key={v.id}
-                        selected={currentMaterial?.facets?.[facet.key] === v.id}
+                        key={m.id}
+                        selected={material === m.id}
                         disabled={!available}
                         onSelect={() => {
                           if (!available) return;
                           warm();
-                          pickFacetValue(facet.key, v.id);
+                          setMaterial(m.id);
                         }}
-                        title={v.id}
+                        title={m.label}
                         description={
                           available
-                            ? v.description
+                            ? m.description
                             : `Not available in ${size || "this " + labels.size.toLowerCase()}`
                         }
                       />
                     );
                   })}
                 </Section>
-              ))}
-            {hasMaterials && !useFacets && (
-              <Section
-                title={`${materialStart + 1}. Choose ${labels.material}`}
-                ref={(el) => {
-                  sectionsRef.current[materialStart] = el;
-                }}
-              >
-                {product.materials.map((m) => {
-                  const available = availableMaterials.has(m.id);
-                  return (
+              )}
+
+              {/* Printing Options */}
+              {hasPrinting && (
+                <Section
+                  title={`${printingIdx + 1}. Printing Options`}
+                  ref={(el) => {
+                    sectionsRef.current[printingIdx] = el;
+                  }}
+                >
+                  {product.printing.map((p) => (
                     <OptionCard
-                      key={m.id}
-                      selected={material === m.id}
-                      disabled={!available}
+                      key={p.id}
+                      selected={printing === p.id}
                       onSelect={() => {
-                        if (!available) return;
                         warm();
-                        setMaterial(m.id);
+                        setPrinting(p.id);
                       }}
-                      title={m.label}
-                      description={
-                        available
-                          ? m.description
-                          : `Not available in ${size || "this " + labels.size.toLowerCase()}`
+                      title={p.label}
+                      description={p.description}
+                      meta={
+                        p.setupFee > 0
+                          ? `Setup fee: ${formatGhs(p.setupFee)} + ${formatGhs(p.perUnit)}/unit`
+                          : undefined
                       }
                     />
-                  );
-                })}
-              </Section>
-            )}
+                  ))}
+                </Section>
+              )}
 
-            {/* Printing Options */}
-            {hasPrinting && (
+              {/* Order Quantity */}
               <Section
-                title={`${printingIdx + 1}. Printing Options`}
+                title={`${quantityIdx + 1}. Order Quantity`}
                 ref={(el) => {
-                  sectionsRef.current[printingIdx] = el;
+                  sectionsRef.current[quantityIdx] = el;
                 }}
               >
-                {product.printing.map((p) => (
-                  <OptionCard
-                    key={p.id}
-                    selected={printing === p.id}
-                    onSelect={() => {
+                <div className="flex flex-col gap-3">
+                  <input
+                    type="number"
+                    min={product.moq || 1}
+                    value={quantity}
+                    onChange={(e) => {
                       warm();
-                      setPrinting(p.id);
+                      // Drop leading zeros so "088" reads "88" — React skips the
+                      // DOM rewrite on number inputs when values match numerically.
+                      const cleaned = e.target.value.replace(/^0+(?=\d)/, "");
+                      if (cleaned !== e.target.value) e.target.value = cleaned;
+                      setQuantity(Number(cleaned) || 0);
                     }}
-                    title={p.label}
-                    description={p.description}
-                    meta={
-                      p.setupFee > 0
-                        ? `Setup fee: ${formatGhs(p.setupFee)} + ${formatGhs(p.perUnit)}/unit`
-                        : undefined
-                    }
+                    className="h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand focus-visible:border-accent focus-visible:outline-none"
                   />
-                ))}
-              </Section>
-            )}
-
-            {/* Order Quantity */}
-            <Section
-              title={`${quantityIdx + 1}. Order Quantity`}
-              ref={(el) => {
-                sectionsRef.current[quantityIdx] = el;
-              }}
-            >
-              <div className="flex flex-col gap-3">
-                <input
-                  type="number"
-                  min={product.moq || 1}
-                  value={quantity}
-                  onChange={(e) => {
-                    warm();
-                    // Drop leading zeros so "088" reads "88" — React skips the
-                    // DOM rewrite on number inputs when values match numerically.
-                    const cleaned = e.target.value.replace(/^0+(?=\d)/, "");
-                    if (cleaned !== e.target.value) e.target.value = cleaned;
-                    setQuantity(Number(cleaned) || 0);
-                  }}
-                  className="h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand focus-visible:border-accent focus-visible:outline-none"
-                />
-                {combo && combo.unitPrice > 0 && (
-                  <div className="flex flex-col gap-1 rounded-option border border-line px-3.5 py-3 text-sm">
-                    <span className="flex justify-between text-muted">
-                      <span>
-                        Unit price × {quantity.toLocaleString("en-GH")}
-                      </span>
-                      <span>{formatGhs(unitPrice * quantity)}</span>
-                    </span>
-                    {setupFee > 0 && (
+                  {combo && combo.unitPrice > 0 && (
+                    <div className="flex flex-col gap-1 rounded-option border border-line px-3.5 py-3 text-sm">
                       <span className="flex justify-between text-muted">
-                        <span>One-time printing setup</span>
-                        <span>{formatGhs(setupFee)}</span>
+                        <span>
+                          Unit price × {quantity.toLocaleString("en-GH")}
+                        </span>
+                        <span>{formatGhs(unitPrice * quantity)}</span>
                       </span>
-                    )}
-                    <span className="flex justify-between font-semibold text-brand">
-                      <span>Estimated total</span>
-                      <span>{formatGhs(estimatedTotal)}</span>
-                    </span>
-                    <span className="text-xs text-muted">
-                      Excludes tax and delivery — final totals at checkout.
-                    </span>
+                      {setupFee > 0 && (
+                        <span className="flex justify-between text-muted">
+                          <span>One-time printing setup</span>
+                          <span>{formatGhs(setupFee)}</span>
+                        </span>
+                      )}
+                      <span className="flex justify-between font-semibold text-brand">
+                        <span>Estimated total</span>
+                        <span>{formatGhs(estimatedTotal)}</span>
+                      </span>
+                      <span className="text-xs text-muted">
+                        Excludes tax and delivery — final totals at checkout.
+                      </span>
+                    </div>
+                  )}
+                  <div className="mt-2 flex flex-col gap-2">
+                    <label
+                      htmlFor="notes"
+                      className="text-sm font-medium leading-none text-brand"
+                    >
+                      Additional Notes (Optional)
+                    </label>
+                    <textarea
+                      id="notes"
+                      rows={2}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Any special requirements or instructions..."
+                      className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none"
+                    />
                   </div>
-                )}
-                <div className="mt-2 flex flex-col gap-2">
-                  <label
-                    htmlFor="notes"
-                    className="text-sm font-medium leading-none text-brand"
-                  >
-                    Additional Notes (Optional)
-                  </label>
-                  <textarea
-                    id="notes"
-                    rows={2}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Any special requirements or instructions..."
-                    className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none"
-                  />
                 </div>
-              </div>
-            </Section>
+              </Section>
 
-            {/* Review / actions */}
-            <div
-              ref={(el) => {
-                sectionsRef.current[reviewIdx] = el;
-              }}
-              className="flex flex-col gap-3 sm:flex-row sm:justify-end"
-            >
-              {/* Button order differs by breakpoint (Figma 404:1371):
-                  mobile = Add to Cart → Buy Now → Keep Shopping (primary first);
-                  desktop = Keep Shopping → Add to Cart → Buy Now (left-to-right). */}
-              <Link
-                href="/products"
-                className="order-3 inline-flex h-10 items-center justify-center gap-2 rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 sm:order-1 sm:mr-auto"
-              >
-                Keep Shopping
-              </Link>
-              <button
-                type="button"
-                onClick={() => addToCart("add")}
-                disabled={hasSizes && !size}
-                className={cn(
-                  "order-1 inline-flex h-10 items-center justify-center gap-2 rounded-button border px-6 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2",
-                  justAdded
-                    ? "border-[rgba(22,163,74,0.35)] bg-[rgba(22,163,74,0.12)] text-[#15803d]"
-                    : "border-line bg-background text-brand hover:bg-line/30",
-                )}
-              >
-                {justAdded ? (
-                  <Check className="size-4" aria-hidden />
-                ) : (
-                  <ShoppingCart className="size-4" aria-hidden />
-                )}
-                {justAdded ? "Added" : "Add to Cart"}
-              </button>
-              <button
-                type="button"
-                onClick={() => addToCart("buy")}
-                disabled={hasSizes && !size}
-                className="order-2 inline-flex h-10 items-center justify-center gap-2 rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3"
-              >
-                {pendingKind === "buy" && (
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
-                )}
-                Buy Now
-              </button>
+              {/* End-of-form anchor — the actions themselves now live in the
+                  pinned bar below, but the scroll-spy still needs a marker for
+                  the final step. */}
+              <div
+                ref={(el) => {
+                  sectionsRef.current[reviewIdx] = el;
+                }}
+                aria-hidden
+              />
             </div>
-            {error && (
-              <p
-                role="alert"
-                className="text-sm font-medium text-destructive"
-              >
-                {error}
-              </p>
-            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Pinned action bar, full-bleed. `fixed` (not `sticky`) so it stays at
+          the very bottom of the viewport the whole way down, sitting in front
+          of the site footer rather than stopping above it. `useBodyPadding`
+          reserves its height at the end of the document so the footer can
+          still be scrolled fully clear of it. */}
+      <div
+        ref={actionBarRef}
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface"
+      >
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+          {error && (
+            <p
+              role="alert"
+              className="mb-2 text-sm font-medium text-destructive"
+            >
+              {error}
+            </p>
+          )}
+          {/* Mobile stacks the three CTAs full-width — Add to Cart → Buy Now →
+              Keep Shopping, top to bottom. From `sm` they share one row with
+              Keep Shopping pushed left and Buy Now last. The `order-*` classes
+              drive both arrangements. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <Link
+              href="/products"
+              className="order-3 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 sm:order-1 sm:mr-auto sm:w-auto"
+            >
+              Keep Shopping
+            </Link>
+            <button
+              type="button"
+              onClick={() => addToCart("add")}
+              disabled={hasSizes && !size}
+              className={cn(
+                "order-1 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button border px-6 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2 sm:w-auto",
+                justAdded
+                  ? "border-[rgba(22,163,74,0.35)] bg-[rgba(22,163,74,0.12)] text-[#15803d]"
+                  : "border-line bg-background text-brand hover:bg-line/30",
+              )}
+            >
+              {justAdded ? (
+                <Check className="size-4" aria-hidden />
+              ) : (
+                <ShoppingCart className="size-4" aria-hidden />
+              )}
+              {justAdded ? "Added" : "Add to Cart"}
+            </button>
+            <button
+              type="button"
+              onClick={() => addToCart("buy")}
+              disabled={hasSizes && !size}
+              className="order-2 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3 sm:w-auto"
+            >
+              {pendingKind === "buy" && (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              )}
+              Buy Now
+            </button>
           </div>
         </div>
       </div>
