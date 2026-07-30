@@ -24,6 +24,8 @@ import {
   removeLineItem,
   updateLineItemQuantity,
 } from "@/lib/actions/cart";
+import { getStockMap } from "@/lib/stock";
+import { shortfall, type StockState } from "@/lib/stock-rules";
 import { mapLineItem, TAX_RATE, type CartItem } from "./map-cart";
 import { CartSkeleton } from "./cart-skeleton";
 import {
@@ -215,11 +217,18 @@ function CartLine({
   pending,
   onRemove,
   onStep,
+  shortfallInfo,
+  onReduce,
 }: {
   item: CartItem;
   pending: boolean;
   onRemove: (id: string) => void;
   onStep: (id: string, delta: number) => void;
+  /** Non-null when this line exceeds what can actually be sold — see
+   *  shortfallFor in CartClient. Never carries a stock count, only the
+   *  customer's own reduce-to target (Global Constraints: no counts shown). */
+  shortfallInfo: { reduceTo: number } | null;
+  onReduce: (reduceTo: number) => void;
 }) {
   return (
     <div className="rounded-card border border-line bg-surface p-6">
@@ -262,6 +271,26 @@ function CartLine({
               </button>
             </div>
           </div>
+          {shortfallInfo && (
+            <div
+              role="alert"
+              className="flex flex-col items-start gap-2 rounded-option border border-[rgba(180,83,9,0.35)] bg-[rgba(254,243,199,0.5)] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p className="text-sm font-medium text-[#92400e]">
+                {item.name} isn&apos;t available in this quantity.
+              </p>
+              <button
+                type="button"
+                onClick={() => onReduce(shortfallInfo.reduceTo)}
+                disabled={pending}
+                className="inline-flex h-8 shrink-0 items-center rounded-button bg-[#92400e] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#92400e]/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {shortfallInfo.reduceTo === 0
+                  ? "Remove item"
+                  : `Reduce to ${shortfallInfo.reduceTo}`}
+              </button>
+            </div>
+          )}
           <div className="flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col gap-2">
               {item.isService ? (
@@ -375,6 +404,58 @@ export function CartClient({
   React.useEffect(() => {
     if (hydrated) notifyCartCount(items.length);
   }, [items.length, hydrated]);
+
+  // --- Cart guard: layer 1 of the out-of-stock protection ------------------
+  // Keyed by VARIANT id (StockState), fetched by PRODUCT id (getStockMap's
+  // signature). Cart lines only carry variantId, so we resolve via the
+  // productId that mapLineItem now populates from the Medusa line item's
+  // product_id. Optimistic lines (staged before a commit settles) are plain
+  // object literals with no productId — they're naturally excluded from the
+  // productIds set below and so never flagged, which is correct: the
+  // shortfall check must derive from RESOLVED items, not optimistic ones.
+  const [stock, setStock] = React.useState<Map<string, StockState>>(new Map());
+
+  // A stable key of the resolved product ids currently in the cart. Using
+  // this (rather than `items` directly) as the effect dependency means a
+  // quantity tick or an unrelated re-render doesn't trigger a re-fetch —
+  // only an actual change in which products are present does.
+  const stockProductIdsKey = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const it of items) {
+      if (!it.isService && it.productId) ids.add(it.productId);
+    }
+    return Array.from(ids).sort().join(",");
+  }, [items]);
+
+  React.useEffect(() => {
+    let alive = true;
+    // getStockMap([]) resolves to an empty Map immediately (see lib/stock.ts)
+    // — going through the same async path even when there's nothing to look
+    // up keeps every setStock call inside a .then callback rather than
+    // synchronous in the effect body.
+    const productIds = stockProductIdsKey ? stockProductIdsKey.split(",") : [];
+    getStockMap(productIds).then((map) => {
+      if (alive) setStock(map);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [stockProductIdsKey]);
+
+  // Non-null only for a resolved, non-service line whose quantity exceeds
+  // what's actually sellable. Fails OPEN: a variant absent from `stock`
+  // (unknown state, or an optimistic line with no variantId/productId yet)
+  // is treated as fine and never flagged — see the plan's Global Constraints.
+  const shortfallFor = React.useCallback(
+    (item: CartItem): { reduceTo: number } | null => {
+      if (item.isService) return null; // service lines are exempt
+      if (!item.variantId) return null;
+      const state = stock.get(item.variantId);
+      if (!state) return null; // unknown => fail open
+      return shortfall(item.quantity, state);
+    },
+    [stock],
+  );
 
   // Optimistic remove → server action → on error, restore.
   const remove = (id: string) => {
@@ -582,6 +663,28 @@ export function CartClient({
     [scheduleDrainQty],
   );
 
+  // Apply a shortfall's reduce-to target. reduceTo === 0 means the line is
+  // out of stock entirely — Medusa rejects a zero-quantity line, so remove
+  // it instead of setting the quantity to 0. Otherwise this rides the same
+  // optimistic/debounced/serialized write path as the +/- stepper.
+  // Plain function (not useCallback), matching `remove` above — it also
+  // reads `remove`, and wrapping it in useCallback made the React Compiler
+  // unable to preserve memoization across `remove`'s own forward reference
+  // to `forgetQty`.
+  const reduceLine = (item: CartItem, reduceTo: number) => {
+    if (reduceTo <= 0) {
+      remove(item.id);
+      return;
+    }
+    if (isOptimisticLine(item.id)) return;
+    qtyTarget.current.set(item.id, reduceTo);
+    qtyDirty.current.set(item.id, reduceTo);
+    setItems((xs) =>
+      xs.map((x) => (x.id === item.id ? { ...x, quantity: reduceTo } : x)),
+    );
+    scheduleDrainQty();
+  };
+
   // Drop any pending quantity sync for a line (e.g. it's being removed).
   const forgetQty = React.useCallback((id: string) => {
     qtyDirty.current.delete(id);
@@ -659,6 +762,11 @@ export function CartClient({
 
   const total = items.reduce((sum, x) => sum + lineTotal(x), 0);
 
+  // Lines that exceed what's actually sellable — drives the inline warnings
+  // and gates the Checkout CTA. Empty when stock is unknown or fine, per the
+  // fail-open rule.
+  const shortItems = items.filter((it) => shortfallFor(it) !== null);
+
   // Still waiting on the first cart snapshot (direct visit, promise pending).
   // The add→cart path adopts its handoff in the mount effect, so this shows
   // for at most one frame there.
@@ -733,6 +841,8 @@ export function CartClient({
             pending={isPending || isOptimisticLine(item.id)}
             onRemove={remove}
             onStep={stepQty}
+            shortfallInfo={shortfallFor(item)}
+            onReduce={(reduceTo) => reduceLine(item, reduceTo)}
           />
         ))}
       </div>
@@ -801,17 +911,38 @@ export function CartClient({
             Includes VAT, NHIL, and all applicable fees
           </p>
         </div>
-        <Link
-          href="/checkout"
-          className={buttonVariants({
-            variant: "primary",
-            size: "lg",
-            fullWidth: true,
-            className: "mt-1",
-          })}
-        >
-          Proceed to Checkout
-        </Link>
+        {shortItems.length > 0 ? (
+          <div className="mt-1 flex flex-col gap-1.5">
+            <button
+              type="button"
+              disabled
+              aria-disabled="true"
+              className={buttonVariants({
+                variant: "primary",
+                size: "lg",
+                fullWidth: true,
+              })}
+            >
+              Proceed to Checkout
+            </button>
+            <p className="text-center text-xs text-muted">
+              Please resolve the highlighted item
+              {shortItems.length === 1 ? "" : "s"} above before checking out.
+            </p>
+          </div>
+        ) : (
+          <Link
+            href="/checkout"
+            className={buttonVariants({
+              variant: "primary",
+              size: "lg",
+              fullWidth: true,
+              className: "mt-1",
+            })}
+          >
+            Proceed to Checkout
+          </Link>
+        )}
         <Link
           href="/products"
           className={buttonVariants({

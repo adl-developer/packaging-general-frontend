@@ -11,6 +11,13 @@ export interface CartItem {
   /** Medusa variant id — lets the UI know which catalog item a line is
    *  (e.g. cross-sell "Added" state survives reloads). */
   variantId?: string;
+  /** Medusa product id. Present on lines mapped from a real cart line item
+   *  (mapLineItem populates it from item.product_id); ABSENT on the
+   *  optimistic lines the cart client stages before a commit settles (they
+   *  are plain object literals, not mapLineItem output). Callers that key
+   *  stock lookups off this field must tolerate it being undefined — see
+   *  the stock guard in cart-client.tsx. */
+  productId?: string;
   name: string;
   specs: string[];
   unitPrice: number;
@@ -68,6 +75,7 @@ export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
   return {
     id: item.id,
     variantId: item.variant_id ?? undefined,
+    productId: item.product_id ?? undefined,
     name: item.product_title || item.title || "Item",
     specs,
     unitPrice: Number(item.unit_price ?? 0),
