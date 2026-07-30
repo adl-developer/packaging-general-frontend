@@ -24,7 +24,6 @@ import {
   removeLineItem,
   updateLineItemQuantity,
 } from "@/lib/actions/cart";
-import { getStockMap } from "@/lib/stock";
 import { shortfall, type StockState } from "@/lib/stock-rules";
 import { mapLineItem, TAX_RATE, type CartItem } from "./map-cart";
 import { CartSkeleton } from "./cart-skeleton";
@@ -45,6 +44,42 @@ const QTY_DEBOUNCE_MS = 450;
 const lineSubtotal = (item: CartItem) => item.unitPrice * item.quantity;
 const lineTotal = (item: CartItem) =>
   lineSubtotal(item) * (1 + item.taxRate);
+
+/**
+ * Fetch live stock via the same-origin `/api/stock` proxy — NOT `lib/stock`'s
+ * `getStockMap` directly. That function calls the Medusa backend, which is a
+ * different origin from the deployed storefront; a browser calling it
+ * directly would depend on Render's `STORE_CORS` allow-listing the Vercel
+ * origin (a value that lives only in Render's dashboard). If that were ever
+ * wrong the request would fail, be swallowed by the fail-open try/catch, and
+ * the cart guard would be silently dead in production. Routing through this
+ * app's own Route Handler (`src/app/api/stock/route.ts`, which runs
+ * server-to-server and calls getStockMap there) removes the CORS dependency
+ * entirely.
+ *
+ * Fails OPEN end to end: any non-OK response or thrown error (network
+ * failure, bad JSON, proxy down) resolves to an empty Map, exactly like
+ * getStockMap's own internal fail-open behaviour — never blocks checkout,
+ * never paints a line as short, on an unknown state.
+ */
+async function fetchStockViaProxy(
+  productIds: string[],
+): Promise<Map<string, StockState>> {
+  if (!productIds.length) return new Map();
+  try {
+    const params = new URLSearchParams();
+    for (const id of productIds) params.append("id", id);
+    const res = await fetch(`/api/stock?${params}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`stock proxy failed: ${res.status}`);
+    const { stock } = (await res.json()) as {
+      stock: Record<string, StockState>;
+    };
+    return new Map(Object.entries(stock));
+  } catch (err) {
+    console.error("[fetchStockViaProxy] stock unavailable, treating as in stock:", err);
+    return new Map();
+  }
+}
 
 function EmptyCart() {
   return (
@@ -406,12 +441,13 @@ export function CartClient({
   }, [items.length, hydrated]);
 
   // --- Cart guard: layer 1 of the out-of-stock protection ------------------
-  // Keyed by VARIANT id (StockState), fetched by PRODUCT id (getStockMap's
-  // signature). Cart lines only carry variantId, so we resolve via the
-  // productId that mapLineItem now populates from the Medusa line item's
-  // product_id. Optimistic lines (staged before a commit settles) are plain
-  // object literals with no productId — they're naturally excluded from the
-  // productIds set below and so never flagged, which is correct: the
+  // Keyed by VARIANT id (StockState), fetched via /api/stock by PRODUCT id
+  // (see fetchStockViaProxy above). Cart lines only carry variantId, so we
+  // resolve via the productId that mapLineItem now populates from the Medusa
+  // line item's product_id. Optimistic lines (staged before a commit
+  // settles) are plain object literals with no productId — they're
+  // naturally excluded from the productIds set below and so never flagged,
+  // which is correct: the
   // shortfall check must derive from RESOLVED items, not optimistic ones.
   const [stock, setStock] = React.useState<Map<string, StockState>>(new Map());
 
@@ -429,12 +465,12 @@ export function CartClient({
 
   React.useEffect(() => {
     let alive = true;
-    // getStockMap([]) resolves to an empty Map immediately (see lib/stock.ts)
-    // — going through the same async path even when there's nothing to look
-    // up keeps every setStock call inside a .then callback rather than
-    // synchronous in the effect body.
+    // fetchStockViaProxy([]) resolves to an empty Map immediately — going
+    // through the same async path even when there's nothing to look up keeps
+    // every setStock call inside a .then callback rather than synchronous in
+    // the effect body.
     const productIds = stockProductIdsKey ? stockProductIdsKey.split(",") : [];
-    getStockMap(productIds).then((map) => {
+    fetchStockViaProxy(productIds).then((map) => {
       if (alive) setStock(map);
     });
     return () => {
