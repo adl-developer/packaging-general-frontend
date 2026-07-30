@@ -238,6 +238,11 @@ export interface ProductSummary {
   startingPrice: number;
   moq: number;
   features: string[];
+  /** Every sellable variant id in this family — used to look up live stock
+   *  (keyed by variant id) and decide the family's out-of-stock badge. Empty
+   *  for the static sample fallback, which `familyOutOfStock` correctly reads
+   *  as "not out of stock" (unknown, not zero). */
+  variantIds: string[];
 }
 
 let cachedRegionId: string | undefined;
@@ -290,6 +295,7 @@ function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
     startingPrice: prices.length ? Math.min(...prices) : 0,
     moq: typeof meta.moq === "number" ? meta.moq : Number(meta.moq) || 0,
     features: Array.isArray(meta.features) ? (meta.features as string[]) : [],
+    variantIds: (p.variants ?? []).map((v) => v.id),
   };
 }
 
@@ -575,6 +581,9 @@ const SAMPLE_PRODUCTS: ProductSummary[] = products.map((p) => ({
   startingPrice: p.startingPrice,
   moq: p.moq,
   features: p.features,
+  // No live variants behind the static fallback — familyOutOfStock([]) is
+  // false, so these never show a spurious out-of-stock badge.
+  variantIds: [],
 }));
 
 /** Fetch the live catalog for the browse grid. Falls back to the static sample

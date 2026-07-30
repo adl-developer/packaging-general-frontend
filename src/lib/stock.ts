@@ -26,6 +26,15 @@ import {
  * silently defeats this entire feature, this one call uses raw `fetch`, where
  * the cache semantics are explicit and visible.
  */
+// Verified live against this backend: Medusa only COMPUTES
+// `inventory_quantity` when `+variants.manage_inventory` is ALSO requested.
+// `fields=id,variants.id,+variants.inventory_quantity` alone returns
+// `inventory_quantity: undefined` for every variant; adding
+// `+variants.manage_inventory,+variants.allow_backorder` (as below) returns
+// the real number. Consequence: removing `+variants.manage_inventory` as
+// "unused" would silently make the ENTIRE CATALOG read as out of stock
+// (undefined ?? 0 > 0 is false), while tsc and every unit test stay green —
+// the bug would only show up live. Do not trim this string.
 const STOCK_FIELDS =
   "id,variants.id,+variants.inventory_quantity,+variants.manage_inventory,+variants.allow_backorder";
 

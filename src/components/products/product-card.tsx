@@ -14,8 +14,19 @@ import { cn } from "@/lib/utils";
  * the first image from the same `product-images` manifest that feeds the
  * customizer's gallery, so a product only needs listing in one place; products
  * with no photo yet keep the placeholder icon.
+ *
+ * `outOfStock` (derived from live stock — never cached, see `lib/stock.ts`)
+ * mutes the image and adds an "Out of stock" pill opposite the category
+ * badge. The link stays live either way: the customer can still open the
+ * product and use the Request/WhatsApp CTA on the detail page.
  */
-export function ProductCard({ product }: { product: ProductSummary }) {
+export function ProductCard({
+  product,
+  outOfStock = false,
+}: {
+  product: ProductSummary;
+  outOfStock?: boolean;
+}) {
   const cover = getProductImages(product.slug, product.name)[0];
   return (
     <div
@@ -34,14 +45,22 @@ export function ProductCard({ product }: { product: ProductSummary }) {
             alt={cover.alt}
             fill
             sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-            className="object-cover"
+            className={cn("object-cover", outOfStock && "opacity-60")}
           />
         ) : (
-          <ImageIcon className="size-20 text-muted/40" aria-hidden />
+          <ImageIcon
+            className={cn("size-20 text-muted/40", outOfStock && "opacity-60")}
+            aria-hidden
+          />
         )}
         <span className="absolute left-4 top-4 z-10 rounded-full border border-line bg-[#a59a87] px-2.5 py-0.5 text-xs font-semibold text-white">
           {product.category}
         </span>
+        {outOfStock && (
+          <span className="absolute right-4 top-4 z-10 rounded-full border border-line bg-[rgba(231,0,11,0.92)] px-2.5 py-0.5 text-xs font-semibold text-white">
+            Out of stock
+          </span>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col gap-4 p-6">

@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { categoryBySlug } from "@/lib/categories";
 import { listProducts } from "@/lib/products";
+import { getStockMap } from "@/lib/stock";
+import { familyOutOfStock } from "@/lib/stock-rules";
 import { ProductCard } from "@/components/products/product-card";
 import { Reveal } from "@/components/motion/reveal";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
@@ -37,6 +39,18 @@ export default async function CategoryPage({
   const all = await listProducts();
   const products = all.filter((p) => p.category === cat.medusaName);
 
+  // Live stock, fetched once for the whole page (never cached — see
+  // lib/stock.ts). Keyed by variant id; a family reads as out of stock only
+  // when every one of its variants is. A failed fetch returns an empty map,
+  // which familyOutOfStock reads as "not out of stock" (fail open).
+  const stock = await getStockMap(products.map((p) => p.id));
+  const isOutOfStock = (p: (typeof products)[number]) =>
+    familyOutOfStock(
+      p.variantIds
+        .map((id) => stock.get(id))
+        .filter((s) => s !== undefined),
+    );
+
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
       <div>
@@ -69,7 +83,7 @@ export default async function CategoryPage({
         <Stagger className="grid grid-cols-1 gap-8 sm:grid-cols-2">
           {products.map((p) => (
             <StaggerItem key={p.id} className="h-full">
-              <ProductCard product={p} />
+              <ProductCard product={p} outOfStock={isOutOfStock(p)} />
             </StaggerItem>
           ))}
         </Stagger>
