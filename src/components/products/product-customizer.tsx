@@ -10,6 +10,8 @@ import {
   type MaterialOption,
   type Product,
 } from "@/lib/products";
+import type { StockState } from "@/lib/stock-rules";
+import { supportWhatsappUrl, outOfStockEnquiry } from "@/lib/whatsapp";
 import { formatGhs } from "@/lib/format";
 import { warmCart } from "@/lib/actions/cart";
 import { beginOptimisticAdd, requestAddCommit } from "@/lib/cart-handoff";
@@ -43,7 +45,16 @@ import { getProductImages } from "@/lib/product-images";
  * Products without material/printing choices (accessories) skip those
  * sections — the step count adapts.
  */
-export function ProductCustomizer({ product }: { product: Product }) {
+export function ProductCustomizer({
+  product,
+  stock,
+}: {
+  product: Product;
+  /** Live stock keyed by VARIANT id — a plain object because this crosses the
+   *  server/client boundary from the page (Maps don't serialise that way).
+   *  A missing key means unknown, which is treated as in stock (fail open). */
+  stock: Record<string, StockState>;
+}) {
   const router = useRouter();
   const [size, setSize] = React.useState(product.sizes[0]?.id ?? "");
   const [material, setMaterial] = React.useState(
@@ -170,6 +181,30 @@ export function ProductCustomizer({ product }: { product: Product }) {
   const setupFee = selectedPrinting?.setupFee ?? 0;
   const estimatedTotal = unitPrice * quantity + setupFee;
 
+  // Out-of-stock is a SEPARATE, parallel concept from the sparse-combo
+  // availability system above (availableMaterials / facetAvailable /
+  // pickSize's auto-correction) — that system hides combos that DO NOT
+  // EXIST and silently steers the selection away from them. An out-of-stock
+  // combo is a REAL combo that just has no stock right now: it must stay
+  // selectable and must NEVER be auto-corrected away, or the customer is
+  // silently moved to a different option and the enquiry/sales lead is lost.
+  // Unknown variant (absent from `stock`) => treat as in stock (fail open).
+  const comboStock = combo ? stock[combo.variantId] : undefined;
+  const comboOutOfStock = comboStock ? !comboStock.purchasable : false;
+  const enquiryUrl = comboOutOfStock
+    ? supportWhatsappUrl(
+        outOfStockEnquiry({
+          product: product.name,
+          specs: [
+            size ? `${labels.size}: ${size}` : null,
+            material ? `${labels.material}: ${material}` : null,
+            printing ? `Printing: ${printing}` : null,
+          ].filter((s): s is string => !!s),
+          quantity,
+        }),
+      )
+    : null;
+
   const images = React.useMemo(
     () => getProductImages(product.slug, product.name),
     [product.slug, product.name],
@@ -211,6 +246,10 @@ export function ProductCustomizer({ product }: { product: Product }) {
     }
     if (!combo) {
       setError("This combination is currently unavailable.");
+      return;
+    }
+    if (comboOutOfStock) {
+      setError("This option is currently out of stock.");
       return;
     }
     setError(null);
@@ -548,6 +587,28 @@ export function ProductCustomizer({ product }: { product: Product }) {
                       </span>
                     </div>
                   )}
+                  {comboOutOfStock && (
+                    <div className="flex flex-col gap-2 rounded-option border border-[rgba(231,0,11,0.3)] bg-[rgba(231,0,11,0.06)] px-3.5 py-3 text-sm">
+                      <span className="font-semibold text-destructive">
+                        Out of stock
+                      </span>
+                      <span className="text-muted">
+                        This exact option isn&apos;t available right now.
+                        Reach out and we&apos;ll let you know when it&apos;s
+                        back or help with lead time.
+                      </span>
+                      {enquiryUrl && (
+                        <a
+                          href={enquiryUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-flex w-fit items-center gap-2 rounded-button border border-line bg-background px-4 py-2 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+                        >
+                          Ask about this on WhatsApp
+                        </a>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-col gap-2">
                     <label
                       htmlFor="notes"
@@ -613,7 +674,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
             <button
               type="button"
               onClick={() => addToCart("add")}
-              disabled={hasSizes && !size}
+              disabled={(hasSizes && !size) || comboOutOfStock}
               className={cn(
                 "order-1 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button border px-6 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2 sm:w-auto",
                 justAdded
@@ -631,7 +692,7 @@ export function ProductCustomizer({ product }: { product: Product }) {
             <button
               type="button"
               onClick={() => addToCart("buy")}
-              disabled={hasSizes && !size}
+              disabled={(hasSizes && !size) || comboOutOfStock}
               className="order-2 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3 sm:w-auto"
             >
               {pendingKind === "buy" && (
