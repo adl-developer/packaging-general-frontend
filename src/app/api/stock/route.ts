@@ -24,7 +24,18 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const productIds = request.nextUrl.searchParams.getAll("id");
   const stock = await getStockMap(productIds);
-  return Response.json({
-    stock: Object.fromEntries(stock) as Record<string, StockState>,
-  });
+  return Response.json(
+    {
+      stock: Object.fromEntries(stock) as Record<string, StockState>,
+    },
+    {
+      // `dynamic = "force-dynamic"` above already stops Next caching this, and
+      // on Vercel it normally emits a no-store Cache-Control for us. But that
+      // is implicit framework behaviour, and a CDN or edge layer caching this
+      // response would serve stale stock — the single failure this whole
+      // module exists to prevent. Stating the header explicitly costs one line
+      // and removes any dependence on that inference.
+      headers: { "Cache-Control": "no-store" },
+    },
+  );
 }
