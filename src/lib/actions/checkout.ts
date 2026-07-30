@@ -405,7 +405,9 @@ export async function initiatePaystack(): Promise<
  *  the order. On success the cart cookie is cleared so the user starts fresh
  *  next time. */
 export async function completeCheckout(): Promise<
-  { ok: true; orderId: string } | { ok: false; error: string; cartId?: string }
+  | { ok: true; orderId: string }
+  | { ok: false; error: string; cartId?: string; pending: false }
+  | { ok: false; error: string; cartId: string; pending: true }
 > {
   const cartId = await readCartId();
   if (!cartId) {
@@ -416,7 +418,7 @@ export async function completeCheckout(): Promise<
     const store = await cookies();
     const lastOrderId = store.get(LAST_ORDER_COOKIE)?.value;
     if (lastOrderId) return { ok: true, orderId: lastOrderId };
-    return { ok: false, error: "Your checkout session has expired." };
+    return { ok: false, error: "Your checkout session has expired.", pending: false };
   }
 
   try {
@@ -427,15 +429,67 @@ export async function completeCheckout(): Promise<
       revalidatePath("/cart");
       return { ok: true, orderId: result.order.id };
     }
-    // type === "cart" → an error happened during placement.
+    // type === "cart" → Medusa's own SOFT error case. Per the backend route
+    // (@medusajs/medusa .../store/carts/[id]/complete/route.js) this shape is
+    // returned WITHOUT throwing only for error.type PAYMENT_AUTHORIZATION_ERROR
+    // or PAYMENT_REQUIRES_MORE_ERROR — i.e. Paystack itself declined the charge
+    // or needs another step. No money was taken, so the existing "try again"
+    // message is accurate and stays as-is.
     console.error("[checkout] complete returned cart-with-error:", result);
     return {
       ok: false,
       cartId,
+      pending: false,
       error: result.error?.message ?? "We couldn't place your order. Please try again.",
     };
   } catch (err) {
+    // Anything THROWN here is, by the same route logic, NOT a declined/needs-
+    // more payment (those never throw — see above). It's something else that
+    // failed after Medusa's cart.complete() workflow started — most likely the
+    // manage_inventory/allow_backorder stock guard (insufficient stock), or a
+    // completion conflict/system error. Paystack's hosted page already charged
+    // the customer BEFORE the browser was even redirected to this callback, so
+    // this is exactly the "payment succeeded, order failed" window the whole
+    // out-of-stock plan exists to make survivable — never tell this customer
+    // to pay again.
     console.error("[checkout] completeCheckout failed:", err);
-    return { ok: false, cartId, error: "We couldn't place your order. Please try again." };
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      cartId,
+      pending: true,
+      error: message.slice(0, 2000),
+    };
+  }
+}
+
+/**
+ * Fire-and-forget alert to staff when `completeCheckout` hits the `pending`
+ * branch above (payment likely succeeded, order wasn't created). Posts to the
+ * backend's public `/store/order-completion-failed` route (rate-limited per
+ * cart_id, zod-validated, always 200s, never throws — see
+ * backend/src/api/store/order-completion-failed/route.ts).
+ *
+ * MUST NEVER throw and must never be awaited into blocking the customer's
+ * redirect for long — a failure to notify must never make the customer's
+ * outcome worse than the reassuring page they already land on.
+ */
+export async function notifyOrderCompletionFailed(input: {
+  reference: string;
+  cartId: string;
+  reason?: string;
+}): Promise<void> {
+  try {
+    await sdk.client.fetch("/store/order-completion-failed", {
+      method: "POST",
+      body: {
+        reference: input.reference,
+        cart_id: input.cartId,
+        reason: input.reason ?? null,
+      },
+    });
+  } catch (err) {
+    // Swallow on purpose — see the doc comment above.
+    console.error("[checkout] notifyOrderCompletionFailed failed:", err);
   }
 }

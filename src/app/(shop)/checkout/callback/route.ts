@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import type { NextRequest } from "next/server";
-import { completeCheckout } from "@/lib/actions/checkout";
+import {
+  completeCheckout,
+  notifyOrderCompletionFailed,
+} from "@/lib/actions/checkout";
 
 /**
  * Paystack redirect target — a Route Handler, NOT a page.
@@ -27,6 +30,26 @@ export async function GET(request: NextRequest) {
   }
 
   const result = await completeCheckout();
+
+  // Safe post-payment-failure branch: Paystack's hosted page already charged
+  // the customer before this request ran, and cart.complete() then failed for
+  // a reason other than a declined/needs-more payment (see completeCheckout's
+  // `pending` branch — most likely the manage_inventory/allow_backorder stock
+  // guard). Alert staff best-effort (this call never throws — see
+  // notifyOrderCompletionFailed) and send the customer to a reassuring state
+  // instead of the generic error page. This await is NOT a redirect, so it is
+  // fine inside this branch; the redirect() call below still lives outside
+  // any try/catch.
+  if (!result.ok && result.pending) {
+    await notifyOrderCompletionFailed({
+      reference,
+      cartId: result.cartId,
+      reason: result.error,
+    });
+    redirect(
+      `/checkout/confirmation?pending=1&ref=${encodeURIComponent(reference)}`
+    );
+  }
 
   // redirect() throws NEXT_REDIRECT, so it must live outside any try/catch.
   if (!result.ok) {
