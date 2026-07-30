@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { familyOutOfStock, isPurchasable, shortfall } from "./stock-rules";
+import { familyOutOfStock, isPurchasable, toStockState, shortfall } from "./stock-rules";
 
 describe("isPurchasable", () => {
   it("unmanaged variants are always purchasable even at zero", () => {
@@ -19,6 +19,33 @@ describe("isPurchasable", () => {
   });
   it("null manage_inventory is treated as managed", () => {
     expect(isPurchasable({ manage_inventory: null, allow_backorder: null, inventory_quantity: 0 })).toBe(false);
+  });
+});
+
+describe("toStockState", () => {
+  it("unmanaged with quantity produces null available", () => {
+    expect(toStockState({ manage_inventory: false, allow_backorder: false, inventory_quantity: 500 })).toEqual({
+      purchasable: true,
+      available: null,
+    });
+  });
+  it("backorder with zero quantity produces null available", () => {
+    expect(toStockState({ manage_inventory: true, allow_backorder: true, inventory_quantity: 0 })).toEqual({
+      purchasable: true,
+      available: null,
+    });
+  });
+  it("managed with quantity produces that quantity", () => {
+    expect(toStockState({ manage_inventory: true, allow_backorder: false, inventory_quantity: 7 })).toEqual({
+      purchasable: true,
+      available: 7,
+    });
+  });
+  it("managed with zero produces zero available", () => {
+    expect(toStockState({ manage_inventory: true, allow_backorder: false, inventory_quantity: 0 })).toEqual({
+      purchasable: false,
+      available: 0,
+    });
   });
 });
 

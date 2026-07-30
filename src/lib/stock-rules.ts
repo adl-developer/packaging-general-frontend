@@ -16,10 +16,10 @@ export interface StockState {
 }
 
 /**
- * Mirrors the backend aggregate. Order matters: the unmanaged check MUST come
- * first, because the Printing Setup Fee service variants are unmanaged and
- * carry no meaningful quantity — reading their `inventory_quantity` would
- * block a fee line and break every printed order.
+ * Mirrors the backend aggregate. Unmanaged variants (manage_inventory ===
+ * false) — like the two Printing Setup Fee service variants — are always
+ * purchasable and carry no meaningful inventory_quantity. Check that first
+ * so their quantity is never consulted.
  */
 export function isPurchasable(v: VariantStockFields): boolean {
   if (v.manage_inventory === false) return true;
