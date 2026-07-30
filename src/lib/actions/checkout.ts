@@ -7,6 +7,8 @@ import { sdk, authHeaders } from "@/lib/medusa";
 import { getCart } from "./cart";
 import { getCustomer } from "./auth";
 import { getAuthToken } from "@/lib/auth-token";
+import { getStockMap } from "@/lib/stock";
+import { shortfall } from "@/lib/stock-rules";
 import {
   isValidEmail,
   normalizeGhanaPhone,
@@ -328,6 +330,16 @@ interface PaystackSessionData {
   paystackTxAccessCode?: string;
 }
 
+/** Unique product ids across the cart's lines — getStockMap's signature
+ *  takes product ids, not variant ids (see lib/stock.ts). */
+function productIdsFor(cart: HttpTypes.StoreCart): string[] {
+  const ids = new Set<string>();
+  for (const line of cart.items ?? []) {
+    if (line.product_id) ids.add(line.product_id);
+  }
+  return Array.from(ids);
+}
+
 /** Initialize a Paystack payment session for the current cart and return the
  *  authorization URL the browser should be redirected to. */
 export async function initiatePaystack(): Promise<
@@ -343,6 +355,28 @@ export async function initiatePaystack(): Promise<
   }
   if (!cart.shipping_methods?.length) {
     return { ok: false, error: "Please choose a delivery option before paying." };
+  }
+
+  // Last check before money moves. Narrows — but cannot close — the window
+  // between here and cart.complete(); the callback route (layer 3) is what
+  // handles stock disappearing while the customer is on Paystack's page.
+  //
+  // Fail OPEN: a variant absent from `stock` (unknown — e.g. the stock read
+  // failed, or the line's variant_id is missing) is `undefined` here, and
+  // `state && shortfall(...)` short-circuits without blocking. Service lines
+  // (the Printing Setup Fee) are unmanaged, so toStockState gives them
+  // `available: null`, and shortfall() never flags a null availability —
+  // they're exempt for free, without needing a separate isService check.
+  const stock = await getStockMap(productIdsFor(cart));
+  for (const line of cart.items ?? []) {
+    const state = line.variant_id ? stock.get(line.variant_id) : undefined;
+    if (state && shortfall(Number(line.quantity ?? 0), state)) {
+      return {
+        ok: false,
+        error:
+          "Some items in your cart are no longer available in that quantity. Please review your cart.",
+      };
+    }
   }
 
   try {
