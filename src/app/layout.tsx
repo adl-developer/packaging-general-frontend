@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { MotionConfig } from "motion/react";
 import { Analytics } from "@vercel/analytics/next";
+import { PwaClient } from "@/components/pwa/pwa-client";
 import "./globals.css";
 
 const inter = Inter({
@@ -52,6 +53,18 @@ export const metadata: Metadata = {
     images: ["/logo.png"],
   },
   robots: { index: true, follow: true },
+  appleWebApp: {
+    capable: true,
+    title: "Packaging General",
+    statusBarStyle: "default",
+  },
+};
+
+// Matches the site header background (`--color-surface`) so the OS status
+// bar / browser chrome blends with the app instead of clashing with it —
+// same reasoning as `theme_color` in `src/app/manifest.ts`.
+export const viewport: Viewport = {
+  themeColor: "#fefdfb",
 };
 
 export default function RootLayout({
@@ -68,6 +81,7 @@ export default function RootLayout({
             client-only preference (which would cause SSR hydration mismatches). */}
         <MotionConfig reducedMotion="user">{children}</MotionConfig>
         <Analytics />
+        <PwaClient />
       </body>
     </html>
   );
