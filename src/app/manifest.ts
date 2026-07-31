@@ -22,12 +22,30 @@ export default function manifest(): MetadataRoute.Manifest {
     // Matches the site header background (`--color-surface`) so the OS status
     // bar / browser chrome blends with the app instead of clashing with it.
     theme_color: "#fefdfb",
+    // Same two files serve both purposes. They're safe unmasked: the art is
+    // a solid rust square with no transparency (no letterboxing risk), the
+    // mark just sits with more padding than a typical edge-to-edge "any"
+    // icon would. Contexts that don't apply a circular/rounded mask (desktop
+    // taskbar, some launchers) get `purpose:"any"`; adaptive-icon contexts
+    // get `purpose:"maskable"`.
     icons: [
       {
         src: "/icon-192-maskable.png",
         sizes: "192x192",
         type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icon-192-maskable.png",
+        sizes: "192x192",
+        type: "image/png",
         purpose: "maskable",
+      },
+      {
+        src: "/icon-512-maskable.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any",
       },
       {
         src: "/icon-512-maskable.png",

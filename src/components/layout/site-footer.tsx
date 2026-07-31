@@ -49,9 +49,13 @@ function LinkList({
 /** Global site footer (Figma: 4-column + business hours + copyright). */
 export function SiteFooter() {
   // supportWhatsappUrl returns null when NEXT_PUBLIC_SUPPORT_WHATSAPP is
-  // unset/blank — the button must be omitted entirely rather than render a
-  // dead `wa.me/undefined` link. Heading, sub-line and business hours are
-  // static content and still render either way.
+  // unset/blank. The heading + sub-line + button are ONE CTA unit: the
+  // sub-line ("Chat with our support team") is a verbal promise the button
+  // fulfils, so rendering it with no button beneath would read worse than
+  // showing nothing at all — hide all three together, never just the
+  // button. Business Hours is unrelated, informationally independent
+  // content (posted opening hours are useful whether or not chat is
+  // configured) and always renders regardless.
   const whatsappUrl = supportWhatsappUrl(SUPPORT_MESSAGE);
 
   return (
@@ -77,20 +81,28 @@ export function SiteFooter() {
           </div>
 
           <div className="flex flex-col gap-3">
-            <FooterHeading>Need Help?</FooterHeading>
-            <p className="text-xs text-muted">Chat with our support team</p>
             {whatsappUrl && (
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-8 w-full items-center justify-center gap-2 rounded-button bg-brand px-2.5 text-xs font-medium text-brand-foreground transition-colors hover:bg-brand/90"
-              >
-                <MessageCircle className="size-4" aria-hidden />
-                Chat Live with Support
-              </a>
+              <>
+                <FooterHeading>Need Help?</FooterHeading>
+                <p className="text-xs text-muted">Chat with our support team</p>
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-8 w-full items-center justify-center gap-2 rounded-button bg-brand px-2.5 text-xs font-medium text-brand-foreground transition-colors hover:bg-brand/90"
+                >
+                  <MessageCircle className="size-4" aria-hidden />
+                  Chat Live with Support
+                </a>
+              </>
             )}
-            <div className="mt-2 flex flex-col gap-1 border-t border-line pt-4">
+            <div
+              className={
+                whatsappUrl
+                  ? "mt-2 flex flex-col gap-1 border-t border-line pt-4"
+                  : "flex flex-col gap-1"
+              }
+            >
               <p className="text-sm font-semibold text-brand">
                 Business Hours
               </p>
