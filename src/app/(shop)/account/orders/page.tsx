@@ -7,6 +7,7 @@ import { listMyOrders } from "@/lib/actions/orders";
 import { formatGhs } from "@/lib/format";
 import { formatOrderNumber } from "@/lib/order-number";
 import { Reveal } from "@/components/motion/reveal";
+import { ReorderActions } from "@/components/account/reorder-actions";
 
 export const metadata: Metadata = {
   title: "My Orders",
@@ -60,7 +61,7 @@ export default async function AccountOrdersPage() {
       <Reveal className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-3xl font-semibold leading-9 text-brand">
-            My Orders
+            Order History
           </h1>
           <Link
             href="/account/settings"
@@ -71,7 +72,7 @@ export default async function AccountOrdersPage() {
           </Link>
         </div>
         <p className="text-base leading-6 text-muted">
-          Signed in as {customer.email}
+          Track and reorder packaging
         </p>
       </Reveal>
 
@@ -149,20 +150,20 @@ export default async function AccountOrdersPage() {
                         {formatGhs(Number(order.total ?? 0))}
                       </span>
                     </span>
-                    {/* Keep the customer's email out of the URL — the track
-                        page auto-applies the signed-in email. Only a claimed
-                        guest order placed under a DIFFERENT address still
-                        needs its email as an explicit param. */}
-                    <Link
-                      href={`/track-order?order=${formatOrderNumber(order.display_id, order.created_at, order.id)}${
+                    {/* Actions cell (Figma 3971:1260) — View + Reorder, side
+                        by side. Keep the customer's email out of the View
+                        URL — the track page auto-applies the signed-in
+                        email. Only a claimed guest order placed under a
+                        DIFFERENT address still needs its email as an
+                        explicit param. */}
+                    <ReorderActions
+                      orderId={order.id}
+                      viewHref={`/track-order?order=${formatOrderNumber(order.display_id, order.created_at, order.id)}${
                         order.email && order.email !== customer.email
                           ? `&email=${encodeURIComponent(order.email)}`
                           : ""
                       }`}
-                      className="inline-flex h-9 items-center rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30"
-                    >
-                      Track Order
-                    </Link>
+                    />
                   </div>
                 </Reveal>
               </li>

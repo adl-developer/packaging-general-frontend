@@ -12,7 +12,11 @@ const ORDER_LIST_FIELDS =
   "id,display_id,status,fulfillment_status,payment_status,created_at,email,currency_code,total,item_total,*items";
 
 const ORDER_DETAIL_FIELDS =
-  "id,display_id,status,fulfillment_status,payment_status,created_at,email,currency_code,total,subtotal,tax_total,shipping_total,discount_total,item_total,metadata,*items,*shipping_address,*shipping_methods";
+  // *items.product added for Reorder (2026-07-31): mirrors CART_FIELDS'
+  // *items.product in cart.ts — needed to read product.metadata.service so a
+  // service line (Printing Setup Fee) can be excluded, the same way
+  // map-cart.ts identifies it for the live cart.
+  "id,display_id,status,fulfillment_status,payment_status,created_at,email,currency_code,total,subtotal,tax_total,shipping_total,discount_total,item_total,metadata,*items,*items.product,*shipping_address,*shipping_methods";
 
 /** The signed-in customer's orders, newest first. Empty array if not logged in. */
 export async function listMyOrders(): Promise<HttpTypes.StoreOrder[]> {

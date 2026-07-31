@@ -18,6 +18,7 @@ import { formatGhs } from "@/lib/format";
 import { motion, AnimatePresence } from "motion/react";
 import { DURATION, EASE_PREMIUM, SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
+import { takeReorderNotice } from "@/lib/reorder-notice";
 import {
   addLineItem,
   emptyCart as emptyCartAction,
@@ -199,6 +200,22 @@ function AddFailedBanner() {
     >
       We couldn&apos;t add your item to the cart. Please go back to the product
       and try again.
+    </div>
+  );
+}
+
+/** Shown when a reorder capped or skipped one or more lines — see
+ *  reorder-notice.ts. A plain inline banner, not a toast: the design has no
+ *  toast/snackbar for reorder (docs/superpowers/specs/2026-07-31-reorder-
+ *  design.md §2.1), and this must stay on screen until the customer notices
+ *  it, not auto-dismiss like CartToast does. */
+function ReorderNoticeBanner({ message }: { message: string }) {
+  return (
+    <div
+      role="status"
+      className="rounded-card border border-[rgba(180,83,9,0.35)] bg-[rgba(254,243,199,0.5)] px-4 py-3 text-sm font-medium text-[#92400e]"
+    >
+      {message}
     </div>
   );
 }
@@ -426,6 +443,12 @@ export function CartClient({
   // An optimistic add's commit failed → its lines were rolled back; tell the
   // shopper instead of silently losing the item.
   const [addFailed, setAddFailed] = React.useState(false);
+  // A reorder capped or skipped a line — the message computed server-side by
+  // reorderOrder, handed over via reorder-notice.ts. Null on every other
+  // arrival at /cart (direct visit, normal add-to-cart, empty order). Lazy
+  // initializer — NOT an effect — so the take-once read happens exactly once,
+  // during this component's first render, with no cascading extra render.
+  const [reorderNotice] = React.useState<string | null>(() => takeReorderNotice());
   // True once committed server truth has been adopted — the (possibly slower)
   // base-items fetch must not overwrite it with a pre-commit snapshot.
   const addSettledRef = React.useRef(false);
@@ -811,9 +834,10 @@ export function CartClient({
   if (items.length === 0)
     return (
       <>
-        {addFailed && (
-          <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
-            <AddFailedBanner />
+        {(addFailed || reorderNotice) && (
+          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 pt-8 sm:px-6 lg:px-8">
+            {addFailed && <AddFailedBanner />}
+            {reorderNotice && <ReorderNoticeBanner message={reorderNotice} />}
           </div>
         )}
         <EmptyCart />
@@ -866,6 +890,7 @@ export function CartClient({
       </div>
 
       {addFailed && <AddFailedBanner />}
+      {reorderNotice && <ReorderNoticeBanner message={reorderNotice} />}
 
       <div className="flex flex-col gap-4">
         {items.map((item) => (
