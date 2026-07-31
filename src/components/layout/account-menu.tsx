@@ -84,9 +84,20 @@ export function AccountMenu({ user }: { user?: AccountUser }) {
           >
           {user ? (
             <>
+              {/* The panel is a fixed w-56, so neither line may assume it
+                  fits. A display name is short and single-line by nature, so
+                  it truncates. An email must NOT be truncated — it is how the
+                  customer confirms WHICH account they are signed in as, and a
+                  clipped address (plus-addressing, long company domains) is
+                  exactly the case where that matters. `break-words` wraps it
+                  onto a second line only when it cannot fit. */}
               <div className="px-2 py-1.5">
-                <p className="text-sm font-medium text-brand">{user.name}</p>
-                <p className="text-xs font-medium text-muted">{user.email}</p>
+                <p className="truncate text-sm font-medium text-brand" title={user.name}>
+                  {user.name}
+                </p>
+                <p className="text-xs font-medium break-words text-muted">
+                  {user.email}
+                </p>
               </div>
               <div className="my-1 h-px bg-line" aria-hidden />
               <Link href="/account/orders" role="menuitem" className={menuItem} onClick={() => setOpen(false)}>
