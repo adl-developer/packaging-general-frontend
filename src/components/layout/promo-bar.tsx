@@ -1,6 +1,6 @@
 import { Tag } from "lucide-react";
 import { getActivePromotion } from "@/lib/promotions";
-import { formatGhs } from "@/lib/format";
+import { promoOffer, promoScope } from "@/lib/promo-copy";
 
 /**
  * Lavender announcement bar (Figma: Easter promo), driven by the live active
@@ -12,21 +12,14 @@ export async function PromoBar() {
   const promo = await getActivePromotion();
   if (!promo) return null;
 
-  const offer =
-    promo.valueType === "percentage"
-      ? `${promo.value}% off`
-      : `${formatGhs(promo.value)} off`;
-
   return (
     <div className="bg-accent text-accent-foreground">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-3 text-sm font-bold sm:px-6 lg:px-8">
         <span className="inline-flex items-center gap-2">
           <Tag className="size-4 shrink-0" aria-hidden />
           <span>
-            Enjoy <span className="text-white">{offer}</span>{" "}
-            {promo.campaignName
-              ? `for all ${promo.campaignName} orders`
-              : "your order"}
+            Enjoy <span className="text-white">{promoOffer(promo)}</span>{" "}
+            {promoScope(promo)}
           </span>
         </span>
         <span className="inline-flex items-center gap-2">
