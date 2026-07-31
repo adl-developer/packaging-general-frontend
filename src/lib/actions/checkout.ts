@@ -4,11 +4,12 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk, authHeaders } from "@/lib/medusa";
-import { getCart } from "./cart";
+import { getCart, getCartLineCount, addConfiguredLineItem } from "./cart";
 import { getCustomer } from "./auth";
 import { getAuthToken } from "@/lib/auth-token";
 import { getStockMap } from "@/lib/stock";
 import { shortfall } from "@/lib/stock-rules";
+import { decideBuyNowRoute, isPrefillComplete } from "@/lib/buy-now";
 import {
   isValidEmail,
   normalizeGhanaPhone,
@@ -322,6 +323,119 @@ export async function saveDeliveryAddress(input: {
 
   revalidatePath("/checkout/payment");
   return { ok: true };
+}
+
+export type BuyNowResult =
+  | { ok: true; route: "payment" }
+  | { ok: true; route: "delivery" }
+  | { ok: true; route: "cart-with-notice"; notice: string }
+  | { ok: false; error: string };
+
+const BUY_NOW_NOTICE =
+  "You already have items in your cart. We've added this one — review everything before paying.";
+
+/**
+ * Buy Now — see docs/superpowers/specs/2026-07-31-buy-now-design.md.
+ *
+ * There is only ONE cart per session (§3) — this deliberately does NOT create
+ * a second cart or swap the `pg_cart_id` cookie. It adds the item to the
+ * existing cart and then routes the customer based on what was already there
+ * and whether their account has enough saved to skip straight to payment:
+ *
+ *   - signed out                     → refused (server-side re-check; the
+ *                                       button is never rendered for a guest,
+ *                                       but hiding UI is not access control)
+ *   - cart already had other items   → item added, "cart-with-notice" — the
+ *                                       customer reviews everything before
+ *                                       paying, never silently charged for
+ *                                       items they didn't mean to buy now
+ *   - cart was empty, prefill full   → item added + prefill applied,
+ *                                       "payment" — lands on /checkout/payment
+ *   - cart was empty, prefill short  → item added, "delivery" — no saved
+ *                                       address/phone would fail at
+ *                                       initiatePaystack with a generic error
+ *
+ * Reuses the exact same building blocks the cart-based flow uses
+ * (addConfiguredLineItem, saveContactInfo, saveDeliveryAddress) — this does
+ * NOT touch initiatePaystack's guard chain at all.
+ */
+export async function buyNow(input: {
+  variantId: string;
+  quantity: number;
+  setupPrintingValue?: string | null;
+  notes?: string;
+}): Promise<BuyNowResult> {
+  // Server-side auth is mandatory — the button is hidden for guests, but a
+  // hidden button is not access control (spec §5).
+  const customer = await getCustomer();
+  if (!customer) {
+    return { ok: false, error: "Please sign in to use Buy Now." };
+  }
+
+  // Cart state and prefill completeness are both resolved BEFORE the add, so
+  // the routing decision reflects what the customer already had — not the
+  // line we're about to add on top of it.
+  const [cartLineCount, prefill] = await Promise.all([
+    getCartLineCount(),
+    getCheckoutPrefill(),
+  ]);
+  const route = decideBuyNowRoute(true, cartLineCount, isPrefillComplete(prefill));
+  if (route === "refused") {
+    // Unreachable given the getCustomer() check above — defense in depth only.
+    return { ok: false, error: "Please sign in to use Buy Now." };
+  }
+
+  try {
+    await addConfiguredLineItem({
+      variantId: input.variantId,
+      quantity: input.quantity,
+      setupPrintingValue: input.setupPrintingValue,
+      notes: input.notes,
+    });
+  } catch (err) {
+    console.error("[checkout] buyNow add failed:", err);
+    return { ok: false, error: "Couldn't add this item. Please try again." };
+  }
+
+  if (route === "cart-with-notice") {
+    return { ok: true, route: "cart-with-notice", notice: BUY_NOW_NOTICE };
+  }
+
+  if (route === "delivery") {
+    return { ok: true, route: "delivery" };
+  }
+
+  // route === "payment" — the cart was empty and the account has a saved
+  // address + phone. Apply them in the SAME order the storefront's own
+  // checkout flow requires (email, then shipping_address + shipping method —
+  // see storefront/CLAUDE.md) so the cart is payment-ready when we land there.
+  // Either save failing sends the customer to /checkout/delivery instead of
+  // dumping them at payment with an incomplete cart — the item they came for
+  // is already safely added either way.
+  const contactResult = await saveContactInfo({
+    companyName: prefill.companyName,
+    contactPerson: prefill.contactPerson,
+    phone: prefill.contactPhone || prefill.deliveryPhone,
+    email: prefill.email,
+  });
+  if (!contactResult.ok) {
+    return { ok: true, route: "delivery" };
+  }
+
+  const deliveryResult = await saveDeliveryAddress({
+    contactName: prefill.deliveryName,
+    phone: prefill.deliveryPhone || prefill.contactPhone,
+    email: prefill.email,
+    address: prefill.address,
+    instructions: prefill.instructions,
+    lat: prefill.lat,
+    lng: prefill.lng,
+  });
+  if (!deliveryResult.ok) {
+    return { ok: true, route: "delivery" };
+  }
+
+  return { ok: true, route: "payment" };
 }
 
 interface PaystackSessionData {

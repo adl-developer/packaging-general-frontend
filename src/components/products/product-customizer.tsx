@@ -14,7 +14,9 @@ import type { StockState } from "@/lib/stock-rules";
 import { supportWhatsappUrl, outOfStockEnquiry } from "@/lib/whatsapp";
 import { formatGhs } from "@/lib/format";
 import { warmCart } from "@/lib/actions/cart";
+import { buyNow } from "@/lib/actions/checkout";
 import { beginOptimisticAdd, requestAddCommit } from "@/lib/cart-handoff";
+import { setReorderNotice } from "@/lib/reorder-notice";
 import { TAX_RATE, type CartItem } from "@/app/(shop)/cart/map-cart";
 import { motion } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
@@ -48,12 +50,19 @@ import { getProductImages } from "@/lib/product-images";
 export function ProductCustomizer({
   product,
   stock,
+  isSignedIn,
 }: {
   product: Product;
   /** Live stock keyed by VARIANT id — a plain object because this crosses the
    *  server/client boundary from the page (Maps don't serialise that way).
    *  A missing key means unknown, which is treated as in stock (fail open). */
   stock: Record<string, StockState>;
+  /** Buy Now is signed-in-only (docs/superpowers/specs/2026-07-31-buy-now-
+   *  design.md §5) — signed OUT customers never see the button at all, not
+   *  shown-and-disabled. This is display-only: the `buyNow` server action
+   *  re-checks getCustomer() itself, so a stale/tampered value here can't
+   *  grant access, only hide a button that would refuse anyway. */
+  isSignedIn: boolean;
 }) {
   const router = useRouter();
   const [size, setSize] = React.useState(product.sizes[0]?.id ?? "");
@@ -230,29 +239,37 @@ export function ProductCustomizer({
     };
   }, []);
 
-  const addToCart = (kind: "add" | "buy") => {
-    // One mutation at a time — Medusa locks the cart per mutation, so a second
-    // concurrent add would 409. Ignore extra clicks while one is in flight.
-    if (pendingKind) return;
+  /** Shared pre-flight validation for both Add to Cart and Buy Now — same
+   *  rules, same messages. Returns false (and sets `error`) when the current
+   *  selection can't be added at all. */
+  const validateSelection = (): boolean => {
     if (hasSizes && !size) {
       setError(
         `Please select a ${labels.size.toLowerCase()} before adding to cart.`,
       );
-      return;
+      return false;
     }
     if (product.moq && quantity < product.moq) {
       setError(`Minimum order quantity is ${product.moq} units.`);
-      return;
+      return false;
     }
     if (!combo) {
       setError("This combination is currently unavailable.");
-      return;
+      return false;
     }
     if (comboOutOfStock) {
       setError("This option is currently out of stock.");
-      return;
+      return false;
     }
     setError(null);
+    return true;
+  };
+
+  const addToCart = () => {
+    // One mutation at a time — Medusa locks the cart per mutation, so a second
+    // concurrent add would 409. Ignore extra clicks while one is in flight.
+    if (pendingKind) return;
+    if (!validateSelection() || !combo) return; // combo re-checked for TS narrowing
 
     // ── Fully optimistic: render first, commit in the background. ──
     // We already know everything the cart page will show — the option ids ARE
@@ -293,7 +310,7 @@ export function ProductCustomizer({
     setJustAdded(true);
     if (addedResetRef.current) window.clearTimeout(addedResetRef.current);
     addedResetRef.current = window.setTimeout(() => setJustAdded(false), 1800);
-    setPendingKind(kind);
+    setPendingKind("add");
     setGoingToCart(true);
     beginOptimisticAdd(optimisticLines);
     // The commit runs in CartAddAgent (mounted in the shop layout, survives
@@ -311,6 +328,64 @@ export function ProductCustomizer({
       notes,
     });
     router.push("/cart");
+  };
+
+  /**
+   * Buy Now — deliberately NOT the optimistic "navigate first, commit behind
+   * it" pattern above. This is the money path (docs/superpowers/specs/
+   * 2026-07-31-buy-now-design.md): where we navigate to depends on the
+   * SERVER's view of the cart and the account's saved details, so we must
+   * await the real result before deciding. The `buyNow` server action
+   * re-checks getCustomer() itself — this button only ever renders for a
+   * signed-in customer (isSignedIn prop), but that's display-only.
+   */
+  const handleBuyNow = async () => {
+    if (pendingKind) return;
+    if (!validateSelection() || !combo) return; // combo re-checked for TS narrowing
+
+    setPendingKind("buy");
+    try {
+      const result = await buyNow({
+        variantId: combo.variantId,
+        quantity,
+        setupPrintingValue:
+          selectedPrinting && selectedPrinting.setupFee > 0
+            ? selectedPrinting.id
+            : undefined,
+        notes,
+      });
+
+      if (!result.ok) {
+        setError(result.error);
+        setPendingKind(null);
+        return;
+      }
+
+      // The item is in the cart on every ok branch — bump the header badge
+      // the same way the cart-based Add to Cart flow does.
+      notifyCartAdd({ lines: 1 });
+
+      if (result.route === "cart-with-notice") {
+        // Reuses the same take-once notice channel the Reorder flow uses to
+        // hand a message to /cart across a client-side navigation (see
+        // lib/reorder-notice.ts + cart-client.tsx's banner) — the mechanism
+        // is generic ("show this message once on /cart"), not reorder-
+        // specific, so Buy Now's honesty notice rides the same rail rather
+        // than inventing a second one.
+        setReorderNotice(result.notice);
+        router.push("/cart");
+        return;
+      }
+      if (result.route === "delivery") {
+        router.push("/checkout/delivery");
+        return;
+      }
+      router.push("/checkout/payment");
+    } catch (err) {
+      console.error("[product-customizer] buyNow failed:", err);
+      setError("Something went wrong. Please try again.");
+      setPendingKind(null);
+    }
   };
 
   // "Step N of M" tracks the furthest section scrolled past the sticky header.
@@ -673,7 +748,7 @@ export function ProductCustomizer({
             </Link>
             <button
               type="button"
-              onClick={() => addToCart("add")}
+              onClick={() => addToCart()}
               disabled={(hasSizes && !size) || comboOutOfStock}
               className={cn(
                 "order-1 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button border px-6 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2 sm:w-auto",
@@ -689,17 +764,22 @@ export function ProductCustomizer({
               )}
               {justAdded ? "Added" : "Add to Cart"}
             </button>
-            <button
-              type="button"
-              onClick={() => addToCart("buy")}
-              disabled={(hasSizes && !size) || comboOutOfStock}
-              className="order-2 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3 sm:w-auto"
-            >
-              {pendingKind === "buy" && (
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-              )}
-              Buy Now
-            </button>
+            {/* Signed-out customers never see Buy Now at all — not shown-
+                and-disabled (spec §5). Add to Cart above stays available to
+                everyone, so nothing is lost. */}
+            {isSignedIn && (
+              <button
+                type="button"
+                onClick={() => void handleBuyNow()}
+                disabled={(hasSizes && !size) || comboOutOfStock}
+                className="order-2 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3 sm:w-auto"
+              >
+                {pendingKind === "buy" && (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                )}
+                Buy Now
+              </button>
+            )}
           </div>
         </div>
       </div>
