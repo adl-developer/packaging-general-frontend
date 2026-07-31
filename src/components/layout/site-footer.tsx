@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { Mail } from "lucide-react";
+import { MessageCircle } from "lucide-react";
+import { supportWhatsappUrl } from "@/lib/whatsapp";
+
+// Neutral opener — deliberately not page-aware. A footer button is a
+// general-purpose entry point; guessing intent from the current URL would
+// produce wrong messages on most pages.
+const SUPPORT_MESSAGE = "Hi Packaging General — I need help with an order.";
 
 const companyLinks = [
   { label: "About Us", href: "/about" },
@@ -42,6 +48,12 @@ function LinkList({
 
 /** Global site footer (Figma: 4-column + business hours + copyright). */
 export function SiteFooter() {
+  // supportWhatsappUrl returns null when NEXT_PUBLIC_SUPPORT_WHATSAPP is
+  // unset/blank — the button must be omitted entirely rather than render a
+  // dead `wa.me/undefined` link. Heading, sub-line and business hours are
+  // static content and still render either way.
+  const whatsappUrl = supportWhatsappUrl(SUPPORT_MESSAGE);
+
   return (
     <footer className="mt-auto border-t border-line bg-surface">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -65,17 +77,19 @@ export function SiteFooter() {
           </div>
 
           <div className="flex flex-col gap-3">
-            <FooterHeading>Community</FooterHeading>
-            <p className="text-xs text-muted">
-              Join packaging professionals across West Africa
-            </p>
-            <a
-              href="mailto:support@packaginggeneral.com"
-              className="inline-flex h-8 items-center justify-center gap-2 rounded-button bg-brand px-3 text-xs font-medium text-brand-foreground transition-colors hover:bg-brand/90"
-            >
-              <Mail className="size-4" aria-hidden />
-              Contact Support
-            </a>
+            <FooterHeading>Need Help?</FooterHeading>
+            <p className="text-xs text-muted">Chat with our support team</p>
+            {whatsappUrl && (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-8 w-full items-center justify-center gap-2 rounded-button bg-brand px-2.5 text-xs font-medium text-brand-foreground transition-colors hover:bg-brand/90"
+              >
+                <MessageCircle className="size-4" aria-hidden />
+                Chat Live with Support
+              </a>
+            )}
             <div className="mt-2 flex flex-col gap-1 border-t border-line pt-4">
               <p className="text-sm font-semibold text-brand">
                 Business Hours
