@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getCustomer } from "@/lib/actions/auth";
 import { getMyOrder } from "@/lib/actions/orders";
 import { addLineItem, getCart, updateLineItemQuantity } from "@/lib/actions/cart";
-import { getStockMap } from "@/lib/stock";
+import { getCatalogStock } from "@/lib/stock";
 import {
   buildReorderMessage,
   reconcileReorder,
@@ -64,14 +64,14 @@ export async function reorderOrder(orderId: string): Promise<ReorderResult> {
   }
 
   const productIds = Array.from(new Set(productLines.map((l) => l.productId)));
-  const stockMap = await getStockMap(productIds);
+  const { byVariant: stockMap, resolved } = await getCatalogStock(productIds);
 
   const cart = await getCart();
   const existingCartLines: ExistingCartLine[] = (cart?.items ?? [])
     .filter((i) => i.variant_id)
     .map((i) => ({ variantId: i.variant_id as string, quantity: Number(i.quantity ?? 0) }));
 
-  const result = reconcileReorder(orderLines, stockMap, existingCartLines);
+  const result = reconcileReorder(orderLines, stockMap, existingCartLines, resolved);
 
   if (result.linesToAdd.length === 0) {
     const message = buildReorderMessage(result);
@@ -83,20 +83,58 @@ export async function reorderOrder(orderId: string): Promise<ReorderResult> {
 
   // Cart mutations are serialized (Medusa locks the cart per write — see
   // cart.ts) so these MUST run sequentially, never in parallel.
+  //
+  // Each write is individually guarded. `reconcileReorder` already filters out
+  // everything we KNOW is unbuyable, so a rejection here is an unforeseen one
+  // (a variant unpublished between the stock read and the write, a backend
+  // blip). Letting it propagate would throw out of the server action — the
+  // browser gets a bare 500 and the customer sees "Something went wrong" with
+  // no idea that some lines DID land in their cart. Demote it to a reported
+  // failure instead, so a single bad line costs one line, not the reorder.
+  const failedLines: { variantId: string; name: string }[] = [];
   for (const line of result.linesToAdd) {
     const existingItem = (cart?.items ?? []).find(
       (i) => i.variant_id === line.variantId,
     );
-    if (existingItem && line.existingQuantity > 0) {
-      await updateLineItemQuantity(
-        existingItem.id,
-        line.existingQuantity + line.addQuantity,
+    try {
+      if (existingItem && line.existingQuantity > 0) {
+        await updateLineItemQuantity(
+          existingItem.id,
+          line.existingQuantity + line.addQuantity,
+        );
+      } else {
+        await addLineItem(line.variantId, line.addQuantity);
+      }
+    } catch (err) {
+      console.error(
+        `[reorder] failed to add ${line.variantId} from order ${orderId}:`,
+        err,
       );
-    } else {
-      await addLineItem(line.variantId, line.addQuantity);
+      failedLines.push({ variantId: line.variantId, name: line.name });
     }
   }
 
+  // A line that failed to write was never added — report it as unavailable
+  // rather than counting it among the lines that made it into the cart.
+  const added = result.linesToAdd.filter(
+    (l) => !failedLines.some((f) => f.variantId === l.variantId),
+  );
+
+  if (added.length === 0) {
+    const message = buildReorderMessage({ ...result, linesToAdd: [] });
+    return {
+      ok: false,
+      error: message ?? "We couldn't add these items to your cart.",
+    };
+  }
+
   revalidatePath("/cart");
-  return { ok: true, message: buildReorderMessage(result) };
+  return {
+    ok: true,
+    message: buildReorderMessage({
+      ...result,
+      linesToAdd: added,
+      discontinuedLines: [...result.discontinuedLines, ...failedLines],
+    }),
+  };
 }

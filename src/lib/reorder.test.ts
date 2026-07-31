@@ -111,6 +111,53 @@ describe("reconcileReorder", () => {
     expect(result.skippedLines).toEqual([]);
   });
 
+  // Regression — order PG-2026-017 (2026-07-31). An order placed before the
+  // catalog re-import references variants the backend has since deleted. The
+  // stock map comes back WITHOUT them, which used to read as "unknown -> fail
+  // open", so the line was pushed to the cart and Medusa 400'd
+  // ("Variants … do not exist"), 500ing the whole reorder. A resolved catalog
+  // lookup that omits the variant is proof it is gone, not proof of nothing.
+  it("marks a variant missing from a RESOLVED catalog as discontinued, never adds it", () => {
+    const lines = [line({ variantId: "v-dead", quantity: 10, name: "Premium Mailer Box" })];
+    const stockMap = stock([["v-alive", { purchasable: true, available: 50 }]]);
+
+    const result = reconcileReorder(lines, stockMap, [], true);
+
+    expect(result.linesToAdd).toEqual([]);
+    expect(result.discontinuedLines).toEqual([
+      { variantId: "v-dead", name: "Premium Mailer Box" },
+    ]);
+    expect(result.skippedLines).toEqual([]);
+  });
+
+  it("still fails open when the catalog lookup itself failed (unresolved)", () => {
+    const lines = [line({ variantId: "v-unknown", quantity: 3 })];
+
+    const result = reconcileReorder(lines, new Map(), [], false);
+
+    expect(result.linesToAdd).toEqual([
+      { variantId: "v-unknown", name: line().name, addQuantity: 3, existingQuantity: 0 },
+    ]);
+    expect(result.discontinuedLines).toEqual([]);
+  });
+
+  it("adds the surviving lines of a partially-discontinued order", () => {
+    const lines = [
+      line({ variantId: "v-alive", quantity: 4, name: "RSC Carton" }),
+      line({ variantId: "v-dead", quantity: 9, name: "Folding Carton (FMCG)" }),
+    ];
+    const stockMap = stock([["v-alive", { purchasable: true, available: 50 }]]);
+
+    const result = reconcileReorder(lines, stockMap, [], true);
+
+    expect(result.linesToAdd).toEqual([
+      { variantId: "v-alive", name: "RSC Carton", addQuantity: 4, existingQuantity: 0 },
+    ]);
+    expect(result.discontinuedLines).toEqual([
+      { variantId: "v-dead", name: "Folding Carton (FMCG)" },
+    ]);
+  });
+
   it("never flags unmanaged/backorder variants (available: null) as short", () => {
     const lines = [line({ variantId: "v1", quantity: 500 })];
     const stockMap = stock([["v1", { purchasable: true, available: null }]]);
@@ -129,6 +176,7 @@ describe("buildReorderMessage", () => {
       linesToAdd: [{ variantId: "v1", name: "X", addQuantity: 2, existingQuantity: 0 }],
       cappedLines: [],
       skippedLines: [],
+      discontinuedLines: [],
     });
     expect(message).toBeNull();
   });
@@ -143,6 +191,7 @@ describe("buildReorderMessage", () => {
         { variantId: "v2", name: "Y", requestedQuantity: 10, addedQuantity: 4 },
       ],
       skippedLines: [],
+      discontinuedLines: [],
     });
     expect(message).toBe(
       "2 items added. 1 item was reduced to the quantity we have available.",
@@ -154,9 +203,40 @@ describe("buildReorderMessage", () => {
       linesToAdd: [],
       cappedLines: [],
       skippedLines: [{ variantId: "v1", name: "Food Box" }],
+      discontinuedLines: [],
     });
     expect(message).toBe(
       "1 item is out of stock and was not added: Food Box.",
+    );
+  });
+
+  // Discontinued is a DIFFERENT message from out-of-stock: "out of stock"
+  // implies "check back later", which would be a lie for a product the shop
+  // no longer sells.
+  it("reports discontinued items separately from out-of-stock ones", () => {
+    const message = buildReorderMessage({
+      linesToAdd: [],
+      cappedLines: [],
+      skippedLines: [],
+      discontinuedLines: [{ variantId: "v1", name: "Premium Mailer Box" }],
+    });
+    expect(message).toBe(
+      "1 item is no longer available and was not added: Premium Mailer Box.",
+    );
+  });
+
+  it("reports added alongside discontinued", () => {
+    const message = buildReorderMessage({
+      linesToAdd: [{ variantId: "v1", name: "RSC Carton", addQuantity: 4, existingQuantity: 0 }],
+      cappedLines: [],
+      skippedLines: [],
+      discontinuedLines: [
+        { variantId: "v2", name: "Export / Agro Box" },
+        { variantId: "v3", name: "Folding Carton (FMCG)" },
+      ],
+    });
+    expect(message).toBe(
+      "1 item added. 2 items are no longer available and were not added: Export / Agro Box, Folding Carton (FMCG).",
     );
   });
 });

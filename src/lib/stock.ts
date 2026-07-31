@@ -41,10 +41,32 @@ const STOCK_FIELDS =
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000";
 
+export interface CatalogStock {
+  /** Keyed by VARIANT id. */
+  byVariant: Map<string, StockState>;
+  /**
+   * Did the backend actually answer?
+   *
+   * Callers need this to tell "this variant is GONE" from "we couldn't ask".
+   * Medusa omits unknown/deleted product ids from /store/products silently
+   * (HTTP 200, shorter list) rather than erroring — verified live against this
+   * backend 2026-07-31 — so when `resolved` is true, a variant missing from
+   * `byVariant` is proof it no longer exists. When false, absence proves
+   * nothing. Conflating the two is what made Reorder 500 on orders placed
+   * before the catalog re-import (see lib/reorder.ts `catalogResolved`).
+   */
+  resolved: boolean;
+}
+
 /** Keyed by VARIANT id. Empty map = "unknown", which callers treat as in stock. */
 export async function getStockMap(productIds: string[]): Promise<Map<string, StockState>> {
+  return (await getCatalogStock(productIds)).byVariant;
+}
+
+/** As `getStockMap`, but also reports whether the lookup itself succeeded. */
+export async function getCatalogStock(productIds: string[]): Promise<CatalogStock> {
   const out = new Map<string, StockState>();
-  if (!productIds.length) return out;
+  if (!productIds.length) return { byVariant: out, resolved: true };
   try {
     const params = new URLSearchParams({
       fields: STOCK_FIELDS,
@@ -74,6 +96,7 @@ export async function getStockMap(productIds: string[]): Promise<Map<string, Sto
         if (v.id) out.set(v.id, toStockState(v));
       }
     }
+    return { byVariant: out, resolved: true };
   } catch (err) {
     // Fail OPEN on purpose — see the Global Constraints. Medusa still refuses a
     // genuinely short order at cart.complete(), so the money path stays safe;
@@ -81,7 +104,7 @@ export async function getStockMap(productIds: string[]): Promise<Map<string, Sto
     // backend blip into a total shop outage.
     console.error("[getStockMap] stock unavailable, treating as in stock:", err);
   }
-  return out;
+  return { byVariant: out, resolved: false };
 }
 
 export async function getStockForProduct(productId: string): Promise<Map<string, StockState>> {

@@ -17,8 +17,8 @@ import { shortfall, type StockState } from "@/lib/stock-rules";
  *     A line that cannot fit at all — because it is fully out of stock, or
  *     because the cart already holds everything sellable — is skipped
  *     entirely rather than silently truncated to a diff of 0.
- *  4. Unknown stock (absent from the map) fails OPEN — treated as fully
- *     available, matching the rest of the out-of-stock cycle.
+ *  4. A variant absent from the map is either DISCONTINUED or UNKNOWN, and the
+ *     two must not be conflated — see `catalogResolved` on reconcileReorder.
  */
 export interface ReorderLine {
   variantId: string;
@@ -60,13 +60,34 @@ export interface ReorderSkippedLine {
 export interface ReorderReconciliation {
   linesToAdd: ReorderAddLine[];
   cappedLines: ReorderCappedLine[];
+  /** In the catalog, but not sellable right now (out of stock). */
   skippedLines: ReorderSkippedLine[];
+  /** No longer in the catalog at all — the shop stopped selling it. */
+  discontinuedLines: ReorderSkippedLine[];
 }
 
+/**
+ * @param catalogResolved  Did the live catalog lookup actually succeed?
+ *
+ * This flag is the whole difference between "we know this variant is gone" and
+ * "we couldn't ask", and it is why old orders used to 500 the reorder action.
+ *
+ * TRUE  — the backend answered. A variant missing from `stockByVariant` is
+ *         therefore PROVEN deleted/unpublished (Medusa silently omits dead ids
+ *         from /store/products rather than erroring), so the line is
+ *         discontinued. Adding it would make Medusa reject the whole cart write
+ *         with 400 "Variants … do not exist" — which is exactly what happened
+ *         to orders placed before the catalog re-import.
+ * FALSE — the lookup failed (backend blip). Absence proves nothing, so every
+ *         line fails OPEN and is added, matching the rest of the
+ *         out-of-stock cycle. Medusa still refuses a genuinely short order at
+ *         cart.complete(), so the money path stays safe.
+ */
 export function reconcileReorder(
   orderLines: ReorderLine[],
   stockByVariant: Map<string, StockState>,
   existingCartLines: ExistingCartLine[] = [],
+  catalogResolved = false,
 ): ReorderReconciliation {
   const existingByVariant = new Map(
     existingCartLines.map((l) => [l.variantId, l.quantity]),
@@ -75,6 +96,7 @@ export function reconcileReorder(
   const linesToAdd: ReorderAddLine[] = [];
   const cappedLines: ReorderCappedLine[] = [];
   const skippedLines: ReorderSkippedLine[] = [];
+  const discontinuedLines: ReorderSkippedLine[] = [];
 
   for (const orderLine of orderLines) {
     // Rule 1 — service lines are never reordered.
@@ -84,7 +106,16 @@ export function reconcileReorder(
     const existingQuantity = existingByVariant.get(orderLine.variantId) ?? 0;
     const state = stockByVariant.get(orderLine.variantId);
 
-    // Rule 4 — unknown stock state fails open.
+    // Rule 4 — absent from a RESOLVED catalog means the variant is gone.
+    if (!state && catalogResolved) {
+      discontinuedLines.push({
+        variantId: orderLine.variantId,
+        name: orderLine.name,
+      });
+      continue;
+    }
+
+    // Absent from an UNRESOLVED catalog proves nothing — fail open.
     if (!state) {
       linesToAdd.push({
         variantId: orderLine.variantId,
@@ -132,7 +163,7 @@ export function reconcileReorder(
     });
   }
 
-  return { linesToAdd, cappedLines, skippedLines };
+  return { linesToAdd, cappedLines, skippedLines, discontinuedLines };
 }
 
 /**
@@ -147,8 +178,9 @@ export function buildReorderMessage(result: ReorderReconciliation): string | nul
   const addedCount = result.linesToAdd.length;
   const cappedCount = result.cappedLines.length;
   const skippedCount = result.skippedLines.length;
+  const goneCount = result.discontinuedLines.length;
 
-  if (cappedCount === 0 && skippedCount === 0) return null;
+  if (cappedCount === 0 && skippedCount === 0 && goneCount === 0) return null;
 
   const parts: string[] = [];
 
@@ -170,6 +202,20 @@ export function buildReorderMessage(result: ReorderReconciliation): string | nul
       `${skippedCount} item${skippedCount === 1 ? "" : "s"} ${
         skippedCount === 1 ? "is" : "are"
       } out of stock and ${skippedCount === 1 ? "was" : "were"} not added: ${names}.`,
+    );
+  }
+
+  // Deliberately NOT folded into the out-of-stock sentence: "out of stock"
+  // invites the customer to check back later, which would be untrue for a
+  // product the shop has stopped selling.
+  if (goneCount > 0) {
+    const names = result.discontinuedLines.map((l) => l.name).join(", ");
+    parts.push(
+      `${goneCount} item${goneCount === 1 ? "" : "s"} ${
+        goneCount === 1 ? "is" : "are"
+      } no longer available and ${
+        goneCount === 1 ? "was" : "were"
+      } not added: ${names}.`,
     );
   }
 

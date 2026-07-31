@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk } from "@/lib/medusa";
+import { isDeadVariantError } from "@/lib/cart-errors";
 
 /**
  * Guest cart persistence.
@@ -273,8 +274,17 @@ async function ensureCartId(): Promise<string> {
  * Network blips (no HTTP status — `fetch failed`/ECONNRESET) keep the cookie:
  * the cart is almost certainly fine, and clearing it would lose the shopper's
  * cart over a transient error.
+ *
+ * ⚠ One 4xx is NOT about the cart and must never clear it: Medusa rejects a
+ * write referencing a dead variant with 400 "Variants … do not exist or belong
+ * to a product that is not published". That verdict is about the LINE, not the
+ * cart — the cart is alive and (usually) full of the shopper's other items.
+ * Clearing on it silently emptied a real cart whenever a reorder or customizer
+ * add touched a variant removed by a catalog re-import (found 2026-07-31 while
+ * fixing Reorder). Keep this exception.
  */
 async function clearStaleCartOn4xx(err: unknown): Promise<void> {
+  if (isDeadVariantError(err)) return;
   const status = (err as { status?: number })?.status;
   if (typeof status === "number" && status >= 400 && status < 500) {
     await clearCartId();
