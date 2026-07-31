@@ -35,6 +35,7 @@ import {
 } from "@/lib/cart-handoff";
 import type { CrossSellProduct } from "@/lib/products";
 import type { ActivePromotion } from "@/lib/promotions";
+import { promoOffer, promoScope } from "@/lib/promo-copy";
 
 export type { CartItem } from "./map-cart";
 
@@ -329,15 +330,21 @@ function CartLine({
               className="flex flex-col items-start gap-2 rounded-option border border-[rgba(180,83,9,0.35)] bg-[rgba(254,243,199,0.5)] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
             >
               <p className="text-sm font-medium text-[#92400e]">
-                {item.name} isn&apos;t available in this quantity.
+                {`${item.name} isn’t available in this quantity.`}
               </p>
               <button
                 type="button"
-                onClick={() => onReduce(shortfallInfo.reduceTo)}
+                onClick={() => onReduce(Math.max(0, shortfallInfo.reduceTo))}
                 disabled={pending}
                 className="inline-flex h-8 shrink-0 items-center rounded-button bg-[#92400e] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#92400e]/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {shortfallInfo.reduceTo === 0
+                {/* reduceTo can be NEGATIVE: Medusa's inventory_quantity is
+                    stocked MINUS reservations, so an item with 12 in stock and
+                    30 already committed to orders reports -18. Testing `=== 0`
+                    let that through and rendered "Reduce to -18" — a quantity
+                    no customer can act on. Anything at or below zero means
+                    there is nothing left to sell, which is a removal. */}
+                {shortfallInfo.reduceTo <= 0
                   ? "Remove item"
                   : `Reduce to ${shortfallInfo.reduceTo}`}
               </button>
@@ -1050,11 +1057,10 @@ export function CartClient({
             <p className="text-base font-bold tracking-wider text-brand">
               {promo.code}
             </p>
+            {/* Same wording as the header promo bar (shared promo-copy
+                helpers) so the two advertised messages can't drift. */}
             <p className="text-xs text-muted">
-              at checkout for{" "}
-              {promo.valueType === "percentage"
-                ? `${promo.value}% off!`
-                : `${formatGhs(promo.value)} off!`}
+              at checkout — enjoy {promoOffer(promo)} {promoScope(promo)}
             </p>
           </div>
         )}

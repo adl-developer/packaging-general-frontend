@@ -37,11 +37,30 @@ declare global {
  */
 export function PwaClient() {
   useEffect(() => {
+    // ⚠ Never register in development. The SW caches /_next/static/* CACHE
+    // FIRST, which is correct in production because Next content-hashes those
+    // filenames — a changed chunk is a new URL. In dev the SAME chunk URL is
+    // reused with different content, so the SW serves stale JavaScript and
+    // your edits silently do not appear. This cost real debugging time twice:
+    // a fixed component kept rendering its old markup with no error anywhere.
+    // Also actively unregister any SW left over from a previous dev session,
+    // otherwise it keeps serving that stale cache forever.
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        // Registration failures (unsupported browser, dev-mode quirks, etc.)
-        // must never break the app — the site works fine with no SW at all.
-      });
+      if (process.env.NODE_ENV === "production") {
+        navigator.serviceWorker.register("/sw.js").catch(() => {
+          // Registration failures (unsupported browser, etc.) must never break
+          // the app — the site works fine with no SW at all.
+        });
+      } else {
+        navigator.serviceWorker
+          .getRegistrations()
+          .then((regs) => regs.forEach((r) => r.unregister()))
+          .catch(() => {});
+        caches
+          ?.keys()
+          .then((keys) => keys.forEach((k) => caches.delete(k)))
+          .catch(() => {});
+      }
     }
 
     function onBeforeInstallPrompt() {
