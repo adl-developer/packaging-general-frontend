@@ -560,10 +560,26 @@ export function CartClient({
   //     the pre-existing server items underneath. The settle subscription
   //     below swaps in the committed truth (or rolls back on failure).
   //  2. Arrived from Add to Cart, commit already settled → adopt its result.
-  //  3. Deep link / reload / back → adopt the streamed server fetch.
+  //  3. Deep link / reload / back / Buy Now's cart-with-notice route → adopt
+  //     the streamed server fetch.
+  //
+  // adoptedRef is latched ONLY once an outcome actually lands (synchronously
+  // for modes 1/2, or inside adoptServerFetch's .then/.catch for mode 3) —
+  // NOT eagerly at the top of the effect. Reason: the header's cart Link
+  // prefetches /cart in the background on every product page. When Buy Now's
+  // server action later mutates the cart and calls revalidatePath("/cart"),
+  // that stale prefetched itemsPromise gets superseded by a second, fresh one
+  // from the same navigation — React swaps props on this ALREADY-MOUNTED
+  // component twice in quick succession. The first effect instance's cleanup
+  // fires (setting its own `alive` false) before its adoptServerFetch promise
+  // resolves. If adoptedRef had already been set eagerly, the second effect
+  // instance (carrying the correct, fresh itemsPromise) would bail out via
+  // the guard below and NEVER adopt anything — hydrated stays false forever
+  // and /cart is stuck on the skeleton (this was the actual, reproduced bug:
+  // console evidence showed exactly this two-promise race). Latching only on
+  // a real outcome lets the second instance retry and complete hydration.
   React.useEffect(() => {
     if (adoptedRef.current) return;
-    adoptedRef.current = true;
     // The synchronous setStates below are deliberate: this adopts a one-shot
     // external snapshot (the optimistic handoff) on mount, and the extra
     // render happens before paint — that's what makes the arrival instant.
@@ -587,6 +603,7 @@ export function CartClient({
       Promise.resolve(itemsPromise)
         .then((server) => {
           if (!alive || addSettledRef.current) return;
+          adoptedRef.current = true;
           seedQty(server);
           // Keep any still-pending optimistic lines on top of the fetched base.
           setItems((xs) => [
@@ -598,25 +615,36 @@ export function CartClient({
         .catch(() => {
           // getCart() already degrades to null internally; this only guards a
           // streaming hiccup. Show the cart rather than a stuck skeleton.
-          if (alive && !addSettledRef.current) setHydrated(true);
+          if (alive && !addSettledRef.current) {
+            adoptedRef.current = true;
+            setHydrated(true);
+          }
         });
     };
 
     const pending = takeOptimisticAdd();
     if (!pending) {
-      adoptServerFetch(); // mode 3
+      adoptServerFetch(); // mode 3 — adoptedRef latches once it resolves
     } else if (pending.result?.ok) {
-      // Mode 2 — commit finished during the navigation hop.
+      // Mode 2 — commit finished during the navigation hop. Synchronous
+      // outcome — safe to latch immediately.
+      adoptedRef.current = true;
       addSettledRef.current = true;
       seedQty(pending.result.items);
       setItems(pending.result.items);
       setHydrated(true);
     } else if (pending.result) {
-      // Mode 2, failed — nothing to show optimistically; explain + fetch base.
+      // Mode 2, failed — nothing to show optimistically; explain + fetch
+      // base. Hydration isn't final until adoptServerFetch resolves, so
+      // adoptedRef latches there, not here.
       setAddFailed(true);
       adoptServerFetch();
     } else {
-      // Mode 1 — instant paint, base merge behind it.
+      // Mode 1 — instant paint, base merge behind it. Already hydrated via
+      // the optimistic items — safe to latch immediately; a cancelled merge
+      // just means the pre-existing lines arrive a little later via
+      // onAddSettled instead.
+      adoptedRef.current = true;
       setItems(pending.optimisticItems);
       setHydrated(true);
       adoptServerFetch();
