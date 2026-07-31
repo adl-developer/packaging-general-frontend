@@ -200,14 +200,29 @@ export function ProductCustomizer({
   // Unknown variant (absent from `stock`) => treat as in stock (fail open).
   const comboStock = combo ? stock[combo.variantId] : undefined;
   const comboOutOfStock = comboStock ? !comboStock.purchasable : false;
+  // The enquiry is read by a human on WhatsApp, so every spec must be the
+  // DISPLAY LABEL, never the option id. For products with real size options
+  // the id happens to be readable ("Small"), but for accessories the size id
+  // IS THE VARIANT ID (see SizeOption.id in lib/products.ts — "legacy/accessory
+  // fallback: the variant id"), which produced messages like
+  // "Size: variant_01KYVJHRMBAHEF48PNX5KCY8YV" — gibberish to the customer and
+  // to whoever answers. Resolve through the option lists; fall back to the raw
+  // value only when no option matches, which is strictly better than nothing.
+  const labelFor = <T extends { id: string; label: string }>(
+    options: readonly T[],
+    id: string,
+  ) => options.find((o) => o.id === id)?.label ?? id;
+
   const enquiryUrl = comboOutOfStock
     ? supportWhatsappUrl(
         outOfStockEnquiry({
           product: product.name,
           specs: [
-            size ? `${labels.size}: ${size}` : null,
-            material ? `${labels.material}: ${material}` : null,
-            printing ? `Printing: ${printing}` : null,
+            size ? `${labels.size}: ${labelFor(product.sizes, size)}` : null,
+            material
+              ? `${labels.material}: ${labelFor(product.materials, material)}`
+              : null,
+            printing ? `Printing: ${labelFor(product.printing, printing)}` : null,
           ].filter((s): s is string => !!s),
           quantity,
         }),
