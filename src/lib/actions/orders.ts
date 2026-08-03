@@ -72,6 +72,12 @@ export interface OrderLookupResult {
     discount_total: number;
     total: number;
   };
+  /** The configured Ghana levy split (VAT / NHIL / GETFund), used to itemise
+   *  `tax_total` on the invoice. Comes from the tax rate that actually charges
+   *  it, so the on-screen invoice matches the emailed one — see the backend's
+   *  `utils/levy-config.ts`. Optional: a response predating the field falls
+   *  back to the statutory Act 1151 values. */
+  levies?: { vat: number; nhil: number; getfund: number } | null;
   /** Carrier tracking block — present once a real fulfillment has been
    *  created with a provider (e.g. Yango). Null for orders still in
    *  pre-fulfillment (e.g. just paid, awaiting production). */

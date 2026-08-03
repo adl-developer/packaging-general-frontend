@@ -91,6 +91,10 @@ interface TrackedOrder {
     discount: number;
     total: number;
   };
+  /** The configured VAT/NHIL/GETFund split, from GET /store/order-lookup.
+   *  Absent on a cached/older response — `buildInvoice` falls back to the
+   *  statutory Act 1151 values, which is what this file used to hard-code. */
+  levies?: { vat: number; nhil: number; getfund: number } | null;
   /** Carrier tracking info from the order's active fulfillment (Yango, etc.).
    *  Null until the fulfillment has been created. */
   carrier: {
@@ -106,23 +110,32 @@ const cardClass = "rounded-card border-2 border-[#e2e1e0] bg-surface";
 /**
  * Build the invoice payload from a looked-up order's REAL totals: subtotal,
  * delivery and total come straight from the order; the single tax_total is
- * split across the Ghana levy lines proportionally (VAT 15 / NHIL 2.5 /
- * GETFund 2.5 of the 20-point bundle), with GETFund taking the rounding
- * remainder so the three lines always sum to the amount actually charged.
- * `totalBeforeTax` is derived as total − tax so any discount is absorbed and
- * the column foots to the total. E-VAT receipt fields stay blank until the
- * backend issues real GRA e-invoicing data.
+ * split across the Ghana levy lines proportionally, with GETFund taking the
+ * rounding remainder so the three lines always sum to the amount actually
+ * charged. `totalBeforeTax` is derived as total − tax so any discount is
+ * absorbed and the column foots to the total. E-VAT receipt fields stay blank
+ * until the backend issues real GRA e-invoicing data.
  *
- * ⚠ This mirrors the backend's `utils/invoice-breakdown.ts`, which computes
- * the same figures for the emailed invoice. Separate repos, no shared module —
- * change both together or the email will disagree with this dialog.
+ * ⚠ The split is now CONFIGURABLE from the admin portal (Settings → Platform)
+ * and arrives on the lookup response as `levies`. This file used to hard-code
+ * 15 / 2.5 / 2.5 over a fixed 20-point denominator, which agreed with the
+ * emailed invoice only by luck; the moment an operator changed the levies, the
+ * two invoices for one order would have disagreed.
+ *
+ * The statutory Act 1151 values remain the FALLBACK, for a response that
+ * predates the field. The denominator is the configured total, never a
+ * hard-coded 20 — a split that no longer sums to 20 would otherwise mis-scale
+ * every line.
  */
 function buildInvoice(order: TrackedOrder): InvoiceData {
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const taxes = order.pricing.taxes;
   const total = order.pricing.total;
-  const vat = round2((taxes * 15) / 20);
-  const nhil = round2((taxes * 2.5) / 20);
+  const levies = order.levies ?? { vat: 15, nhil: 2.5, getfund: 2.5 };
+  const points = levies.vat + levies.nhil + levies.getfund || 20;
+  const vat = round2((taxes * levies.vat) / points);
+  const nhil = round2((taxes * levies.nhil) / points);
+  // Remainder, so the three lines always sum to the tax actually charged.
   const getfund = round2(taxes - vat - nhil);
   return {
     orderNumber: order.number,
@@ -284,6 +297,7 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
       discount: o.totals.discount_total,
       total: o.totals.total,
     },
+    levies: o.levies ?? null,
     carrier: o.carrier
       ? {
           name: carrierLabel(o.carrier.provider_id),
