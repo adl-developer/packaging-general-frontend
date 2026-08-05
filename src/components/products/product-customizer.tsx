@@ -23,7 +23,7 @@ import { SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd } from "@/lib/cart-events";
 import { CartSkeleton } from "@/app/(shop)/cart/cart-skeleton";
 import { ProductGallery } from "@/components/products/product-gallery";
-import { getProductImages } from "@/lib/product-images";
+import { getProductImages, toProductImages } from "@/lib/product-images";
 
 /**
  * Product customizer — Figma frames 404:1371 → 3933:25640 (the "New Product
@@ -230,8 +230,11 @@ export function ProductCustomizer({
     : null;
 
   const images = React.useMemo(
-    () => getProductImages(product.slug, product.name),
-    [product.slug, product.name],
+    () =>
+      product.images.length
+        ? toProductImages(product.images, product.name)
+        : getProductImages(product.slug, product.name),
+    [product.images, product.name, product.slug],
   );
 
   // The action bar is `fixed`, so it covers the last ~70px of the page — which

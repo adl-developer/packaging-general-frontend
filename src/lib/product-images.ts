@@ -27,6 +27,14 @@ export interface ProductImage {
   alt: string;
 }
 
+/** Converts ordered Medusa product-media URLs into gallery-ready images. */
+export function toProductImages(urls: readonly string[], name: string): ProductImage[] {
+  return urls.map((src, i) => ({
+    src,
+    alt: i === 0 ? name : name + " — view " + (i + 1),
+  }));
+}
+
 /** slug → filenames under `public/products/`, in display order.
  *
  *  `box-*` / `prod-accessories` are the client's own photos. `item-*` (except

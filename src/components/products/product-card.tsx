@@ -27,7 +27,10 @@ export function ProductCard({
   product: ProductSummary;
   outOfStock?: boolean;
 }) {
-  const cover = getProductImages(product.slug, product.name)[0];
+  const cover =
+    product.thumbnail ??
+    product.images[0] ??
+    getProductImages(product.slug, product.name)[0]?.src;
   return (
     <div
       className={cn(
@@ -41,8 +44,8 @@ export function ProductCard({
       <div className="relative flex h-52 items-center justify-center overflow-hidden bg-[#f3f4f6]">
         {cover ? (
           <Image
-            src={cover.src}
-            alt={cover.alt}
+            src={cover}
+            alt={product.name}
             fill
             sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
             className={cn("object-cover", outOfStock && "opacity-60")}
