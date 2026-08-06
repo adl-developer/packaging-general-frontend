@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk, createAuthClient, authHeaders } from "@/lib/medusa";
 import { AUTH_COOKIE, getAuthToken } from "@/lib/auth-token";
+import { getCartLineCount } from "./cart";
 import {
   isValidEmail,
   normalizeGhanaPhone,
@@ -479,11 +480,19 @@ export async function requestVerificationEmail(
 export async function confirmEmailVerification(
   email: string,
   token: string
-): Promise<{ ok: boolean; signedIn: boolean; error: string | null }> {
+): Promise<{
+  ok: boolean;
+  signedIn: boolean;
+  /** True when the freshly transferred cart still holds items — i.e. they
+   *  started a Buy Now before verifying, so the card offers to resume it. */
+  pendingOrder: boolean;
+  error: string | null;
+}> {
   if (!email || !token) {
     return {
       ok: false,
       signedIn: false,
+      pendingOrder: false,
       error: "This verification link is invalid or has expired. Please request a new one.",
     };
   }
@@ -499,9 +508,12 @@ export async function confirmEmailVerification(
       await setAuthToken(loginToken);
       await transferGuestCart(loginToken);
       revalidatePath("/", "layout");
-      return { ok: true, signedIn: true, error: null };
+      // Read AFTER the transfer: an item parked by the Buy Now modal before
+      // signup is now on this account's cart.
+      const pendingOrder = (await getCartLineCount()) > 0;
+      return { ok: true, signedIn: true, pendingOrder, error: null };
     }
-    return { ok: true, signedIn: false, error: null };
+    return { ok: true, signedIn: false, pendingOrder: false, error: null };
   } catch (err) {
     const status = (err as { status?: number })?.status;
     const msg = (err as { message?: string })?.message;
@@ -509,6 +521,7 @@ export async function confirmEmailVerification(
       return {
         ok: false,
         signedIn: false,
+        pendingOrder: false,
         error:
           msg ||
           "This verification link is invalid or has expired. Please request a new one.",
@@ -518,6 +531,7 @@ export async function confirmEmailVerification(
     return {
       ok: false,
       signedIn: false,
+      pendingOrder: false,
       error: "We couldn't verify your email right now. Please try again.",
     };
   }
