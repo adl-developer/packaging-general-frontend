@@ -381,9 +381,11 @@ export function ProductCustomizer({
    * it" pattern above. This is the money path (docs/superpowers/specs/
    * 2026-07-31-buy-now-design.md): where we navigate to depends on the
    * SERVER's view of the cart and the account's saved details, so we must
-   * await the real result before deciding. The `buyNow` server action
-   * re-checks getCustomer() itself — this button only ever renders for a
-   * signed-in customer (isSignedIn prop), but that's display-only.
+   * await the real result before deciding. This function only ever RUNS for
+   * a signed-in customer — `onBuyNowClick` gates on `isSignedIn` before
+   * calling it, regardless of whether the button itself is visible — but
+   * that gating is display-only. The `buyNow` server action re-checks
+   * getCustomer() itself, so that's the actual access control.
    */
   const handleBuyNow = async () => {
     if (pendingKind) return;
