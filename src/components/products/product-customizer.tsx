@@ -354,6 +354,12 @@ export function ProductCustomizer({
    *  modal's sign-in path so Buy Now's navigation lives in exactly one place. */
   const continueToRoute = React.useCallback(
     (route: ContinueRoute, notice?: string) => {
+      // Close the re-click window for the whole client-side navigation: the
+      // modal's sign-in path lands here directly (never through
+      // handleBuyNow), so without this the Buy Now button stays live and a
+      // second click would add the same line again. Idempotent when
+      // handleBuyNow already set it on the signed-in path.
+      setPendingKind("buy");
       // The item is in the cart on every ok branch — bump the header badge the
       // same way the cart-based Add to Cart flow does.
       notifyCartAdd({ lines: 1 });

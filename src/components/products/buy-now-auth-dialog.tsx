@@ -57,7 +57,12 @@ export function BuyNowAuthDialog({
   const panelRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // Blocked while pending (spec §8) — a mid-submit dismiss would unmount
+    // the dialog while the POST is in flight, leaving the page believing
+    // it's signed out while the server has already set the session and
+    // added the line item. A second Buy Now click would then double it.
+    const onKey = (e: KeyboardEvent) =>
+      e.key === "Escape" && !pending && onClose();
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     panelRef.current?.focus();
@@ -65,7 +70,7 @@ export function BuyNowAuthDialog({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [onClose]);
+  }, [onClose, pending]);
 
   // "continue" is a navigation, not a panel — hand the route back exactly once
   // (the effect can re-run on unrelated re-renders).
@@ -85,7 +90,7 @@ export function BuyNowAuthDialog({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: DURATION.fast }}
-        onClick={onClose}
+        onClick={() => !pending && onClose()}
         className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
         role="dialog"
         aria-modal="true"
@@ -120,8 +125,9 @@ export function BuyNowAuthDialog({
             <button
               type="button"
               onClick={onClose}
+              disabled={pending}
               aria-label="Close"
-              className="grid size-8 shrink-0 place-items-center rounded-button text-muted transition-colors hover:bg-line/30 hover:text-brand"
+              className="grid size-8 shrink-0 place-items-center rounded-button text-muted transition-colors hover:bg-line/30 hover:text-brand disabled:cursor-not-allowed disabled:opacity-60"
             >
               <X className="size-4" aria-hidden />
             </button>
