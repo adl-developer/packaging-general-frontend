@@ -39,6 +39,7 @@ export function VerifyEmailCard({
 }) {
   const [phase, setPhase] = React.useState<Phase>("verifying");
   const [signedIn, setSignedIn] = React.useState(false);
+  const [cartHasItems, setCartHasItems] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const fired = React.useRef(false);
 
@@ -51,6 +52,7 @@ export function VerifyEmailCard({
     confirmEmailVerification(email ?? "", token ?? "").then((result) => {
       if (result.ok) {
         setSignedIn(result.signedIn);
+        setCartHasItems(result.cartHasItems);
         setPhase("success");
       } else {
         setError(result.error);
@@ -88,11 +90,22 @@ export function VerifyEmailCard({
                 ) : null}
                 . Any orders you placed with this email have been added to your
                 account.
-                {signedIn ? " You're signed in and ready to go." : ""}
+                {signedIn && cartHasItems
+                  ? " You're signed in, and your cart is ready to check out."
+                  : signedIn
+                    ? " You're signed in and ready to go."
+                    : ""}
               </p>
             </div>
           </div>
-          {signedIn ? (
+          {signedIn && cartHasItems ? (
+            <Link
+              href="/checkout/delivery"
+              className="flex h-11 w-full items-center justify-center rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
+            >
+              Continue to checkout
+            </Link>
+          ) : signedIn ? (
             <Link
               href="/account/orders"
               className="flex h-11 w-full items-center justify-center rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"

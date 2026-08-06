@@ -348,8 +348,11 @@ const BUY_NOW_NOTICE =
  * and whether their account has enough saved to skip straight to payment:
  *
  *   - signed out                     → refused (server-side re-check; the
- *                                       button is never rendered for a guest,
- *                                       but hiding UI is not access control)
+ *                                       button IS rendered for guests now —
+ *                                       a signed-out click opens the auth
+ *                                       modal instead — so this guard is the
+ *                                       actual access control, not defense
+ *                                       in depth over hidden UI)
  *   - cart already had other items   → item added, "cart-with-notice" — the
  *                                       customer reviews everything before
  *                                       paying, never silently charged for
@@ -375,10 +378,19 @@ export async function buyNow(input: BuyNowItem): Promise<BuyNowResult> {
 }
 
 /**
- * Buy Now core. PRECONDITION: a customer session exists for this request —
- * either read from the cookie by buyNow(), or established moments ago by
- * buyNowAuth() via signInCustomer(). Not exported: every caller must come
- * through one of those two doors.
+ * Buy Now core. PRECONDITION: the auth cookie is set for THIS request —
+ * either it was already there when buyNow() read it, or buyNowAuth() just
+ * set it via signInCustomer() moments earlier in the same server action.
+ * This function takes no customer: every downstream call it makes
+ * (getCheckoutPrefill, saveContactInfo, saveDeliveryAddress) re-reads the
+ * cookie itself via getCustomer(). That read-back works because Next's
+ * cookies() proxies a mutable per-request store inside a Server Function —
+ * a set() earlier in the action IS visible to a get() later in the same
+ * request. If that ever stopped holding, the failure is silent: getCustomer()
+ * would return null, isPrefillComplete would be false, and every returning
+ * customer would quietly land on /checkout/delivery instead of
+ * /checkout/payment. Not exported: every caller must come through one of the
+ * two doors above, which are what establish the precondition.
  */
 async function buyNowForSession(input: BuyNowItem): Promise<BuyNowResult> {
   // Cart state and prefill completeness are both resolved BEFORE the add, so
