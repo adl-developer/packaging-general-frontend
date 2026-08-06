@@ -23,7 +23,9 @@ import { SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd } from "@/lib/cart-events";
 import { CartSkeleton } from "@/app/(shop)/cart/cart-skeleton";
 import { ProductGallery } from "@/components/products/product-gallery";
-import { getProductImages } from "@/lib/product-images";
+import { toProductImages } from "@/lib/product-images";
+import { BuyNowAuthDialog } from "./buy-now-auth-dialog";
+import type { ContinueRoute } from "@/lib/buy-now-auth";
 
 /**
  * Product customizer — Figma frames 404:1371 → 3933:25640 (the "New Product
@@ -57,11 +59,11 @@ export function ProductCustomizer({
    *  server/client boundary from the page (Maps don't serialise that way).
    *  A missing key means unknown, which is treated as in stock (fail open). */
   stock: Record<string, StockState>;
-  /** Buy Now is signed-in-only (docs/superpowers/specs/2026-07-31-buy-now-
-   *  design.md §5) — signed OUT customers never see the button at all, not
-   *  shown-and-disabled. This is display-only: the `buyNow` server action
-   *  re-checks getCustomer() itself, so a stale/tampered value here can't
-   *  grant access, only hide a button that would refuse anyway. */
+  /** Selects Buy Now's BEHAVIOUR, not its visibility: the button always
+   *  renders, but a signed-out click opens the auth modal instead of calling
+   *  `buyNow` (spec 2026-08-06). Display-only either way — the `buyNow`
+   *  server action re-checks getCustomer() itself, so a stale or tampered
+   *  value can't grant access. */
   isSignedIn: boolean;
 }) {
   const router = useRouter();
@@ -87,6 +89,9 @@ export function ProductCustomizer({
   // the navigation unmounts this component (and /cart's loading.tsx shows the
   // identical skeleton, so the handoff is seamless).
   const [goingToCart, setGoingToCart] = React.useState(false);
+  // Signed-out Buy Now opens the auth modal instead of refusing
+  // (docs/superpowers/specs/2026-08-06-buy-now-signed-out-design.md).
+  const [authOpen, setAuthOpen] = React.useState(false);
 
   // Warm the cart route (Buy Now lands there) so the navigation is instant.
   React.useEffect(() => {
@@ -230,8 +235,8 @@ export function ProductCustomizer({
     : null;
 
   const images = React.useMemo(
-    () => getProductImages(product.slug, product.name),
-    [product.slug, product.name],
+    () => toProductImages(product.images, product.name),
+    [product.images, product.name],
   );
 
   // The action bar is `fixed`, so it covers the last ~70px of the page — which
@@ -345,14 +350,42 @@ export function ProductCustomizer({
     router.push("/cart");
   };
 
+  /** Where a successful Buy Now goes. Shared by the signed-in path and the
+   *  modal's sign-in path so Buy Now's navigation lives in exactly one place. */
+  const continueToRoute = React.useCallback(
+    (route: ContinueRoute, notice?: string) => {
+      // The item is in the cart on every ok branch — bump the header badge the
+      // same way the cart-based Add to Cart flow does.
+      notifyCartAdd({ lines: 1 });
+
+      if (route === "cart-with-notice") {
+        // Reuses the take-once notice channel the Reorder flow uses to hand a
+        // message to /cart across a client-side navigation (see
+        // lib/reorder-notice.ts + cart-client.tsx's banner) — the mechanism is
+        // generic, not reorder-specific.
+        if (notice) setReorderNotice(notice);
+        router.push("/cart");
+        return;
+      }
+      if (route === "delivery") {
+        router.push("/checkout/delivery");
+        return;
+      }
+      router.push("/checkout/payment");
+    },
+    [router],
+  );
+
   /**
    * Buy Now — deliberately NOT the optimistic "navigate first, commit behind
    * it" pattern above. This is the money path (docs/superpowers/specs/
    * 2026-07-31-buy-now-design.md): where we navigate to depends on the
    * SERVER's view of the cart and the account's saved details, so we must
-   * await the real result before deciding. The `buyNow` server action
-   * re-checks getCustomer() itself — this button only ever renders for a
-   * signed-in customer (isSignedIn prop), but that's display-only.
+   * await the real result before deciding. This function only ever RUNS for
+   * a signed-in customer — `onBuyNowClick` gates on `isSignedIn` before
+   * calling it, regardless of whether the button itself is visible — but
+   * that gating is display-only. The `buyNow` server action re-checks
+   * getCustomer() itself, so that's the actual access control.
    */
   const handleBuyNow = async () => {
     if (pendingKind) return;
@@ -376,31 +409,28 @@ export function ProductCustomizer({
         return;
       }
 
-      // The item is in the cart on every ok branch — bump the header badge
-      // the same way the cart-based Add to Cart flow does.
-      notifyCartAdd({ lines: 1 });
-
-      if (result.route === "cart-with-notice") {
-        // Reuses the same take-once notice channel the Reorder flow uses to
-        // hand a message to /cart across a client-side navigation (see
-        // lib/reorder-notice.ts + cart-client.tsx's banner) — the mechanism
-        // is generic ("show this message once on /cart"), not reorder-
-        // specific, so Buy Now's honesty notice rides the same rail rather
-        // than inventing a second one.
-        setReorderNotice(result.notice);
-        router.push("/cart");
-        return;
-      }
-      if (result.route === "delivery") {
-        router.push("/checkout/delivery");
-        return;
-      }
-      router.push("/checkout/payment");
+      continueToRoute(
+        result.route,
+        result.route === "cart-with-notice" ? result.notice : undefined,
+      );
     } catch (err) {
       console.error("[product-customizer] buyNow failed:", err);
       setError("Something went wrong. Please try again.");
       setPendingKind(null);
     }
+  };
+
+  /** Buy Now's click target. Signed in → straight to the money path. Signed
+   *  out → validate first (no point authenticating for a configuration that
+   *  can't be bought), then open the modal. */
+  const onBuyNowClick = () => {
+    if (isSignedIn) {
+      void handleBuyNow();
+      return;
+    }
+    if (pendingKind) return;
+    if (!validateSelection() || !combo) return;
+    setAuthOpen(true);
   };
 
   // "Step N of M" tracks the furthest section scrolled past the sticky header.
@@ -779,25 +809,41 @@ export function ProductCustomizer({
               )}
               {justAdded ? "Added" : "Add to Cart"}
             </button>
-            {/* Signed-out customers never see Buy Now at all — not shown-
-                and-disabled (spec §5). Add to Cart above stays available to
-                everyone, so nothing is lost. */}
-            {isSignedIn && (
-              <button
-                type="button"
-                onClick={() => void handleBuyNow()}
-                disabled={(hasSizes && !size) || comboOutOfStock}
-                className="order-2 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3 sm:w-auto"
-              >
-                {pendingKind === "buy" && (
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
-                )}
-                Buy Now
-              </button>
-            )}
+            {/* Always rendered, signed in or not — a signed-out click opens the
+                auth modal (spec 2026-08-06) rather than hiding the fast path. */}
+            <button
+              type="button"
+              onClick={onBuyNowClick}
+              disabled={(hasSizes && !size) || comboOutOfStock}
+              className="order-2 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3 sm:w-auto"
+            >
+              {pendingKind === "buy" && (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              )}
+              Buy Now
+            </button>
           </div>
         </div>
       </div>
+
+      {authOpen && combo && (
+        <BuyNowAuthDialog
+          item={{
+            variantId: combo.variantId,
+            quantity,
+            setupPrintingValue:
+              selectedPrinting && selectedPrinting.setupFee > 0
+                ? selectedPrinting.id
+                : undefined,
+            notes: notes || undefined,
+          }}
+          onClose={() => setAuthOpen(false)}
+          onContinue={(route, notice) => {
+            setAuthOpen(false);
+            continueToRoute(route, notice);
+          }}
+        />
+      )}
     </div>
   );
 }

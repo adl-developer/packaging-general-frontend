@@ -76,6 +76,8 @@ export interface Product {
   startingPrice: number;
   moq: number;
   features: string[];
+  images: string[];
+  thumbnail: string | null;
   optionLabels: OptionLabels;
   sizes: SizeOption[];
   /** Empty for products without material choices (accessories, legacy). */
@@ -167,6 +169,8 @@ export const products: Product[] = [
     startingPrice: 3.5,
     moq: 50,
     features: ["3 sizes available", "3 print options"],
+    images: [],
+    thumbnail: null,
     optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
@@ -183,6 +187,8 @@ export const products: Product[] = [
     startingPrice: 4.2,
     moq: 50,
     features: ["3 sizes available", "3 print options"],
+    images: [],
+    thumbnail: null,
     optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
@@ -199,6 +205,8 @@ export const products: Product[] = [
     startingPrice: 2.8,
     moq: 100,
     features: ["3 sizes available", "3 print options"],
+    images: [],
+    thumbnail: null,
     optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
@@ -215,6 +223,8 @@ export const products: Product[] = [
     startingPrice: 6.5,
     moq: 50,
     features: ["3 sizes available", "3 print options"],
+    images: [],
+    thumbnail: null,
     optionLabels: DEFAULT_OPTION_LABELS,
     sizes: CARTON_SIZES,
     materials: CARTON_MATERIALS,
@@ -238,6 +248,8 @@ export interface ProductSummary {
   startingPrice: number;
   moq: number;
   features: string[];
+  images: string[];
+  thumbnail: string | null;
   /** Every sellable variant id in this family — used to look up live stock
    *  (keyed by variant id) and decide the family's out-of-stock badge. Empty
    *  for the static sample fallback, which `familyOutOfStock` correctly reads
@@ -295,6 +307,10 @@ function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
     startingPrice: prices.length ? Math.min(...prices) : 0,
     moq: typeof meta.moq === "number" ? meta.moq : Number(meta.moq) || 0,
     features: Array.isArray(meta.features) ? (meta.features as string[]) : [],
+    images: (p.images ?? [])
+      .map((image) => image.url)
+      .filter((url): url is string => !!url),
+    thumbnail: p.thumbnail ?? null,
     variantIds: (p.variants ?? []).map((v) => v.id),
   };
 }
@@ -303,7 +319,7 @@ function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
 // `variants.calculated_price` adds the computed price, `*variants.options` +
 // `variants.options.option.title` expose which option values a variant holds.
 const DETAIL_FIELDS =
-  "id,title,handle,description,metadata,*categories,*variants,variants.calculated_price,*variants.options,variants.options.option.title";
+  "id,title,handle,description,thumbnail,images.url,metadata,*categories,*variants,variants.calculated_price,*variants.options,variants.options.option.title";
 
 /** Fetch a single product by handle (slug) for the detail page. Returns null
  *  on miss or backend error. */
@@ -581,6 +597,8 @@ const SAMPLE_PRODUCTS: ProductSummary[] = products.map((p) => ({
   startingPrice: p.startingPrice,
   moq: p.moq,
   features: p.features,
+  images: [],
+  thumbnail: null,
   // No live variants behind the static fallback — familyOutOfStock([]) is
   // false, so these never show a spurious out-of-stock badge.
   variantIds: [],
@@ -598,7 +616,7 @@ export async function listProducts(): Promise<ProductSummary[]> {
     const { products: live } = await sdk.store.product.list({
       region_id,
       fields:
-        "id,title,handle,description,metadata,*categories,*variants,variants.calculated_price",
+        "id,title,handle,description,thumbnail,images.url,metadata,*categories,*variants,variants.calculated_price",
       limit: 100,
     });
     const browsable = live.filter((p) => !isServiceProduct(p));

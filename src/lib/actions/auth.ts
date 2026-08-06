@@ -49,6 +49,17 @@ export type AuthState = {
   verificationJustSent?: boolean;
 };
 
+/** Result of a sign-in attempt with NO redirect — so callers that must stay
+ *  on the page (the Buy Now modal) can act on it. */
+export type SignInOutcome =
+  | { status: "ok" }
+  | { status: "unverified"; email: string }
+  | { status: "error"; error: string };
+
+/** Result of a signup attempt. There is never a session: new accounts start
+ *  unverified and the backend emails the link. */
+export type SignUpOutcome = { status: "ok" } | { status: "error"; error: string };
+
 // Deliberately generic: confirming "this email is already registered" lets
 // anyone test which emails have accounts (enumeration). Same wording for
 // every signup-conflict path so the response can't be differentiated.
@@ -199,6 +210,100 @@ async function registerCustomer(input: {
 }
 
 /**
+ * Sign-in core: login → verification gate → session cookie → guest-cart
+ * transfer. Deliberately does NOT redirect, so it can be used from a modal
+ * that has to stay put and continue a purchase. `authenticate` adds the
+ * redirect; nothing else about the /sign-in flow changes.
+ */
+export async function signInCustomer(
+  email: string,
+  password: string,
+): Promise<SignInOutcome> {
+  const authClient = createAuthClient();
+
+  let result: string | { location: string } | Record<string, unknown>;
+  try {
+    result = await authClient.auth.login("customer", "emailpass", {
+      email,
+      password,
+    });
+  } catch {
+    return { status: "error", error: "Invalid email or password." };
+  }
+  if (typeof result !== "string") {
+    return {
+      status: "error",
+      error: "Additional verification is required to sign in.",
+    };
+  }
+
+  // Verification gate — only reached with CORRECT credentials, so showing the
+  // "not verified" state here reveals nothing a wrong-password attempt could
+  // learn (those get the generic error above). Legacy accounts have no
+  // email_verified flag and pass straight through; only an explicit `false`
+  // (accounts created since the verification feature) blocks.
+  try {
+    const { customer } = await sdk.store.customer.retrieve(
+      { fields: "+metadata" },
+      authHeaders(result),
+    );
+    if (customer?.metadata?.email_verified === false) {
+      return { status: "unverified", email };
+    }
+  } catch {
+    // Transient failure — fall through and sign in as before; the gate only
+    // acts on a positive "unverified" read.
+  }
+
+  await setAuthToken(result);
+  await transferGuestCart(result);
+  revalidatePath("/", "layout");
+  return { status: "ok" };
+}
+
+/**
+ * Signup core shared by the auth card and the Buy Now modal: validate, then
+ * register. No session is issued — the account starts unverified and the
+ * backend emails the verification link (see the note in authenticate()).
+ */
+export async function signUpCustomer(input: {
+  fullName: string;
+  email: string;
+  password: string;
+  company?: string;
+  phoneLocal?: string;
+}): Promise<SignUpOutcome> {
+  const { email, password } = input;
+  const fullName = input.fullName.trim();
+  const company = (input.company ?? "").trim();
+  const phoneLocal = (input.phoneLocal ?? "").trim();
+
+  if (!fullName) return { status: "error", error: "Please enter your full name." };
+  if (!isValidEmail(email)) return { status: "error", error: EMAIL_ERROR };
+  if (password.length < 8) {
+    return { status: "error", error: "Password must be at least 8 characters." };
+  }
+
+  const [firstName, ...rest] = fullName.split(/\s+/);
+  const lastName = rest.join(" ");
+  // Phone is optional on signup, but when given it must be a real Ghana
+  // number — normalized to E.164 so SMS notifications work later.
+  const phone = phoneLocal ? normalizeGhanaPhone(phoneLocal) : undefined;
+  if (phone === null) return { status: "error", error: PHONE_ERROR };
+
+  const outcome = await registerCustomer({
+    email,
+    password,
+    firstName,
+    lastName: lastName || undefined,
+    company: company || undefined,
+    phone,
+  });
+  if ("error" in outcome) return { status: "error", error: outcome.error };
+  return { status: "ok" };
+}
+
+/**
  * Single entry point for the auth card. Branches on the hidden `mode` field so
  * one `useActionState` drives both the Sign In and Sign Up tabs.
  */
@@ -214,77 +319,29 @@ export async function authenticate(
     return fieldError("Email and password are required.");
   }
 
-  const authClient = createAuthClient();
-
   if (mode === "signup") {
-    const fullName = String(formData.get("name") || "").trim();
-    const company = String(formData.get("company") || "").trim();
-    const phoneLocal = String(formData.get("phone") || "").trim();
-    if (!fullName) return fieldError("Please enter your full name.");
-    if (!isValidEmail(email)) return fieldError(EMAIL_ERROR);
-    if (password.length < 8) {
-      return fieldError("Password must be at least 8 characters.");
-    }
-    const [firstName, ...rest] = fullName.split(/\s+/);
-    const lastName = rest.join(" ");
-    // Phone is optional on signup, but when given it must be a real Ghana
-    // number — normalized to E.164 so SMS notifications work later.
-    const phone = phoneLocal ? normalizeGhanaPhone(phoneLocal) : undefined;
-    if (phone === null) return fieldError(PHONE_ERROR);
-
-    const outcome = await registerCustomer({
+    const outcome = await signUpCustomer({
+      fullName: String(formData.get("name") || ""),
       email,
       password,
-      firstName,
-      lastName: lastName || undefined,
-      company: company || undefined,
-      phone,
+      company: String(formData.get("company") || ""),
+      phoneLocal: String(formData.get("phone") || ""),
     });
-    if ("error" in outcome) {
-      return fieldError(outcome.error);
-    }
-
+    if (outcome.status === "error") return fieldError(outcome.error);
     // New accounts start unverified (the backend's customer.created subscriber
     // marks them and emails the link). No session until the email is verified
-    // — signing them in here would make the login gate below meaningless.
+    // — signing them in here would make the login gate meaningless.
     return { error: null, unverifiedEmail: email, verificationJustSent: true };
   }
 
   // mode === "signin"
-  let result: string | { location: string } | Record<string, unknown>;
-  try {
-    result = await authClient.auth.login("customer", "emailpass", {
-      email,
-      password,
-    });
-  } catch {
-    return fieldError("Invalid email or password.");
-  }
-  if (typeof result !== "string") {
-    return fieldError("Additional verification is required to sign in.");
+  const outcome = await signInCustomer(email, password);
+  if (outcome.status === "error") return fieldError(outcome.error);
+  if (outcome.status === "unverified") {
+    return { error: null, unverifiedEmail: outcome.email };
   }
 
-  // Verification gate — only reached with CORRECT credentials, so showing the
-  // "not verified" state here reveals nothing a wrong-password attempt could
-  // learn (those get the generic error above). Legacy accounts have no
-  // email_verified flag and pass straight through; only an explicit `false`
-  // (accounts created since the verification feature) blocks.
-  try {
-    const { customer } = await sdk.store.customer.retrieve(
-      { fields: "+metadata" },
-      authHeaders(result)
-    );
-    if (customer?.metadata?.email_verified === false) {
-      return { error: null, unverifiedEmail: email };
-    }
-  } catch {
-    // Transient failure — fall through and sign in as before; the gate only
-    // acts on a positive "unverified" read.
-  }
-
-  await setAuthToken(result);
-  await transferGuestCart(result);
-  revalidatePath("/", "layout");
+  // redirect() throws NEXT_REDIRECT, so it must live outside any try/catch.
   redirect("/account/orders");
 }
 
