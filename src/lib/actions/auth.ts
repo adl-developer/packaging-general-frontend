@@ -483,16 +483,19 @@ export async function confirmEmailVerification(
 ): Promise<{
   ok: boolean;
   signedIn: boolean;
-  /** True when the freshly transferred cart still holds items — i.e. they
-   *  started a Buy Now before verifying, so the card offers to resume it. */
-  pendingOrder: boolean;
+  /** True when the freshly transferred cart holds items. This says nothing
+   *  about *why* — an ordinary Add to Cart signup looks identical to a Buy
+   *  Now signup here, since the spec deliberately doesn't track Buy Now
+   *  intent through verification. The card uses it only to decide whether
+   *  "Continue to checkout" makes sense as the CTA. */
+  cartHasItems: boolean;
   error: string | null;
 }> {
   if (!email || !token) {
     return {
       ok: false,
       signedIn: false,
-      pendingOrder: false,
+      cartHasItems: false,
       error: "This verification link is invalid or has expired. Please request a new one.",
     };
   }
@@ -510,10 +513,10 @@ export async function confirmEmailVerification(
       revalidatePath("/", "layout");
       // Read AFTER the transfer: an item parked by the Buy Now modal before
       // signup is now on this account's cart.
-      const pendingOrder = (await getCartLineCount()) > 0;
-      return { ok: true, signedIn: true, pendingOrder, error: null };
+      const cartHasItems = (await getCartLineCount()) > 0;
+      return { ok: true, signedIn: true, cartHasItems, error: null };
     }
-    return { ok: true, signedIn: false, pendingOrder: false, error: null };
+    return { ok: true, signedIn: false, cartHasItems: false, error: null };
   } catch (err) {
     const status = (err as { status?: number })?.status;
     const msg = (err as { message?: string })?.message;
@@ -521,7 +524,7 @@ export async function confirmEmailVerification(
       return {
         ok: false,
         signedIn: false,
-        pendingOrder: false,
+        cartHasItems: false,
         error:
           msg ||
           "This verification link is invalid or has expired. Please request a new one.",
@@ -531,7 +534,7 @@ export async function confirmEmailVerification(
     return {
       ok: false,
       signedIn: false,
-      pendingOrder: false,
+      cartHasItems: false,
       error: "We couldn't verify your email right now. Please try again.",
     };
   }
