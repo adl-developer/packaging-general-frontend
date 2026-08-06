@@ -5,11 +5,16 @@ import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk, authHeaders } from "@/lib/medusa";
 import { getCart, getCartLineCount, addConfiguredLineItem } from "./cart";
-import { getCustomer } from "./auth";
+import { getCustomer, signInCustomer, signUpCustomer } from "./auth";
 import { getAuthToken } from "@/lib/auth-token";
 import { getStockMap } from "@/lib/stock";
 import { shortfall } from "@/lib/stock-rules";
 import { decideBuyNowRoute, isPrefillComplete } from "@/lib/buy-now";
+import {
+  parseBuyNowItem,
+  type BuyNowAuthState,
+  type BuyNowItem,
+} from "@/lib/buy-now-auth";
 import {
   isValidEmail,
   normalizeGhanaPhone,
@@ -359,19 +364,23 @@ const BUY_NOW_NOTICE =
  * (addConfiguredLineItem, saveContactInfo, saveDeliveryAddress) — this does
  * NOT touch initiatePaystack's guard chain at all.
  */
-export async function buyNow(input: {
-  variantId: string;
-  quantity: number;
-  setupPrintingValue?: string | null;
-  notes?: string;
-}): Promise<BuyNowResult> {
-  // Server-side auth is mandatory — the button is hidden for guests, but a
-  // hidden button is not access control (spec §5).
+export async function buyNow(input: BuyNowItem): Promise<BuyNowResult> {
+  // Server-side auth is mandatory — the button now renders for guests too
+  // (they get the auth modal), so this is the only real gate.
   const customer = await getCustomer();
   if (!customer) {
     return { ok: false, error: "Please sign in to use Buy Now." };
   }
+  return buyNowForSession(input);
+}
 
+/**
+ * Buy Now core. PRECONDITION: a customer session exists for this request —
+ * either read from the cookie by buyNow(), or established moments ago by
+ * buyNowAuth() via signInCustomer(). Not exported: every caller must come
+ * through one of those two doors.
+ */
+async function buyNowForSession(input: BuyNowItem): Promise<BuyNowResult> {
   // Cart state and prefill completeness are both resolved BEFORE the add, so
   // the routing decision reflects what the customer already had — not the
   // line we're about to add on top of it.
@@ -436,6 +445,79 @@ export async function buyNow(input: {
   }
 
   return { ok: true, route: "payment" };
+}
+
+/**
+ * Buy Now from a signed-OUT product page — see
+ * docs/superpowers/specs/2026-08-06-buy-now-signed-out-design.md.
+ *
+ * One action behind the modal's two tabs. The item payload rides along as
+ * hidden fields so the customer's configuration survives authentication.
+ *
+ *   signin + verified    → session, item added, route handed back
+ *   signin + unverified  → verify panel; nothing added (no session, no
+ *                          confirmed intent yet)
+ *   signup               → account created (unverified, no session) and the
+ *                          item parked in the GUEST cart, which
+ *                          confirmEmailVerification transfers on the verify
+ *                          auto-login
+ */
+export async function buyNowAuth(
+  _prev: BuyNowAuthState,
+  formData: FormData,
+): Promise<BuyNowAuthState> {
+  const parsed = parseBuyNowItem({
+    variantId: formData.get("variantId") as string | null,
+    quantity: formData.get("quantity") as string | null,
+    setupPrintingValue: formData.get("setupPrintingValue") as string | null,
+    notes: formData.get("notes") as string | null,
+  });
+  if (!parsed.ok) return { status: "error", error: parsed.error };
+
+  const mode = String(formData.get("mode") || "signin");
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const password = String(formData.get("password") || "");
+  if (!email || !password) {
+    return { status: "error", error: "Email and password are required." };
+  }
+
+  if (mode === "signup") {
+    const signup = await signUpCustomer({
+      fullName: String(formData.get("name") || ""),
+      email,
+      password,
+      company: String(formData.get("company") || ""),
+      phoneLocal: String(formData.get("phone") || ""),
+    });
+    if (signup.status === "error") {
+      return { status: "error", error: signup.error };
+    }
+
+    // The account exists now, so a failed add must not read as failure of the
+    // signup — report it honestly instead and let them re-add after verifying.
+    let itemSaved = true;
+    try {
+      await addConfiguredLineItem(parsed.item);
+    } catch (err) {
+      console.error("[checkout] buyNowAuth signup add failed:", err);
+      itemSaved = false;
+    }
+    return { status: "pending-verification", email, itemSaved };
+  }
+
+  const outcome = await signInCustomer(email, password);
+  if (outcome.status === "error") {
+    return { status: "error", error: outcome.error };
+  }
+  if (outcome.status === "unverified") {
+    return { status: "unverified", email: outcome.email };
+  }
+
+  const result = await buyNowForSession(parsed.item);
+  if (!result.ok) return { status: "error", error: result.error };
+  return result.route === "cart-with-notice"
+    ? { status: "continue", route: "cart-with-notice", notice: result.notice }
+    : { status: "continue", route: result.route };
 }
 
 interface PaystackSessionData {
