@@ -234,14 +234,14 @@ function VerifyPanel({
           <span>
             A verification link has been sent to <strong>{email}</strong>. Click
             it to activate your account
-            {itemSaved
+            {justSent && itemSaved
               ? " — your item is saved in your cart and you'll be taken straight to checkout."
               : "."}
           </span>
         </p>
       )}
 
-      {!itemSaved && (
+      {justSent && !itemSaved && (
         <p
           role="alert"
           className="flex items-start gap-2 rounded-button border border-rust/30 bg-rust/10 px-3 py-2 text-sm text-rust"
