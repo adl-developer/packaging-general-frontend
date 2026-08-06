@@ -4,16 +4,15 @@ import { ImageIcon, Package } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
 import type { ProductSummary } from "@/lib/products";
-import { getProductImages } from "@/lib/product-images";
 import { cardHoverClass } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 /**
  * Browse/catalog product card — exact specs from Figma frame 389:928.
- * Fed by the live Medusa catalog (`listProducts()`). The card thumbnail uses
- * the first image from the same `product-images` manifest that feeds the
- * customizer's gallery, so a product only needs listing in one place; products
- * with no photo yet keep the placeholder icon.
+ * Fed by the live Medusa catalog (`listProducts()`). The thumbnail is the
+ * product's own `thumbnail` (set in the admin), falling back to its first
+ * image; a product with no media keeps the placeholder icon, which is the
+ * signal to go and upload one.
  *
  * `outOfStock` (derived from live stock — never cached, see `lib/stock.ts`)
  * mutes the image and adds an "Out of stock" pill opposite the category
@@ -27,10 +26,7 @@ export function ProductCard({
   product: ProductSummary;
   outOfStock?: boolean;
 }) {
-  const cover =
-    product.thumbnail ??
-    product.images[0] ??
-    getProductImages(product.slug, product.name)[0]?.src;
+  const cover = product.thumbnail ?? product.images[0];
   return (
     <div
       className={cn(
