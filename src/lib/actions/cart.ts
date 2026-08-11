@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk } from "@/lib/medusa";
 import { isDeadVariantError } from "@/lib/cart-errors";
+import { goodsLines, syncPlatformFee } from "@/lib/platform-fee";
 
 /**
  * Guest cart persistence.
@@ -78,6 +79,41 @@ async function clearCartId() {
   }
 }
 
+/**
+ * Re-derive the platform fee for a cart we have just read or mutated, and
+ * re-fetch only if the fee line actually moved.
+ *
+ * ⚠ This sits on the READ, not on each mutation, for one reason that matters
+ * more than the others: `initiatePaystack` starts by calling `getCart()`, so
+ * the fee is guaranteed fresh at the one moment it becomes a charge — the
+ * Paystack amount is fixed at `initiatePaymentSession` and nothing after that
+ * changes what the customer pays. Everything else it fixes (a cart page that
+ * would otherwise show last interaction's fee) is a bonus.
+ *
+ * The re-fetch is conditional because the steady state — nothing added,
+ * nothing removed — writes nothing and needs no second round trip.
+ */
+async function withPlatformFee(
+  cart: HttpTypes.StoreCart,
+  fields: string,
+): Promise<HttpTypes.StoreCart> {
+  if (cart.completed_at) return cart;
+  const synced = await syncPlatformFee(cart.id);
+  if (!synced?.changed) return cart;
+  try {
+    const { cart: refreshed } = await sdk.store.cart.retrieve(cart.id, {
+      fields,
+    });
+    return refreshed;
+  } catch (err) {
+    // The fee line is right in the database even though we failed to re-read
+    // it, so the customer will be charged correctly; only this render is
+    // stale. Never fail the cart over it.
+    console.error("[cart] re-read after platform-fee sync failed:", err);
+    return cart;
+  }
+}
+
 /** Read the current cart (if any). Returns null when missing, invalid, or completed. */
 export async function getCart(): Promise<HttpTypes.StoreCart | null> {
   const id = await readCartId();
@@ -112,9 +148,9 @@ export async function getCart(): Promise<HttpTypes.StoreCart | null> {
       const { cart: refreshed } = await sdk.store.cart.retrieve(id, {
         fields: CART_FIELDS,
       });
-      return refreshed;
+      return await withPlatformFee(refreshed, CART_FIELDS);
     }
-    return cart;
+    return await withPlatformFee(cart, CART_FIELDS);
   } catch (err) {
     console.error("[cart] retrieve failed; clearing cookie:", err);
     await clearCartId();
@@ -129,10 +165,13 @@ export async function getCartLineCount(): Promise<number> {
   if (!id) return 0;
   try {
     const { cart } = await sdk.store.cart.retrieve(id, {
-      fields: "id,completed_at,items.id",
+      // `items.metadata` is here only to spot the platform-fee line: it is a
+      // charge, not something the customer put in their basket, so counting it
+      // would make the header badge disagree with the cart page.
+      fields: "id,completed_at,items.id,items.metadata",
     });
     if (cart.completed_at) return 0;
-    return cart.items?.length ?? 0;
+    return goodsLines(cart.items ?? []).length;
   } catch {
     // Badge is cosmetic — never let it break the page. Cookie cleanup happens
     // on the next full getCart().
@@ -329,7 +368,10 @@ export async function addLineItem(
   await writeCartId(cartId); // sliding expiry
   revalidatePath("/cart");
   revalidatePath("/checkout");
-  return updated;
+  // The cart the client renders comes straight back from here, so the fee has
+  // to be re-derived now — otherwise the cart page shows the fee for the
+  // basket as it was BEFORE this add.
+  return await withPlatformFee(updated, CART_MUTATION_FIELDS);
 }
 
 /** Hidden service product holding the one-time printing setup fee variants
@@ -421,7 +463,7 @@ export async function addConfiguredLineItem(input: {
   await writeCartId(cartId); // sliding expiry
   revalidatePath("/cart");
   revalidatePath("/checkout");
-  return updated;
+  return await withPlatformFee(updated, CART_MUTATION_FIELDS);
 }
 
 /** Set a line item's quantity. Quantity ≤ 0 removes the line. */
@@ -461,7 +503,7 @@ export async function updateLineItemQuantity(
   }
   await writeCartId(id); // sliding expiry
   revalidatePath("/cart");
-  return updated;
+  return updated ? await withPlatformFee(updated, CART_MUTATION_FIELDS) : null;
 }
 
 export async function removeLineItem(
@@ -485,7 +527,7 @@ export async function removeLineItem(
   }
   await writeCartId(id); // sliding expiry
   revalidatePath("/cart");
-  return updated;
+  return updated ? await withPlatformFee(updated, CART_MUTATION_FIELDS) : null;
 }
 
 /** Empty the cart by deleting every line item. Keeps the cart id so the guest

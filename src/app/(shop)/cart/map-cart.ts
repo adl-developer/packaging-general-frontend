@@ -1,4 +1,5 @@
 import type { HttpTypes } from "@medusajs/types";
+import { isPlatformFeeLine } from "@/lib/platform-fee";
 
 /** Ghana VAT 15% + NHIL 2.5% + GETFund 2.5% on the same base = 20% flat
  *  (VAT Act 2025, Act 1151, effective 1 Jan 2026 — matches the backend tax
@@ -25,8 +26,13 @@ export interface CartItem {
   taxRate: number;
   quantity: number;
   productSlug?: string;
-  /** Service lines (one-time printing setup fee): fixed qty, no edit link. */
+  /** Service lines (printing setup fee, platform fee): fixed qty, no edit link. */
   isService: boolean;
+  /** The store's platform fee — a service line, but not a printing charge, so
+   *  it needs its own explanatory copy. Optional so the optimistic lines the
+   *  cart client stages (plain literals, not `mapLineItem` output) don't all
+   *  have to declare it. */
+  isPlatformFee?: boolean;
 }
 
 /** Spec display order for configured packaging lines. */
@@ -36,9 +42,14 @@ const SPEC_OPTIONS = ["Size", "Material", "Printing"] as const;
  *  the server page maps the initial cart, and the client re-maps the cart
  *  returned by the add-to-cart actions after a cross-sell/customizer add. */
 export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
-  const isService = Boolean(
-    (item.product?.metadata as Record<string, unknown> | null)?.service,
-  );
+  // ⚠ The platform fee MUST map as a service line. It is a real cart line
+  // (Medusa charges nothing else), so without this it renders with a quantity
+  // stepper and an edit link — letting a customer set the store's fee to zero,
+  // or to ten times itself, from the cart page.
+  const isPlatformFee = isPlatformFeeLine(item);
+  const isService =
+    isPlatformFee ||
+    Boolean((item.product?.metadata as Record<string, unknown> | null)?.service);
 
   // Preferred: real variant option values (Size / Material / Printing).
   // Accessories carry a "Unit: Roll" option — skipped as noise.
@@ -59,7 +70,9 @@ export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
       : key;
 
   let specs: string[] = [];
-  if (isService) {
+  if (isPlatformFee) {
+    specs = ["Applied once to your order"];
+  } else if (isService) {
     // e.g. "1-Color Print · one-time charge"
     const printType = byOption.get("Printing") ?? item.variant_title;
     specs = printType ? [`${printType} · one-time charge`] : ["One-time charge"];
@@ -83,5 +96,6 @@ export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
     quantity: Number(item.quantity ?? 1),
     productSlug: isService ? undefined : (item.product_handle ?? undefined),
     isService,
+    isPlatformFee,
   };
 }

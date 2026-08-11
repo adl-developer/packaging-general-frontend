@@ -64,6 +64,10 @@ export interface OrderLookupResult {
     notes?: string | null;
     /** One-time fee lines (printing setup) — not the ordered product. */
     is_service?: boolean;
+    /** The store's platform fee. Also a line item — Medusa charges nothing
+     *  else — but shown as a charge row on the invoice, so it is dropped from
+     *  the goods list rather than listed twice. */
+    is_platform_fee?: boolean;
   }[];
   totals: {
     item_total: number;
@@ -71,6 +75,10 @@ export interface OrderLookupResult {
     shipping_total: number;
     discount_total: number;
     total: number;
+    /** ⚠ Already INSIDE `item_total`, not additional to it. Subtract it to get
+     *  the goods subtotal; adding the two double-counts the fee. Absent on a
+     *  response predating the fee, and 0 on orders placed before it. */
+    platform_fee_total?: number;
   };
   /** The configured Ghana levy split (VAT / NHIL / GETFund), used to itemise
    *  `tax_total` on the invoice. Comes from the tax rate that actually charges
@@ -163,7 +171,7 @@ export async function emailInvoice(
       return {
         ok: false,
         error:
-          "Invoice emails are temporarily unavailable. Please try again later.",
+          "Receipt emails are temporarily unavailable. Please try again later.",
       };
     }
     if (status === 404 || status === 400) {
@@ -181,7 +189,7 @@ export async function emailInvoice(
     console.error("[orders] emailInvoice failed:", err);
     return {
       ok: false,
-      error: "We couldn't send the invoice email. Please try again.",
+      error: "We couldn't send the receipt email. Please try again.",
     };
   }
 }
