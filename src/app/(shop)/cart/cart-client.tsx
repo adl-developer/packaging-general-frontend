@@ -353,12 +353,11 @@ function CartLine({
           <div className="flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col gap-2">
               {item.isService ? (
-                // One-time service charge (printing setup, platform fee) —
-                // fixed quantity.
+                // One-time service charge (printing setup) — fixed quantity.
+                // The PLATFORM FEE never reaches here: it is filtered out of
+                // the card list and rendered once beside the total instead.
                 <span className="text-sm text-muted">
-                  {item.isPlatformFee
-                    ? "Service charge — recalculated as your order changes"
-                    : "One-time fee — charged once per print type"}
+                  One-time fee — charged once per print type
                 </span>
               ) : (
                 <>
@@ -465,13 +464,35 @@ export function CartClient({
   const [confirmEmpty, setConfirmEmpty] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
 
+  // ⚠ THE PLATFORM FEE IS A CHARGE, NOT A PRODUCT. It has to be a real cart
+  // line because Medusa has no order-level fee — but the customer didn't
+  // choose it, can't change it, and shouldn't see it sitting among the things
+  // they added. So it is stripped out here and rendered exactly once, beside
+  // the total, in the same family as VAT and delivery.
+  //
+  // Everything about "what is in my cart" — the cards, both counts, the header
+  // badge, the stock guard, the empty-cart test — reads `goods`. Only the
+  // TOTAL reads `items`, because the fee is genuinely part of what will be
+  // charged.
+  const goods = React.useMemo(
+    () => items.filter((x) => !x.isPlatformFee),
+    [items],
+  );
+  const platformFee = React.useMemo(
+    () =>
+      items
+        .filter((x) => x.isPlatformFee)
+        .reduce((sum, x) => sum + lineTotal(x), 0),
+    [items],
+  );
+
   // Keep the header cart badge in sync with the cart's line-item count.
   // Fires once hydrated (real total from server) and whenever the count
   // changes — i.e. on remove, on empty, on cross-sell add, and on quantity
   // drops to 0. Gated on hydrated so the pre-adoption [] can't zero the badge.
   React.useEffect(() => {
-    if (hydrated) notifyCartCount(items.length);
-  }, [items.length, hydrated]);
+    if (hydrated) notifyCartCount(goods.length);
+  }, [goods.length, hydrated]);
 
   // --- Cart guard: layer 1 of the out-of-stock protection ------------------
   // Keyed by VARIANT id (StockState), fetched via /api/stock by PRODUCT id
@@ -857,19 +878,22 @@ export function CartClient({
     });
   };
 
+  // ⚠ Over `items`, not `goods` — the fee IS part of what gets charged.
   const total = items.reduce((sum, x) => sum + lineTotal(x), 0);
 
   // Lines that exceed what's actually sellable — drives the inline warnings
   // and gates the Checkout CTA. Empty when stock is unknown or fine, per the
   // fail-open rule.
-  const shortItems = items.filter((it) => shortfallFor(it) !== null);
+  const shortItems = goods.filter((it) => shortfallFor(it) !== null);
 
   // Still waiting on the first cart snapshot (direct visit, promise pending).
   // The add→cart path adopts its handoff in the mount effect, so this shows
   // for at most one frame there.
   if (!hydrated) return <CartSkeleton />;
 
-  if (items.length === 0)
+  // `goods`, not `items` — a cart holding nothing but a fee line is an empty
+  // cart, and must never offer a checkout that charges a fee on nothing.
+  if (goods.length === 0)
     return (
       <>
         {(addFailed || reorderNotice) && (
@@ -906,7 +930,7 @@ export function CartClient({
             onClick={() => setConfirmEmpty(true)}
             // Also frozen while an add commit is in flight — emptying then
             // would race the commit and resurrect the new line afterwards.
-            disabled={isPending || items.some((x) => isOptimisticLine(x.id))}
+            disabled={isPending || goods.some((x) => isOptimisticLine(x.id))}
             className="inline-flex h-9 items-center gap-2 rounded-button bg-rust px-3 text-sm font-medium text-white transition-colors hover:bg-rust/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isPending ? (
@@ -922,7 +946,7 @@ export function CartClient({
             Shopping Cart
           </h1>
           <p className="text-base text-muted">
-            {items.length} item{items.length === 1 ? "" : "s"} in your cart
+            {goods.length} item{goods.length === 1 ? "" : "s"} in your cart
           </p>
         </div>
       </div>
@@ -931,7 +955,7 @@ export function CartClient({
       {reorderNotice && <ReorderNoticeBanner message={reorderNotice} />}
 
       <div className="flex flex-col gap-4">
-        {items.map((item) => (
+        {goods.map((item) => (
           <CartLine
             key={item.id}
             item={item}
@@ -981,11 +1005,11 @@ export function CartClient({
             Order Summary
           </h2>
           <p className="text-sm text-muted">
-            {items.length} item{items.length === 1 ? "" : "s"}
+            {goods.length} item{goods.length === 1 ? "" : "s"}
           </p>
         </div>
         <ul className="flex flex-col gap-1.5">
-          {items.map((item) => (
+          {goods.map((item) => (
             <li
               key={item.id}
               className="flex items-baseline justify-between gap-3 text-sm"
@@ -997,6 +1021,17 @@ export function CartClient({
             </li>
           ))}
         </ul>
+        {/* The fee's one appearance: a charge line under the items, above the
+            total — where a shopper looks for VAT and delivery, not among the
+            things they chose. Hidden entirely when no fee is configured. */}
+        {platformFee > 0 && (
+          <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3 text-sm">
+            <span className="text-muted">Platform Fee</span>
+            <span className="shrink-0 font-medium text-brand tabular-nums">
+              {formatGhs(platformFee)}
+            </span>
+          </div>
+        )}
         <div className="flex flex-col gap-1 border-t border-line pt-3">
           <div className="flex items-center justify-between">
             <span className="text-base font-semibold text-brand">
@@ -1072,7 +1107,7 @@ export function CartClient({
       <ConfirmDialog
         open={confirmEmpty}
         title="Empty your cart?"
-        description={`You will remove all ${items.length} item${items.length === 1 ? "" : "s"} from your cart. This action cannot be undone.`}
+        description={`You will remove all ${goods.length} item${goods.length === 1 ? "" : "s"} from your cart. This action cannot be undone.`}
         confirmLabel="Empty Cart"
         onConfirm={doEmptyCart}
         onCancel={() => setConfirmEmpty(false)}
