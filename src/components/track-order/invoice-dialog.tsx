@@ -17,16 +17,22 @@ import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { emailInvoice } from "@/lib/actions/orders";
 
 /**
- * Invoice dialog — Figma frame 452:12223 (mobile). Centered scrollable modal
+ * Receipt dialog — Figma frame 452:12223 (mobile). Centered scrollable modal
  * with company header, Bill To, itemized breakdown, total card, E-VAT receipt
- * info + QR code, and Download / Email Invoice actions.
+ * info + QR code, and Download / Email Receipt actions.
  *
  * Download opens a print-friendly copy (the browser's print dialog offers
- * "Save as PDF"). Email Invoice posts to the backend, which mails the order's
+ * "Save as PDF"). Email Receipt posts to the backend, which mails the order's
  * own email address.
  *
- * ⚠ The emailed invoice (backend `modules/email/templates/order-invoice.ts`)
- * mirrors this layout section for section. Change one, change the other.
+ * ⚠ TWO mirrors of this layout exist and all three must move together: the
+ * emailed receipt (backend `modules/email/templates/order-invoice.ts`) and the
+ * admin portal's `components/orders/order-receipt-view.tsx`.
+ *
+ * ⚠ The customer-facing COPY says "Receipt" (2026-08-11); this file, its
+ * identifiers and the `?invoice=1` param still say invoice, deliberately —
+ * every receipt already emailed and every QR already printed encodes that
+ * param, so renaming it would break links that are in customers' hands.
  */
 
 /** One invoiced line — every charged line, fee/service lines included, so the
@@ -77,6 +83,31 @@ export interface InvoiceData {
    *  scan reopens this invoice. Empty until the backend supplies it. */
   qrPayload: string;
 }
+
+/**
+ * ⚠⚠ THE RECEIPT QR IS TURNED OFF (client decision, 2026-08-11).
+ *
+ * Flip this to `true` to restore it on the storefront. The backend has its own
+ * switch — `RECEIPT_QR_ENABLED` in `src/utils/invoice-qr.ts` — which covers
+ * the emailed receipt AND the admin portal's copy. Both must be flipped
+ * together or the customer's on-screen receipt and their emailed one disagree.
+ *
+ * WHY IT IS OFF: the client's reading of GRA guidance is that a business under
+ * the GH¢750k turnover threshold doesn't need the QR yet.
+ *
+ * ⚠ That reason is about the **E-VAT fiscal QR**, which we have never issued —
+ * the E-VAT block below is still all "—" pending GRA onboarding. THIS QR is our
+ * own convenience feature (it encodes the signed `?t=…` link so a customer can
+ * reopen the receipt on a phone). Removing it discharges no compliance
+ * obligation and creates none. It is off because the client asked for it.
+ *
+ * `qrPayload` is still populated on `InvoiceData` — the value is the receipt's
+ * deep link, used elsewhere, and removing it would be a wider change than the
+ * one that was asked for.
+ */
+// Annotated `boolean` so the guard below doesn't read as dead code to
+// TypeScript and lint while the flag is off.
+const RECEIPT_QR_ENABLED: boolean = false;
 
 type EmailStatus =
   | { state: "idle" }
@@ -153,7 +184,7 @@ export function InvoiceDialog({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close invoice"
+              aria-label="Close receipt"
               className="absolute right-3 top-3 grid size-8 place-items-center rounded-button text-brand/70 transition-colors hover:bg-line/30 hover:text-brand"
             >
               <X className="size-4" aria-hidden />
@@ -166,7 +197,7 @@ export function InvoiceDialog({
                   className="flex items-center gap-2 text-2xl font-semibold text-brand"
                 >
                   <FileText className="size-6 text-rust" aria-hidden />
-                  Invoice
+                  Receipt
                 </h2>
                 <p className="text-sm text-muted">
                   Order {invoice.orderNumber}
@@ -186,7 +217,7 @@ export function InvoiceDialog({
                 </div>
                 <div className="mt-6 flex flex-col gap-1 text-right">
                   <h3 className="text-lg font-semibold text-brand">
-                    Invoice Details
+                    Receipt Details
                   </h3>
                   <p className="text-sm text-muted">
                     Order #: {invoice.orderNumber}
@@ -331,13 +362,13 @@ export function InvoiceDialog({
                     value={invoice.eVat.lineItemCount}
                   />
                 </dl>
-                {invoice.qrPayload && (
+                {RECEIPT_QR_ENABLED && invoice.qrPayload && (
                   <div className="mt-6 flex flex-col items-center gap-2">
                     <div className="grid size-[165px] place-items-center rounded-card border border-[#c4bcb0] bg-white p-3">
                       <InvoiceQr payload={invoice.qrPayload} />
                     </div>
                     <p className="text-xs text-muted">
-                      Scan to open this invoice on your phone
+                      Scan to open this receipt on your phone
                     </p>
                   </div>
                 )}
@@ -350,7 +381,7 @@ export function InvoiceDialog({
                   className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-button bg-brand px-4 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
                 >
                   <Download className="size-4" aria-hidden />
-                  Download Invoice
+                  Download Receipt
                 </button>
                 <button
                   type="button"
@@ -367,10 +398,10 @@ export function InvoiceDialog({
                     <Mail className="size-4" aria-hidden />
                   )}
                   {emailStatus.state === "sent"
-                    ? "Invoice Sent"
+                    ? "Receipt Sent"
                     : emailStatus.state === "sending"
                       ? "Sending…"
-                      : "Email Invoice"}
+                      : "Email Receipt"}
                 </button>
                 {emailStatus.state === "sent" && (
                   <p
@@ -379,7 +410,7 @@ export function InvoiceDialog({
                   >
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
                     <span>
-                      Invoice emailed to {invoice.billTo.email}. Check your
+                      Receipt emailed to {invoice.billTo.email}. Check your
                       inbox (and spam folder).
                     </span>
                   </p>
@@ -440,15 +471,18 @@ function esc(value: string): string {
 }
 
 /**
- * Open a clean, print-friendly copy of the invoice and trigger the browser's
+ * Open a clean, print-friendly copy of the receipt and trigger the browser's
  * print dialog — every browser offers "Save as PDF" there, which doubles as
  * the download. Fully client-side; no PDF dependency or backend round-trip.
+ *
+ * ⚠ The admin portal prints the same sheet (`order-receipt-view.tsx`). Staff
+ * and customer must be able to produce the same document.
  */
 function printInvoice(invoice: InvoiceData) {
   const w = window.open("", "_blank");
   if (!w) {
     // Popup blocked — nothing else we can do client-side.
-    alert("Please allow popups for this site to download the invoice.");
+    alert("Please allow popups for this site to download the receipt.");
     return;
   }
 
@@ -464,7 +498,7 @@ function printInvoice(invoice: InvoiceData) {
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Invoice ${esc(invoice.orderNumber)} — Packaging General</title>
+<title>Receipt ${esc(invoice.orderNumber)} — Packaging General</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: Inter, system-ui, -apple-system, sans-serif; color: #3d3428; margin: 0; padding: 32px; background: #fff; }
@@ -493,7 +527,7 @@ function printInvoice(invoice: InvoiceData) {
       <p class="muted">Accra, Ghana</p>
     </div>
     <div style="text-align:right">
-      <h1>Invoice</h1>
+      <h1>Receipt</h1>
       <p>Order #: ${esc(invoice.orderNumber)}</p>
       <p>Date: ${esc(invoice.invoiceDate || "—")}</p>
     </div>
@@ -587,7 +621,7 @@ function InvoiceQr({ payload }: { payload: string }) {
       viewBox={`0 0 ${qr.size} ${qr.size}`}
       className="size-full"
       shapeRendering="crispEdges"
-      aria-label="QR code — scan to open this invoice"
+      aria-label="QR code — scan to open this receipt"
       role="img"
     >
       <path d={qr.d} fill="#3d3428" />

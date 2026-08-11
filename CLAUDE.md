@@ -44,6 +44,26 @@ Flow: `/checkout` → `/checkout/delivery` → `/checkout/payment` → Paystack 
 - ⚠ **The dashboard Callback URL rejects `localhost`**, so the post-payment redirect only lands correctly on the **deployed** storefront — run end-to-end payment tests there, not locally. (A per-tx env patch to set the callback URL was built then reverted — **don't re-propose it unprompted**.)
 - `CART_FIELDS` in `cart.ts` must include `*payment_collection,payment_collection.payment_sessions` (the `*relation,relation.subfield` two-field pattern — `*relation.subfield` alone strips parent scalars).
 
+## ⚠ Platform fee — a cart LINE ITEM (2026-08-10)
+
+The store's platform fee is not a total; Medusa has no order-level fee, so the backend
+charges it as a line item flagged `metadata.pg_platform_fee`. Helpers: `src/lib/platform-fee.ts`.
+
+- **`getCart()` syncs it** (`withPlatformFee` in `lib/actions/cart.ts`) and re-fetches
+  only when the backend reports `changed`. ⚠⚠ **`initiatePaystack` begins by calling
+  `getCart()` — that is the money guarantee.** Paystack's amount is fixed at
+  `initiatePaymentSession`; if that call order ever changes, the sync needs its own
+  explicit call there. Cart mutations sync too, but only so the cart page isn't showing
+  the previous basket's fee.
+- ⚠ **`mapLineItem` marks it `isService`** — without that it renders with a quantity
+  stepper and edit link, i.e. the customer can set the store's fee to zero.
+- ⚠ It is inside `cart.item_total` / `order.totals.item_total`, **not additional to it**.
+  The checkout Order Summary lists it as an item and so still foots; the **invoice**
+  gives it its own row, so `buildInvoice` subtracts it from Subtotal and drops the line
+  from `invoiceLines`. Doing one without the other double-counts it.
+- Reorder and the header badge exclude it automatically (no `variant_id`, and
+  `goodsLines`).
+
 ## ⚠ Cart page — user-requested deviations from Figma (preserve these)
 
 Frames 404:1984 / 452:9255 / 452:9905. Apply these instead of the raw Figma layout:

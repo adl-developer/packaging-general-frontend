@@ -353,9 +353,12 @@ function CartLine({
           <div className="flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col gap-2">
               {item.isService ? (
-                // One-time service charge (printing setup) — fixed quantity.
+                // One-time service charge (printing setup, platform fee) —
+                // fixed quantity.
                 <span className="text-sm text-muted">
-                  One-time fee — charged once per print type
+                  {item.isPlatformFee
+                    ? "Service charge — recalculated as your order changes"
+                    : "One-time fee — charged once per print type"}
                 </span>
               ) : (
                 <>

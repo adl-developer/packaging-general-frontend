@@ -85,7 +85,11 @@ interface TrackedOrder {
   pricing: {
     itemName: string;
     itemQty: string;
+    /** ⚠ `item_total` — INCLUDES the platform fee, which is a line item. */
     itemPrice: number;
+    /** The platform fee charged on this order (0 when none). Part of
+     *  `itemPrice`, not additional to it. */
+    platformFee: number;
     fees: number;
     taxes: number;
     discount: number;
@@ -148,8 +152,11 @@ function buildInvoice(order: TrackedOrder): InvoiceData {
     },
     lines: order.invoiceLines,
     charges: {
-      subtotal: order.pricing.itemPrice,
-      platformFee: 0,
+      // The fee rides inside `item_total` because it is a line item; pull it
+      // back out so the two rows don't double-count it and Subtotal keeps
+      // meaning "goods". Mirrors the backend's `invoiceBreakdown`.
+      subtotal: round2(order.pricing.itemPrice - order.pricing.platformFee),
+      platformFee: order.pricing.platformFee,
       deliveryFee: order.pricing.fees,
       discount: order.pricing.discount,
       totalBeforeTax: round2(total - taxes),
@@ -221,7 +228,7 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
   // Service lines (printing setup fee) are charges, not products — the product
   // card and quantities describe the real goods. Fall back to all items for
   // resilience if the flag is ever absent.
-  const goods = o.items.filter((i) => !i.is_service);
+  const goods = o.items.filter((i) => !i.is_service && !i.is_platform_fee);
   const displayItems = goods.length ? goods : o.items;
   const mainItem = displayItems[0];
   const extraCount = displayItems.length - 1;
@@ -268,23 +275,30 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
     // the amounts sum to item_total (the invoice's Subtotal). Amount is
     // unit_price × quantity — `item.total` carries tax and would double-count
     // against the levy lines below it.
-    invoiceLines: o.items.map((item) => {
-      const opts = item.options ?? {};
-      const specs = item.is_service
-        ? "One-time printing setup fee"
-        : ([opts["Size"], opts["Material"], opts["Printing"]]
-            .filter((s): s is string => Boolean(s) && s !== "—")
-            .join(" • ") ||
-          item.variant_title ||
-          "");
-      return {
-        name: item.title || "Item",
-        specs,
-        quantity: `${item.quantity}`,
-        unitPrice: item.unit_price,
-        amount: item.unit_price * item.quantity,
-      };
-    }),
+    //
+    // ⚠ The PLATFORM FEE is the one line excluded, because it has its own
+    // charge row below Subtotal and Subtotal now has it subtracted out (see
+    // `buildInvoice`). Listing it here as well would show it twice. Mirrors
+    // the emailed invoice in `api/store/order-lookup/email/route.ts`.
+    invoiceLines: o.items
+      .filter((item) => !item.is_platform_fee)
+      .map((item) => {
+        const opts = item.options ?? {};
+        const specs = item.is_service
+          ? "One-time printing setup fee"
+          : ([opts["Size"], opts["Material"], opts["Printing"]]
+              .filter((s): s is string => Boolean(s) && s !== "—")
+              .join(" • ") ||
+            item.variant_title ||
+            "");
+        return {
+          name: item.title || "Item",
+          specs,
+          quantity: `${item.quantity}`,
+          unitPrice: item.unit_price,
+          amount: item.unit_price * item.quantity,
+        };
+      }),
     invoiceUrl: o.invoice_url ?? "",
     pricing: {
       itemName:
@@ -292,6 +306,7 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
         (extraCount > 0 ? ` +${extraCount} more` : ""),
       itemQty: `${totalQty} ${totalQty === 1 ? "unit" : "units"}`,
       itemPrice: o.totals.item_total,
+      platformFee: Number(o.totals.platform_fee_total ?? 0),
       fees: o.totals.shipping_total,
       taxes: o.totals.tax_total,
       discount: o.totals.discount_total,
@@ -521,7 +536,7 @@ export function TrackOrder({
         className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background px-4 text-sm font-medium text-brand transition-colors hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-background sm:w-auto"
       >
         <Download className="size-4" aria-hidden />
-        View Invoice
+        View Receipt
       </button>
     </>
   );
