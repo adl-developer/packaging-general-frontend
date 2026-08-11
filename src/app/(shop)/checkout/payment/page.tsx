@@ -15,6 +15,7 @@ import {
 } from "@/components/checkout/order-summary";
 import { PaymentMethod } from "@/components/checkout/payment-method";
 import { getCart } from "@/lib/actions/cart";
+import { goodsLines, platformFeeTotal } from "@/lib/platform-fee";
 
 export const metadata: Metadata = {
   title: "Payment",
@@ -48,13 +49,21 @@ export default async function PaymentPage({
 
   const { error } = await searchParams;
 
-  const items: OrderLineItem[] = (cart.items ?? []).map((line) => ({
+  // ⚠ The platform fee is a cart LINE (Medusa has no order-level fee) but it
+  // is a charge, not something the customer chose — so it is pulled out of the
+  // item list and out of Subtotal, and rendered as its own row beside delivery
+  // and VAT. Doing one without the other double-counts it. See
+  // `lib/platform-fee.ts`.
+  const items: OrderLineItem[] = goodsLines(cart.items ?? []).map((line) => ({
     id: line.id,
     name: line.product_title ?? line.title ?? "Item",
     units: line.quantity,
     price: line.total ?? line.subtotal ?? 0,
   }));
-  const subtotal = cart.item_total ?? cart.subtotal ?? 0;
+  const platformFee = platformFeeTotal(cart);
+  const subtotal =
+    Math.round(((cart.item_total ?? cart.subtotal ?? 0) - platformFee) * 100) /
+    100;
   const total = cart.total ?? 0;
   const discount = Number(cart.discount_total ?? 0);
   const shipping = Number(cart.shipping_total ?? cart.shipping_subtotal ?? 0);
@@ -77,6 +86,7 @@ export default async function PaymentPage({
         <OrderSummary
           items={items}
           subtotal={subtotal}
+          platformFee={platformFee}
           total={total}
           discount={discount}
           shipping={shipping}

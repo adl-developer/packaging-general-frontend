@@ -17,8 +17,12 @@ export interface OrderLineItem {
 }
 
 interface OrderSummaryProps {
+  /** Goods only — the platform fee is a charge row, not an item. */
   items: OrderLineItem[];
+  /** Goods subtotal, with the platform fee already taken out. */
   subtotal: number;
+  /** The store's platform fee (0 when none is configured — the row hides). */
+  platformFee?: number;
   total: number;
   deliveryAddress: string;
   /** Promotion code currently applied to the cart (cart.promotions). */
@@ -38,6 +42,7 @@ function Divider() {
 export function OrderSummary({
   items,
   subtotal,
+  platformFee = 0,
   total,
   deliveryAddress,
   appliedCode,
@@ -98,6 +103,14 @@ export function OrderSummary({
               <span className="font-medium text-plum">
                 −{formatGhs(discount)}
               </span>
+            </div>
+          )}
+          {/* Sits with delivery and VAT, not with the items — it is a charge
+              on the order, not something the customer added. */}
+          {platformFee > 0 && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">Platform Fee</span>
+              <span className="text-brand">{formatGhs(platformFee)}</span>
             </div>
           )}
           <div className="flex items-center justify-between text-sm">

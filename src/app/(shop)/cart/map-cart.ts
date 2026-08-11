@@ -42,10 +42,12 @@ const SPEC_OPTIONS = ["Size", "Material", "Printing"] as const;
  *  the server page maps the initial cart, and the client re-maps the cart
  *  returned by the add-to-cart actions after a cross-sell/customizer add. */
 export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
-  // ⚠ The platform fee MUST map as a service line. It is a real cart line
-  // (Medusa charges nothing else), so without this it renders with a quantity
-  // stepper and an edit link — letting a customer set the store's fee to zero,
-  // or to ten times itself, from the cart page.
+  // The platform fee is a real cart line — Medusa has no order-level fee — but
+  // it is a CHARGE, not a product. The cart page filters it out of the item
+  // cards entirely and renders it once beside the total, with VAT and
+  // delivery. `isService` stays true as a belt-and-braces guard: if it ever
+  // did reach a card, it must not come with a quantity stepper and an edit
+  // link, which would let a customer re-price the store's own fee.
   const isPlatformFee = isPlatformFeeLine(item);
   const isService =
     isPlatformFee ||
@@ -70,9 +72,7 @@ export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
       : key;
 
   let specs: string[] = [];
-  if (isPlatformFee) {
-    specs = ["Applied once to your order"];
-  } else if (isService) {
+  if (isService) {
     // e.g. "1-Color Print · one-time charge"
     const printType = byOption.get("Printing") ?? item.variant_title;
     specs = printType ? [`${printType} · one-time charge`] : ["One-time charge"];

@@ -55,13 +55,21 @@ charges it as a line item flagged `metadata.pg_platform_fee`. Helpers: `src/lib/
   `initiatePaymentSession`; if that call order ever changes, the sync needs its own
   explicit call there. Cart mutations sync too, but only so the cart page isn't showing
   the previous basket's fee.
-- ⚠ **`mapLineItem` marks it `isService`** — without that it renders with a quantity
-  stepper and edit link, i.e. the customer can set the store's fee to zero.
+- ⚠⚠ **IT IS NEVER PRESENTED AS A PRODUCT** (client, 2026-08-11). It is a charge, in the
+  same family as VAT/NHIL and delivery, and belongs beside the total — never in an item
+  list, never in an item count, never with a stepper or a delete button. It was briefly
+  shipped as a cart card and rejected. Concretely: `cart-client.tsx` derives `goods`
+  (everything except the fee) and uses it for the cards, **both** item counts, the
+  header badge, the stock guard and the empty-cart test — only `total` reads `items`;
+  the checkout page and the emails do the equivalent.
 - ⚠ It is inside `cart.item_total` / `order.totals.item_total`, **not additional to it**.
-  The checkout Order Summary lists it as an item and so still foots; the **invoice**
-  gives it its own row, so `buildInvoice` subtracts it from Subtotal and drops the line
-  from `invoiceLines`. Doing one without the other double-counts it.
-- Reorder and the header badge exclude it automatically (no `variant_id`, and
+  Anything that shows it as its own row MUST also subtract it from Subtotal, and drop
+  the line from its item list. Doing one without the other double-counts it. This
+  applies to the cart summary, the checkout Order Summary, the invoice (`buildInvoice` +
+  `invoiceLines`), the order-confirmation email and the receipt builder.
+- `mapLineItem` still marks it `isService` as a belt-and-braces guard — it should never
+  reach a cart card, but if it did it must not come with a quantity stepper.
+- Reorder and `getCartLineCount` exclude it automatically (no `variant_id`, and
   `goodsLines`).
 
 ## ⚠ Cart page — user-requested deviations from Figma (preserve these)
