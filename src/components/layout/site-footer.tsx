@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
+import { getFooterHoursLines } from "@/lib/site-content";
 import { supportWhatsappUrl } from "@/lib/whatsapp";
 
 // Neutral opener — deliberately not page-aware. A footer button is a
@@ -46,8 +47,16 @@ function LinkList({
   );
 }
 
+/** The footer's original static hours — still shown until business hours are
+ *  configured in the admin portal (Settings → Business Hours), so the footer
+ *  never goes blank on a store that has not saved any. */
+const STATIC_HOURS_LINES = [
+  "Mon - Fri: 8:00 AM - 6:00 PM (GMT)",
+  "Sat: 9:00 AM - 2:00 PM (GMT)",
+];
+
 /** Global site footer (Figma: 4-column + business hours + copyright). */
-export function SiteFooter() {
+export async function SiteFooter() {
   // supportWhatsappUrl returns null when NEXT_PUBLIC_SUPPORT_WHATSAPP is
   // unset/blank. The heading + sub-line + button are ONE CTA unit: the
   // sub-line ("Chat with our support team") is a verbal promise the button
@@ -57,6 +66,9 @@ export function SiteFooter() {
   // content (posted opening hours are useful whether or not chat is
   // configured) and always renders regardless.
   const whatsappUrl = supportWhatsappUrl(SUPPORT_MESSAGE);
+  // Admin-configured hours (Settings → Business Hours) win once saved; the
+  // static lines above render until then or when the backend is unreachable.
+  const hoursLines = (await getFooterHoursLines()) ?? STATIC_HOURS_LINES;
 
   return (
     <footer className="mt-auto border-t border-line bg-surface">
@@ -106,10 +118,11 @@ export function SiteFooter() {
               <p className="text-sm font-semibold text-brand">
                 Business Hours
               </p>
-              <p className="text-xs text-muted">
-                Mon - Fri: 8:00 AM - 6:00 PM (GMT)
-              </p>
-              <p className="text-xs text-muted">Sat: 9:00 AM - 2:00 PM (GMT)</p>
+              {hoursLines.map((line) => (
+                <p key={line} className="text-xs text-muted">
+                  {line}
+                </p>
+              ))}
             </div>
           </div>
         </div>

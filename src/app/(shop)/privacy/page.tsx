@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CustomLegalPage } from "@/components/legal/custom-legal";
 import {
   LegalContactCard,
   LegalList,
@@ -8,6 +9,12 @@ import {
   LegalText,
   LegalToc,
 } from "@/components/legal/legal-page";
+import { getCustomLegalDoc } from "@/lib/site-content";
+
+/** Re-render periodically so an admin edit (Settings → Privacy Policy)
+ *  reaches this page without a redeploy; until one is saved, the built-in
+ *  text below renders exactly as before. */
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -31,7 +38,25 @@ const TOC = [
   { id: "changes", label: "Changes" },
 ];
 
-export default function PrivacyPolicyPage() {
+export default async function PrivacyPolicyPage() {
+  // Admin-edited text wins once one has been saved; otherwise (including
+  // backend unreachable) the canonical built-in document below renders.
+  const custom = await getCustomLegalDoc("privacy");
+  if (custom) {
+    return (
+      <CustomLegalPage
+        doc={custom}
+        eyebrow="Privacy"
+        title="Privacy Policy"
+        tocHeading="On this page"
+        contactIntro="To exercise your rights or ask about this policy, reach us at:"
+      />
+    );
+  }
+  return <BuiltInPrivacyPolicy />;
+}
+
+function BuiltInPrivacyPolicy() {
   return (
     <LegalShell
       eyebrow="Privacy"

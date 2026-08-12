@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CustomLegalPage } from "@/components/legal/custom-legal";
 import {
   LegalContactCard,
   LegalList,
@@ -8,6 +9,12 @@ import {
   LegalText,
   LegalToc,
 } from "@/components/legal/legal-page";
+import { getCustomLegalDoc } from "@/lib/site-content";
+
+/** Re-render periodically so an admin edit (Settings → Terms & Conditions)
+ *  reaches this page without a redeploy; until one is saved, the built-in
+ *  text below renders exactly as before. */
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Terms & Conditions",
@@ -35,7 +42,25 @@ const TOC = [
   { id: "law", label: "Governing law" },
 ];
 
-export default function TermsPage() {
+export default async function TermsPage() {
+  // Admin-edited text wins once one has been saved; otherwise (including
+  // backend unreachable) the canonical built-in document below renders.
+  const custom = await getCustomLegalDoc("terms");
+  if (custom) {
+    return (
+      <CustomLegalPage
+        doc={custom}
+        eyebrow="Legal"
+        title="Terms & Conditions"
+        tocHeading="Contents"
+        contactIntro="Questions about these Terms or an order? Reach us at:"
+      />
+    );
+  }
+  return <BuiltInTerms />;
+}
+
+function BuiltInTerms() {
   return (
     <LegalShell
       eyebrow="Legal"

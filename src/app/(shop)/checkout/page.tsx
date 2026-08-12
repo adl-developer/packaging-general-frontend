@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BusinessHoursNotice } from "@/components/checkout/business-hours-notice";
 import { CompanyInfoForm } from "@/components/checkout/company-info-form";
 import { getCheckoutPrefill } from "@/lib/actions/checkout";
 
@@ -14,13 +15,18 @@ export const dynamic = "force-dynamic";
 export default async function CheckoutPage() {
   const prefill = await getCheckoutPrefill();
   return (
-    <CompanyInfoForm
-      initial={{
-        companyName: prefill.companyName,
-        contactPerson: prefill.contactPerson,
-        phone: prefill.contactPhone,
-        email: prefill.email,
-      }}
-    />
+    <>
+      {/* Informational only — never blocks ordering. Renders nothing until
+          business hours are configured in the admin portal. */}
+      <BusinessHoursNotice />
+      <CompanyInfoForm
+        initial={{
+          companyName: prefill.companyName,
+          contactPerson: prefill.contactPerson,
+          phone: prefill.contactPhone,
+          email: prefill.email,
+        }}
+      />
+    </>
   );
 }
