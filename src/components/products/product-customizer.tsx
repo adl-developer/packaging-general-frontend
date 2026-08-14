@@ -11,6 +11,7 @@ import {
   type Product,
 } from "@/lib/products";
 import type { StockState } from "@/lib/stock-rules";
+import { tierFor, tieredUnitPrice } from "@/lib/moq-tiers";
 import { supportWhatsappUrl, outOfStockEnquiry } from "@/lib/whatsapp";
 import { formatGhs } from "@/lib/format";
 import { warmCart } from "@/lib/actions/cart";
@@ -191,7 +192,13 @@ export function ProductCustomizer({
   // Live selection → variant + pricing.
   const combo = resolveCombo(product, size, material, printing);
   const selectedPrinting = product.printing.find((p) => p.id === printing);
-  const unitPrice = combo?.unitPrice ?? 0;
+  const baseUnitPrice = combo?.unitPrice ?? 0;
+  // MOQ tiers scale the variant's own price by quantity bracket. ⚠ This is a
+  // PREVIEW — the backend's /store/carts/:id/moq-tiers sync (run on every
+  // getCart) is what actually charges it, with the same rounding, so the two
+  // agree line for line.
+  const activeTier = tierFor(product.tiers, quantity);
+  const unitPrice = tieredUnitPrice(baseUnitPrice, product.tiers, quantity);
   const setupFee = selectedPrinting?.setupFee ?? 0;
   const estimatedTotal = unitPrice * quantity + setupFee;
 
@@ -690,6 +697,42 @@ export function ProductCustomizer({
                     }}
                     className="h-9 w-full rounded-button border-2 border-input bg-surface px-3 text-sm text-brand focus-visible:border-accent focus-visible:outline-none"
                   />
+                  {/* Volume-pricing ladder — only for tiered products. Prices
+                      are the CURRENT combo's, so switching size/material
+                      re-prices the whole ladder. The active bracket is
+                      highlighted so the price jump on a quantity change is
+                      explained rather than surprising. */}
+                  {product.tiers.length > 0 && combo && combo.unitPrice > 0 && (
+                    <div className="flex flex-col gap-1 rounded-option border border-line px-3.5 py-3 text-sm">
+                      <span className="pb-1 font-semibold text-brand">
+                        Volume pricing
+                      </span>
+                      {product.tiers.map((t) => {
+                        const isActive = t === activeTier;
+                        return (
+                          <span
+                            key={`${t.minQuantity}`}
+                            className={cn(
+                              "flex justify-between",
+                              isActive ? "font-semibold text-brand" : "text-muted",
+                            )}
+                          >
+                            <span>{t.label}</span>
+                            <span>
+                              {formatGhs(
+                                tieredUnitPrice(
+                                  combo.unitPrice,
+                                  product.tiers,
+                                  t.minQuantity,
+                                ),
+                              )}
+                              /unit
+                            </span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                   {combo && combo.unitPrice > 0 && (
                     <div className="flex flex-col gap-1 rounded-option border border-line px-3.5 py-3 text-sm">
                       <span className="flex justify-between text-muted">
@@ -698,6 +741,12 @@ export function ProductCustomizer({
                         </span>
                         <span>{formatGhs(unitPrice * quantity)}</span>
                       </span>
+                      {activeTier && activeTier.priceMultiplier !== 1 && (
+                        <span className="flex justify-between text-muted">
+                          <span>Volume price · {activeTier.label}</span>
+                          <span>{formatGhs(unitPrice)}/unit</span>
+                        </span>
+                      )}
                       {setupFee > 0 && (
                         <span className="flex justify-between text-muted">
                           <span>One-time printing setup</span>

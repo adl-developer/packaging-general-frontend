@@ -2,9 +2,10 @@ import { SectionHeading, SectionSubtitle } from "./section-heading";
 import { Reveal } from "@/components/motion/reveal";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
 import { CategoryCard } from "@/components/products/category-card";
-import { SHOP_CATEGORIES } from "@/lib/categories";
+import { getShopCategories } from "@/lib/categories";
 
-export function ProductCategories() {
+export async function ProductCategories() {
+  const categories = await getShopCategories();
   return (
     <section className="bg-background">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
@@ -18,7 +19,7 @@ export function ProductCategories() {
         </Reveal>
 
         <Stagger className="mx-auto grid max-w-4xl grid-cols-1 gap-6 sm:grid-cols-2">
-          {SHOP_CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <StaggerItem key={c.slug} className="h-full">
               <CategoryCard category={c} />
             </StaggerItem>

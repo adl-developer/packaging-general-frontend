@@ -10,6 +10,7 @@
 
 import type { HttpTypes } from "@medusajs/types";
 import { sdk } from "@/lib/medusa";
+import { parseMoqTiers, type MoqTier } from "@/lib/moq-tiers";
 
 export interface SizeOption {
   /** Option value, e.g. "Small" (legacy/accessory fallback: the variant id). */
@@ -89,6 +90,10 @@ export interface Product {
   printing: PrintingOption[];
   /** Lookup table mapping option selections → variant id + unit price. */
   combos: VariantCombo[];
+  /** Quantity-bracket price multipliers (metadata.tiers). Empty = flat
+   *  pricing. The customizer PREVIEWS these; the backend's
+   *  /store/carts/:id/moq-tiers sync is what charges them. */
+  tiers: MoqTier[];
 }
 
 /** Find the variant for a (size, material, printing) selection. Products
@@ -177,6 +182,7 @@ export const products: Product[] = [
     materialFacets: [],
     printing: CARTON_PRINTING,
     combos: [],
+    tiers: [],
   },
   {
     id: "2",
@@ -195,6 +201,7 @@ export const products: Product[] = [
     materialFacets: [],
     printing: CARTON_PRINTING,
     combos: [],
+    tiers: [],
   },
   {
     id: "3",
@@ -213,6 +220,7 @@ export const products: Product[] = [
     materialFacets: [],
     printing: CARTON_PRINTING,
     combos: [],
+    tiers: [],
   },
   {
     id: "4",
@@ -231,6 +239,7 @@ export const products: Product[] = [
     materialFacets: [],
     printing: CARTON_PRINTING,
     combos: [],
+    tiers: [],
   },
 ];
 
@@ -360,6 +369,10 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
   const summary = toSummary(p);
   const meta = (p.metadata ?? {}) as Record<string, unknown>;
   const variants = p.variants ?? [];
+
+  // Quantity price tiers — every product has carried `tiers` since the
+  // catalog import; it became non-empty on 2026-08-14 (admin MOQ Tiers).
+  const tiers = parseMoqTiers(meta.tiers);
 
   // Display labels for the option sections ("Width"/"Colour"/"Window" …) —
   // mirrored by the catalog import; option TITLES stay Size/Material.
@@ -508,6 +521,7 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
     materialFacets,
     printing,
     combos,
+    tiers,
   };
 }
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { SHOP_CATEGORIES } from "@/lib/categories";
+import { getShopCategories } from "@/lib/categories";
 import { CategoryCard } from "@/components/products/category-card";
 import { Reveal } from "@/components/motion/reveal";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
@@ -13,11 +13,13 @@ export const metadata: Metadata = {
   alternates: { canonical: "/products" },
 };
 
-/** The browse page shows ONLY the 4 top-level categories (manager's flow).
- *  Each card leads to its category page of product cards — except RSC
- *  Cartons, which is one configurable product and links straight to its
- *  customizer. */
-export default function ProductsPage() {
+/** The browse page shows the top-level categories (manager's flow), LIVE
+ *  from Medusa since 2026-08-14 — the admin portal's Categories subtab
+ *  controls them. Each card leads to its category page of product cards; a
+ *  single-product category (RSC Cartons) links straight to its customizer.
+ *  Rules in `lib/shop-categories.ts`. */
+export default async function ProductsPage() {
+  const categories = await getShopCategories();
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
       <div>
@@ -42,7 +44,7 @@ export default function ProductsPage() {
       </Reveal>
 
       <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        {SHOP_CATEGORIES.map((c) => (
+        {categories.map((c) => (
           <StaggerItem key={c.slug} className="h-full">
             <CategoryCard category={c} />
           </StaggerItem>
