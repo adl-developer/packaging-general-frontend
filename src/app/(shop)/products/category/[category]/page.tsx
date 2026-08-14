@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { categoryBySlug } from "@/lib/categories";
+import { getShopCategoryBySlug } from "@/lib/categories";
 import { listProducts } from "@/lib/products";
 import { getStockMap } from "@/lib/stock";
 import { familyOutOfStock } from "@/lib/stock-rules";
@@ -16,7 +16,7 @@ export async function generateMetadata({
   params: Promise<{ category: string }>;
 }): Promise<Metadata> {
   const { category } = await params;
-  const cat = categoryBySlug(category);
+  const cat = await getShopCategoryBySlug(category);
   if (!cat) return { title: "Category not found" };
   return {
     title: cat.title,
@@ -33,7 +33,9 @@ export default async function CategoryPage({
   params: Promise<{ category: string }>;
 }) {
   const { category } = await params;
-  const cat = categoryBySlug(category);
+  // Live category lookup — a hidden or deleted category 404s rather than
+  // rendering a stale card's copy. `cat` is non-null past notFound().
+  const cat = await getShopCategoryBySlug(category);
   if (!cat) notFound();
 
   const all = await listProducts();

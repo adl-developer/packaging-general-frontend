@@ -72,6 +72,43 @@ charges it as a line item flagged `metadata.pg_platform_fee`. Helpers: `src/lib/
 - Reorder and `getCartLineCount` exclude it automatically (no `variant_id`, and
   `goodsLines`).
 
+## ⚠ MOQ tiers — quantity-bracketed prices (2026-08-14)
+
+Products may carry `metadata.tiers` (`[{minQuantity, maxQuantity|null, priceMultiplier,
+label}]`, e.g. 50-199 ×1.2 … 1000+ ×0.8). The multiplier scales the selected **variant's
+own price** — per-variant pricing stays the source of truth; no tiers = flat pricing.
+
+- `src/lib/moq-tiers.ts` is the pure, client-safe **display twin** of
+  `backend/src/utils/moq-tiers.ts` — same rules, same 2dp rounding, nothing checks them
+  against each other. The customizer only PREVIEWS tier prices (ladder + active-tier row
+  + optimistic cart lines).
+- **The charge happens server-side**: `withPlatformFee` in `lib/actions/cart.ts` first
+  calls `POST /store/carts/:id/moq-tiers` (which re-prices goods lines via
+  `unit_price` → `is_custom_price`), then the platform-fee sync. ⚠⚠ **Tiers before fee
+  is load-bearing** — the fee's base is `unit_price × quantity`. Same money guarantee as
+  the fee: `initiatePaystack` → `getCart()` runs both syncs before the Paystack amount
+  is fixed.
+- Tier-priced lines are flagged `metadata.pg_moq_tiered` so removing a product's tiers
+  walks its cart lines back to base; unflagged lines are never touched.
+
+## ⚠ Category browse is DATA-DRIVEN (2026-08-14)
+
+The hard-coded `SHOP_CATEGORIES` list is gone. Homepage cards, `/products` and
+`/products/category/[handle]` render live Medusa categories (admin portal → Products →
+Categories subtab). All display rules live in the pure, tested `src/lib/shop-categories.ts`;
+`src/lib/categories.ts` is the fetch edge (5-min cache, static fallback when the backend
+is unreachable). `categoryBySlug` is now **async `getShopCategoryBySlug`**.
+
+- A category renders only when active AND it has ≥1 published product; a single-product
+  category links straight to that product (this is how RSC Cartons' card → customizer
+  works now — a data rule, not a special case).
+- ⚠ Products match categories **by name**; a rename can hide a category for up to
+  ~5 min while the two caches roll over (hidden, not broken).
+- ⚠ Rank ties fall back to the canonical handle order — the imported categories all
+  have rank 0, and a plain rank sort would reshuffle the homepage alphabetically.
+- ⚠ The canonical card copy in `shop-categories.ts` is duplicated in the admin's
+  prefill (`admin/src/lib/category-canonical.ts`); stored category data wins over both.
+
 ## ⚠ Cart page — user-requested deviations from Figma (preserve these)
 
 Frames 404:1984 / 452:9255 / 452:9905. Apply these instead of the raw Figma layout:
