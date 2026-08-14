@@ -80,15 +80,41 @@ async function clearCartId() {
 }
 
 /**
- * Re-derive the platform fee for a cart we have just read or mutated, and
- * re-fetch only if the fee line actually moved.
+ * Bring a cart's MOQ-tier line prices into agreement with each product's
+ * `metadata.tiers` (backend: `/store/carts/:id/moq-tiers`). Same never-throws
+ * posture as `syncPlatformFee`: a tier that won't sync must not block a
+ * checkout — the customer is then charged whatever the lines already say,
+ * which fails toward the base price.
+ */
+async function syncMoqTiers(cartId: string): Promise<boolean> {
+  try {
+    const { moq_tiers } = await sdk.client.fetch<{
+      moq_tiers: { changed: boolean };
+    }>(`/store/carts/${cartId}/moq-tiers`, { method: "POST" });
+    return moq_tiers?.changed === true;
+  } catch (err) {
+    console.error("[moq-tiers] sync failed:", err);
+    return false;
+  }
+}
+
+/**
+ * Re-derive the server-computed charges — MOQ tier prices, then the platform
+ * fee — for a cart we have just read or mutated, and re-fetch only if a line
+ * actually moved. (Named for the fee it started with; since 2026-08-14 it
+ * also runs the tier sync.)
+ *
+ * ⚠ TIERS FIRST, FEE SECOND — the order is load-bearing. The fee's base is
+ * `unit_price × quantity` over the goods lines, so it must be computed from
+ * the tier-adjusted prices; running it first would charge a fee on prices the
+ * tier sync was about to change.
  *
  * ⚠ This sits on the READ, not on each mutation, for one reason that matters
  * more than the others: `initiatePaystack` starts by calling `getCart()`, so
- * the fee is guaranteed fresh at the one moment it becomes a charge — the
+ * both syncs are guaranteed fresh at the one moment they become a charge — the
  * Paystack amount is fixed at `initiatePaymentSession` and nothing after that
  * changes what the customer pays. Everything else it fixes (a cart page that
- * would otherwise show last interaction's fee) is a bonus.
+ * would otherwise show last interaction's prices) is a bonus.
  *
  * The re-fetch is conditional because the steady state — nothing added,
  * nothing removed — writes nothing and needs no second round trip.
@@ -98,8 +124,9 @@ async function withPlatformFee(
   fields: string,
 ): Promise<HttpTypes.StoreCart> {
   if (cart.completed_at) return cart;
+  const tiersChanged = await syncMoqTiers(cart.id);
   const synced = await syncPlatformFee(cart.id);
-  if (!synced?.changed) return cart;
+  if (!tiersChanged && !synced?.changed) return cart;
   try {
     const { cart: refreshed } = await sdk.store.cart.retrieve(cart.id, {
       fields,
