@@ -262,11 +262,31 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
     },
     products: displayItems.map((item) => {
       const opts = item.options ?? {};
+      // Generic spec lines in canonical order: Size, Material, Printing first,
+      // then remaining titles alphabetically.
+      const legacy = ["Size", "Material", "Printing"];
+      const specEntries: string[] = [];
+      const seen = new Set<string>();
+      for (const key of legacy) {
+        if (opts[key] && opts[key] !== "—") {
+          specEntries.push(opts[key]!);
+          seen.add(key);
+        }
+      }
+      const remaining = Object.keys(opts)
+        .filter((k) => !seen.has(k))
+        .sort((a, b) => a.localeCompare(b));
+      for (const key of remaining) {
+        const val = opts[key];
+        if (val && val !== "—") {
+          specEntries.push(val);
+        }
+      }
       return {
         name: item.title || "Your order",
-        size: opts["Size"] ?? item.variant_title ?? "—",
-        material: opts["Material"] ?? "—",
-        printing: opts["Printing"] ?? "—",
+        size: specEntries.join(" • ") || item.variant_title || "—",
+        material: "—",
+        printing: "—",
         quantity: `${item.quantity} ${item.quantity === 1 ? "unit" : "units"}`,
       };
     }),
@@ -284,13 +304,32 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
       .filter((item) => !item.is_platform_fee)
       .map((item) => {
         const opts = item.options ?? {};
-        const specs = item.is_service
-          ? "One-time printing setup fee"
-          : ([opts["Size"], opts["Material"], opts["Printing"]]
-              .filter((s): s is string => Boolean(s) && s !== "—")
-              .join(" • ") ||
-            item.variant_title ||
-            "");
+        let specs = "";
+        if (item.is_service) {
+          specs = "One-time printing setup fee";
+        } else {
+          // Generic spec lines in canonical order: Size, Material, Printing first,
+          // then remaining titles alphabetically.
+          const legacy = ["Size", "Material", "Printing"];
+          const specEntries: string[] = [];
+          const seen = new Set<string>();
+          for (const key of legacy) {
+            if (opts[key] && opts[key] !== "—") {
+              specEntries.push(opts[key]!);
+              seen.add(key);
+            }
+          }
+          const remaining = Object.keys(opts)
+            .filter((k) => !seen.has(k))
+            .sort((a, b) => a.localeCompare(b));
+          for (const key of remaining) {
+            const val = opts[key];
+            if (val && val !== "—") {
+              specEntries.push(val);
+            }
+          }
+          specs = specEntries.join(" • ") || item.variant_title || "";
+        }
         return {
           name: item.title || "Item",
           specs,
