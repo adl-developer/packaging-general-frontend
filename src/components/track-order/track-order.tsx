@@ -63,9 +63,7 @@ interface TrackedOrder {
    *  Product Information card lists them all. */
   products: {
     name: string;
-    size: string;
-    material: string;
-    printing: string;
+    specs: string;
     quantity: string;
   }[];
   address: string;
@@ -222,6 +220,39 @@ const STEP_META: { title: string; detail: string; Icon: TimelineStep["Icon"] }[]
     },
   ];
 
+/** Build ordered spec entries from an options object.
+ *  Returns [option-title, value] pairs in canonical order:
+ *  Size, Material, Printing first (if present), then remainder alphabetically.
+ *  Values of "—" are filtered out. */
+function orderedSpecEntries(
+  opts: Record<string, string | undefined>,
+): [string, string][] {
+  const legacy = ["Size", "Material", "Printing"];
+  const entries: [string, string][] = [];
+  const seen = new Set<string>();
+
+  for (const key of legacy) {
+    const val = opts[key];
+    if (val && val !== "—") {
+      entries.push([key, val]);
+      seen.add(key);
+    }
+  }
+
+  const remaining = Object.keys(opts)
+    .filter((k) => !seen.has(k))
+    .sort((a, b) => a.localeCompare(b));
+
+  for (const key of remaining) {
+    const val = opts[key];
+    if (val && val !== "—") {
+      entries.push([key, val]);
+    }
+  }
+
+  return entries;
+}
+
 /** Map the real backend lookup result onto the TrackedOrder UI shape. */
 function mapToTracked(o: OrderLookupResult): TrackedOrder {
   const canceled = o.status === "canceled";
@@ -262,31 +293,13 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
     },
     products: displayItems.map((item) => {
       const opts = item.options ?? {};
-      // Generic spec lines in canonical order: Size, Material, Printing first,
-      // then remaining titles alphabetically.
-      const legacy = ["Size", "Material", "Printing"];
-      const specEntries: string[] = [];
-      const seen = new Set<string>();
-      for (const key of legacy) {
-        if (opts[key] && opts[key] !== "—") {
-          specEntries.push(opts[key]!);
-          seen.add(key);
-        }
-      }
-      const remaining = Object.keys(opts)
-        .filter((k) => !seen.has(k))
-        .sort((a, b) => a.localeCompare(b));
-      for (const key of remaining) {
-        const val = opts[key];
-        if (val && val !== "—") {
-          specEntries.push(val);
-        }
-      }
+      const specEntries = orderedSpecEntries(opts);
       return {
         name: item.title || "Your order",
-        size: specEntries.join(" • ") || item.variant_title || "—",
-        material: "—",
-        printing: "—",
+        specs:
+          specEntries.map(([_, val]) => val).join(" • ") ||
+          item.variant_title ||
+          "—",
         quantity: `${item.quantity} ${item.quantity === 1 ? "unit" : "units"}`,
       };
     }),
@@ -308,27 +321,11 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
         if (item.is_service) {
           specs = "One-time printing setup fee";
         } else {
-          // Generic spec lines in canonical order: Size, Material, Printing first,
-          // then remaining titles alphabetically.
-          const legacy = ["Size", "Material", "Printing"];
-          const specEntries: string[] = [];
-          const seen = new Set<string>();
-          for (const key of legacy) {
-            if (opts[key] && opts[key] !== "—") {
-              specEntries.push(opts[key]!);
-              seen.add(key);
-            }
-          }
-          const remaining = Object.keys(opts)
-            .filter((k) => !seen.has(k))
-            .sort((a, b) => a.localeCompare(b));
-          for (const key of remaining) {
-            const val = opts[key];
-            if (val && val !== "—") {
-              specEntries.push(val);
-            }
-          }
-          specs = specEntries.join(" • ") || item.variant_title || "";
+          const specEntries = orderedSpecEntries(opts);
+          specs =
+            specEntries.map(([_, val]) => val).join(" • ") ||
+            item.variant_title ||
+            "";
         }
         return {
           name: item.title || "Item",
@@ -964,9 +961,7 @@ function ProductInformation({
           </p>
           <DetailGrid
             rows={[
-              ["Size:", p.size],
-              ["Material:", p.material],
-              ["Printing:", p.printing],
+              ["Specs:", p.specs],
               ["Quantity:", p.quantity],
             ]}
           />
