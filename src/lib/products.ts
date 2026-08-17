@@ -354,7 +354,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 }
 
 /** A variant's option values keyed by option title (Size/Material/Printing). */
-function variantOptionMap(
+export function variantOptionMap(
   v: HttpTypes.StoreProductVariant,
 ): Record<string, string> {
   const map: Record<string, string> = {};
