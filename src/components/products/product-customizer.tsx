@@ -667,7 +667,7 @@ export function ProductCustomizer({
                         {sectionAttrs.map((attr) => (
                           <div key={attr.name} className="flex flex-col gap-3">
                             <h3 className="text-sm font-semibold text-brand">
-                              {attr.name}
+                              {attr.label ?? attr.name}
                             </h3>
                             <div className="flex flex-col gap-4">
                               {attr.values.map((v) => {

@@ -33,6 +33,8 @@ export type ParsedAttribute = {
   name: string;
   kind: string;
   values: ParsedAttributeValue[];
+  /** Display heading; `name` stays the option title / combo identity. */
+  label?: string;
 };
 
 /** Typed attribute defs from product.metadata.pg_attributes. [] on anything malformed. */
@@ -65,6 +67,9 @@ export function parseAttributes(meta: unknown): ParsedAttribute[] {
       name: a.name.trim(),
       kind: typeof a.kind === "string" ? a.kind : "text",
       values,
+      ...(typeof a.label === "string" && a.label.trim()
+        ? { label: a.label.trim() }
+        : {}),
     });
   }
   return out;
