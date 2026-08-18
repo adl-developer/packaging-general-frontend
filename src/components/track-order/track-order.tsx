@@ -63,9 +63,7 @@ interface TrackedOrder {
    *  Product Information card lists them all. */
   products: {
     name: string;
-    size: string;
-    material: string;
-    printing: string;
+    specs: string;
     quantity: string;
   }[];
   address: string;
@@ -222,6 +220,39 @@ const STEP_META: { title: string; detail: string; Icon: TimelineStep["Icon"] }[]
     },
   ];
 
+/** Build ordered spec entries from an options object.
+ *  Returns [option-title, value] pairs in canonical order:
+ *  Size, Material, Printing first (if present), then remainder alphabetically.
+ *  Values of "—" are filtered out. */
+function orderedSpecEntries(
+  opts: Record<string, string | undefined>,
+): [string, string][] {
+  const legacy = ["Size", "Material", "Printing"];
+  const entries: [string, string][] = [];
+  const seen = new Set<string>();
+
+  for (const key of legacy) {
+    const val = opts[key];
+    if (val && val !== "—") {
+      entries.push([key, val]);
+      seen.add(key);
+    }
+  }
+
+  const remaining = Object.keys(opts)
+    .filter((k) => !seen.has(k))
+    .sort((a, b) => a.localeCompare(b));
+
+  for (const key of remaining) {
+    const val = opts[key];
+    if (val && val !== "—") {
+      entries.push([key, val]);
+    }
+  }
+
+  return entries;
+}
+
 /** Map the real backend lookup result onto the TrackedOrder UI shape. */
 function mapToTracked(o: OrderLookupResult): TrackedOrder {
   const canceled = o.status === "canceled";
@@ -262,11 +293,13 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
     },
     products: displayItems.map((item) => {
       const opts = item.options ?? {};
+      const specEntries = orderedSpecEntries(opts);
       return {
         name: item.title || "Your order",
-        size: opts["Size"] ?? item.variant_title ?? "—",
-        material: opts["Material"] ?? "—",
-        printing: opts["Printing"] ?? "—",
+        specs:
+          specEntries.map(([_, val]) => val).join(" • ") ||
+          item.variant_title ||
+          "—",
         quantity: `${item.quantity} ${item.quantity === 1 ? "unit" : "units"}`,
       };
     }),
@@ -284,13 +317,16 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
       .filter((item) => !item.is_platform_fee)
       .map((item) => {
         const opts = item.options ?? {};
-        const specs = item.is_service
-          ? "One-time printing setup fee"
-          : ([opts["Size"], opts["Material"], opts["Printing"]]
-              .filter((s): s is string => Boolean(s) && s !== "—")
-              .join(" • ") ||
+        let specs = "";
+        if (item.is_service) {
+          specs = "One-time printing setup fee";
+        } else {
+          const specEntries = orderedSpecEntries(opts);
+          specs =
+            specEntries.map(([_, val]) => val).join(" • ") ||
             item.variant_title ||
-            "");
+            "";
+        }
         return {
           name: item.title || "Item",
           specs,
@@ -925,9 +961,7 @@ function ProductInformation({
           </p>
           <DetailGrid
             rows={[
-              ["Size:", p.size],
-              ["Material:", p.material],
-              ["Printing:", p.printing],
+              ["Specs:", p.specs],
               ["Quantity:", p.quantity],
             ]}
           />

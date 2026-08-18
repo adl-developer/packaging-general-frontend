@@ -11,6 +11,11 @@
 import type { HttpTypes } from "@medusajs/types";
 import { sdk } from "@/lib/medusa";
 import { parseMoqTiers, type MoqTier } from "@/lib/moq-tiers";
+import {
+  parseAttributes,
+  type ComboV2,
+  type ParsedAttribute,
+} from "@/lib/attributes";
 
 export interface SizeOption {
   /** Option value, e.g. "Small" (legacy/accessory fallback: the variant id). */
@@ -94,6 +99,12 @@ export interface Product {
    *  pricing. The customizer PREVIEWS these; the backend's
    *  /store/carts/:id/moq-tiers sync is what charges them. */
   tiers: MoqTier[];
+  /** Parsed metadata.pg_attributes (N-axis "Product Variants" model). Empty
+   *  = legacy product — the customizer falls back to sizes/materials/printing. */
+  attributes: ParsedAttribute[];
+  /** Variant lookup keyed by the full N-axis option map. Only populated when
+   *  `attributes` is non-empty; empty otherwise (legacy path uses `combos`). */
+  combosV2: ComboV2[];
 }
 
 /** Find the variant for a (size, material, printing) selection. Products
@@ -183,6 +194,8 @@ export const products: Product[] = [
     printing: CARTON_PRINTING,
     combos: [],
     tiers: [],
+    attributes: [],
+    combosV2: [],
   },
   {
     id: "2",
@@ -202,6 +215,8 @@ export const products: Product[] = [
     printing: CARTON_PRINTING,
     combos: [],
     tiers: [],
+    attributes: [],
+    combosV2: [],
   },
   {
     id: "3",
@@ -221,6 +236,8 @@ export const products: Product[] = [
     printing: CARTON_PRINTING,
     combos: [],
     tiers: [],
+    attributes: [],
+    combosV2: [],
   },
   {
     id: "4",
@@ -240,6 +257,8 @@ export const products: Product[] = [
     printing: CARTON_PRINTING,
     combos: [],
     tiers: [],
+    attributes: [],
+    combosV2: [],
   },
 ];
 
@@ -354,7 +373,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 }
 
 /** A variant's option values keyed by option title (Size/Material/Printing). */
-function variantOptionMap(
+export function variantOptionMap(
   v: HttpTypes.StoreProductVariant,
 ): Record<string, string> {
   const map: Record<string, string> = {};
@@ -513,6 +532,18 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
     }
   }
 
+  // ── New N-axis model (metadata.pg_attributes) — additive only. Legacy
+  // sizes/materials/printing/combos above stay untouched regardless of
+  // whether this parses; `attributes` is [] on anything malformed. ──
+  const attributes = parseAttributes(meta.pg_attributes);
+  const combosV2: ComboV2[] = attributes.length
+    ? variants.map((v) => ({
+        options: variantOptionMap(v),
+        variantId: v.id,
+        unitPrice: v.calculated_price?.calculated_amount ?? 0,
+      }))
+    : [];
+
   return {
     ...summary,
     optionLabels,
@@ -522,6 +553,8 @@ function toFullProduct(p: HttpTypes.StoreProduct): Product {
     printing,
     combos,
     tiers,
+    attributes,
+    combosV2,
   };
 }
 

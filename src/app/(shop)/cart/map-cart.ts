@@ -38,6 +38,38 @@ export interface CartItem {
 /** Spec display order for configured packaging lines. */
 const SPEC_OPTIONS = ["Size", "Material", "Printing"] as const;
 
+/** Build spec lines from a variant's options in a canonical order.
+ *  Pure function: Size, Material, Printing first (legacy stability) if present,
+ *  then remaining titles alphabetically. Each line formatted as "Title: value". */
+export function specLines(
+  byOption: Map<string, string>,
+  labelFor: (key: string) => string,
+): string[] {
+  // Legacy trio in order, then everything else alphabetically.
+  const legacy = ["Size", "Material", "Printing"];
+  const seen = new Set<string>();
+  const lines: string[] = [];
+
+  // Add legacy options in order if present.
+  for (const key of legacy) {
+    if (byOption.has(key)) {
+      lines.push(`${labelFor(key)}: ${byOption.get(key)}`);
+      seen.add(key);
+    }
+  }
+
+  // Add remaining options alphabetically.
+  const remaining = Array.from(byOption.keys())
+    .filter((k) => !seen.has(k))
+    .sort((a, b) => a.localeCompare(b));
+
+  for (const key of remaining) {
+    lines.push(`${labelFor(key)}: ${byOption.get(key)}`);
+  }
+
+  return lines;
+}
+
 /** Map a Medusa cart line → the cart UI's CartItem shape. Pure + client-safe:
  *  the server page maps the initial cart, and the client re-maps the cart
  *  returned by the add-to-cart actions after a cross-sell/customizer add. */
@@ -77,9 +109,7 @@ export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
     const printType = byOption.get("Printing") ?? item.variant_title;
     specs = printType ? [`${printType} · one-time charge`] : ["One-time charge"];
   } else if (byOption.size) {
-    specs = SPEC_OPTIONS.filter((key) => byOption.has(key)).map(
-      (key) => `${labelFor(key)}: ${byOption.get(key)}`,
-    );
+    specs = specLines(byOption, labelFor);
   } else if (item.variant_title && item.variant_title !== "Roll") {
     // Fallback for lines created before variant options were fetched.
     specs = [`Size: ${item.variant_title}`];

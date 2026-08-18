@@ -10,6 +10,11 @@ import {
   type MaterialOption,
   type Product,
 } from "@/lib/products";
+import {
+  resolveOptionsMatch,
+  SECTION_LABELS,
+  type StorefrontSection,
+} from "@/lib/attributes";
 import type { StockState } from "@/lib/stock-rules";
 import { tierFor, tieredUnitPrice } from "@/lib/moq-tiers";
 import { supportWhatsappUrl, outOfStockEnquiry } from "@/lib/whatsapp";
@@ -27,6 +32,11 @@ import { ProductGallery } from "@/components/products/product-gallery";
 import { toProductImages } from "@/lib/product-images";
 import { BuyNowAuthDialog } from "./buy-now-auth-dialog";
 import type { ContinueRoute } from "@/lib/buy-now-auth";
+
+// Canonical section order for attribute-mode products — mirrors
+// SECTION_LABELS' key order (size → material → printing_colour → type →
+// custom). There is no separate SECTION_ORDER export in lib/attributes.ts.
+const SECTION_ORDER = Object.keys(SECTION_LABELS) as StorefrontSection[];
 
 /**
  * Product customizer — Figma frames 404:1371 → 3933:25640 (the "New Product
@@ -73,6 +83,21 @@ export function ProductCustomizer({
     product.materials[0]?.id ?? "",
   );
   const [printing, setPrinting] = React.useState(product.printing[0]?.id ?? "");
+  // N-axis attribute model (Task S2/S3): non-empty `product.attributes` means
+  // this product was authored via the admin "Product Variants" UI and the
+  // customizer renders one picker per attribute instead of the legacy
+  // size/material/printing sections. Legacy products (attributes: []) render
+  // exactly as before — every branch below gates on this flag.
+  const attributeMode = product.attributes.length > 0;
+  const [attrSelection, setAttrSelection] = React.useState<
+    Record<string, string>
+  >(() =>
+    Object.fromEntries(
+      product.attributes
+        .filter((a) => a.values.length > 0)
+        .map((a) => [a.name, a.values[0].id]),
+    ),
+  );
   const [quantity, setQuantity] = React.useState(product.moq || 1);
   const [notes, setNotes] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
@@ -180,18 +205,71 @@ export function ProductCustomizer({
     setMaterial(best.id);
   };
 
+  // ── Attribute-mode (N-axis) helper — sparse-combo availability, same
+  //    spirit as availableMaterials/facetAvailable above, generalized to any
+  //    number of named attributes. A value is offered when swapping it into
+  //    the CURRENT selection still resolves to a real combo. ──
+  const attrValueAvailable = (attrName: string, valueId: string) =>
+    product.combosV2.some((c) => {
+      const trial = { ...attrSelection, [attrName]: valueId };
+      return Object.entries(trial).every(
+        ([n, v]) => (c.options[n] ?? "") === (v ?? ""),
+      );
+    });
+
+  // Attribute mode: one section per distinct StorefrontSection present among
+  // product.attributes, in the canonical SECTION_ORDER (never per-attribute —
+  // several attributes can share a section, e.g. two "type"-section axes).
+  // attrSectionIdx maps each present section to its cursor slot so the JSX
+  // and the scroll-spy (sectionsRef) agree on indices.
+  const presentSections: StorefrontSection[] = attributeMode
+    ? SECTION_ORDER.filter((s) => product.attributes.some((a) => a.section === s))
+    : [];
+  const attrSectionIdx: Partial<Record<StorefrontSection, number>> = {};
+
   let nextIndex = 0;
-  const sizeIdx = hasSizes ? nextIndex++ : -1;
-  const materialStart = hasMaterials ? nextIndex : -1;
-  if (hasMaterials) nextIndex += useFacets ? facetList.length : 1;
-  const printingIdx = hasPrinting ? nextIndex++ : -1;
+  let sizeIdx = -1;
+  let materialStart = -1;
+  let printingIdx = -1;
+  if (attributeMode) {
+    for (const s of presentSections) attrSectionIdx[s] = nextIndex++;
+  } else {
+    sizeIdx = hasSizes ? nextIndex++ : -1;
+    materialStart = hasMaterials ? nextIndex : -1;
+    if (hasMaterials) nextIndex += useFacets ? facetList.length : 1;
+    printingIdx = hasPrinting ? nextIndex++ : -1;
+  }
   const quantityIdx = nextIndex++;
   const reviewIdx = nextIndex++;
   const sectionCount = nextIndex;
 
   // Live selection → variant + pricing.
-  const combo = resolveCombo(product, size, material, printing);
+  const combo = attributeMode
+    ? resolveOptionsMatch(product.combosV2, attrSelection)
+    : resolveCombo(product, size, material, printing);
   const selectedPrinting = product.printing.find((p) => p.id === printing);
+  // Attribute mode generalizes "the printed option carrying a setup fee" to
+  // "the first selected attribute value carrying a setup fee" — the wire
+  // contract still sends at most one setupPrintingValue per add, matching
+  // today's single-printing-selection shape.
+  const attrSetupValue = attributeMode
+    ? product.attributes
+        .map((a) => a.values.find((v) => v.id === attrSelection[a.name]))
+        .find((v): v is NonNullable<typeof v> => !!v && v.setupFee > 0)
+    : undefined;
+  // What every add-to-cart / buy-now call sends as setupPrintingValue, and
+  // what the optimistic "Printing Setup Fee" line's spec text names.
+  const setupSelectionId = attributeMode
+    ? attrSetupValue?.id
+    : selectedPrinting && selectedPrinting.setupFee > 0
+      ? selectedPrinting.id
+      : undefined;
+  // Attribute mode: incomplete when any attribute that HAS values is still
+  // unselected (mirrors the legacy `hasSizes && !size` gate, generalized to
+  // N axes instead of one).
+  const selectionIncomplete = attributeMode
+    ? product.attributes.some((a) => a.values.length > 0 && !attrSelection[a.name])
+    : hasSizes && !size;
   const baseUnitPrice = combo?.unitPrice ?? 0;
   // MOQ tiers scale the variant's own price by quantity bracket. ⚠ This is a
   // PREVIEW — the backend's /store/carts/:id/moq-tiers sync (run on every
@@ -199,7 +277,9 @@ export function ProductCustomizer({
   // agree line for line.
   const activeTier = tierFor(product.tiers, quantity);
   const unitPrice = tieredUnitPrice(baseUnitPrice, product.tiers, quantity);
-  const setupFee = selectedPrinting?.setupFee ?? 0;
+  const setupFee = attributeMode
+    ? (attrSetupValue?.setupFee ?? 0)
+    : (selectedPrinting?.setupFee ?? 0);
   const estimatedTotal = unitPrice * quantity + setupFee;
 
   // Out-of-stock is a SEPARATE, parallel concept from the sparse-combo
@@ -229,13 +309,22 @@ export function ProductCustomizer({
     ? supportWhatsappUrl(
         outOfStockEnquiry({
           product: product.name,
-          specs: [
-            size ? `${labels.size}: ${labelFor(product.sizes, size)}` : null,
-            material
-              ? `${labels.material}: ${labelFor(product.materials, material)}`
-              : null,
-            printing ? `Printing: ${labelFor(product.printing, printing)}` : null,
-          ].filter((s): s is string => !!s),
+          specs: attributeMode
+            ? product.attributes
+                .map((a) => {
+                  const v = a.values.find((vv) => vv.id === attrSelection[a.name]);
+                  return v ? `${a.name}: ${v.label}` : null;
+                })
+                .filter((s): s is string => !!s)
+            : [
+                size ? `${labels.size}: ${labelFor(product.sizes, size)}` : null,
+                material
+                  ? `${labels.material}: ${labelFor(product.materials, material)}`
+                  : null,
+                printing
+                  ? `Printing: ${labelFor(product.printing, printing)}`
+                  : null,
+              ].filter((s): s is string => !!s),
           quantity,
         }),
       )
@@ -270,9 +359,11 @@ export function ProductCustomizer({
    *  rules, same messages. Returns false (and sets `error`) when the current
    *  selection can't be added at all. */
   const validateSelection = (): boolean => {
-    if (hasSizes && !size) {
+    if (selectionIncomplete) {
       setError(
-        `Please select a ${labels.size.toLowerCase()} before adding to cart.`,
+        attributeMode
+          ? "Please complete your selection before adding to cart."
+          : `Please select a ${labels.size.toLowerCase()} before adding to cart.`,
       );
       return false;
     }
@@ -308,22 +399,26 @@ export function ProductCustomizer({
       {
         variantId: combo.variantId,
         name: product.name,
-        specs: [
-          size ? `${labels.size}: ${size}` : null,
-          material ? `${labels.material}: ${material}` : null,
-          printing ? `Printing: ${printing}` : null,
-        ].filter((s): s is string => !!s),
+        specs: attributeMode
+          ? product.attributes
+              .map((a) => `${a.name}: ${attrSelection[a.name]}`)
+              .filter((s) => !s.endsWith(": "))
+          : [
+              size ? `${labels.size}: ${size}` : null,
+              material ? `${labels.material}: ${material}` : null,
+              printing ? `Printing: ${printing}` : null,
+            ].filter((s): s is string => !!s),
         unitPrice,
         taxRate: TAX_RATE,
         quantity,
         productSlug: product.slug,
         isService: false,
       },
-      ...(selectedPrinting && setupFee > 0
+      ...(setupFee > 0 && setupSelectionId
         ? [
             {
               name: "Printing Setup Fee",
-              specs: [`${selectedPrinting.id} · one-time charge`],
+              specs: [`${setupSelectionId} · one-time charge`],
               unitPrice: setupFee,
               taxRate: TAX_RATE,
               quantity: 1,
@@ -348,10 +443,7 @@ export function ProductCustomizer({
     requestAddCommit({
       variantId: combo.variantId,
       quantity,
-      setupPrintingValue:
-        selectedPrinting && selectedPrinting.setupFee > 0
-          ? selectedPrinting.id
-          : undefined,
+      setupPrintingValue: setupSelectionId,
       notes,
     });
     router.push("/cart");
@@ -409,10 +501,7 @@ export function ProductCustomizer({
       const result = await buyNow({
         variantId: combo.variantId,
         quantity,
-        setupPrintingValue:
-          selectedPrinting && selectedPrinting.setupFee > 0
-            ? selectedPrinting.id
-            : undefined,
+        setupPrintingValue: setupSelectionId,
         notes,
       });
 
@@ -556,9 +645,70 @@ export function ProductCustomizer({
             </div>
 
             <div className="flex flex-col gap-10 p-6">
+              {/* Attribute mode (N-axis "Product Variants" model): one Section
+                  per distinct StorefrontSection present, in canonical order;
+                  inside, one sub-heading per attribute sharing that section,
+                  values rendered as the same OptionCard radio cards. */}
+              {attributeMode &&
+                presentSections.map((section) => {
+                  const idx = attrSectionIdx[section]!;
+                  const sectionAttrs = product.attributes.filter(
+                    (a) => a.section === section,
+                  );
+                  return (
+                    <Section
+                      key={section}
+                      title={`${idx + 1}. ${SECTION_LABELS[section]}`}
+                      ref={(el) => {
+                        sectionsRef.current[idx] = el;
+                      }}
+                    >
+                      <div className="flex flex-col gap-6">
+                        {sectionAttrs.map((attr) => (
+                          <div key={attr.name} className="flex flex-col gap-3">
+                            <h3 className="text-sm font-semibold text-brand">
+                              {attr.label ?? attr.name}
+                            </h3>
+                            <div className="flex flex-col gap-4">
+                              {attr.values.map((v) => {
+                                const isAvailable = attrValueAvailable(
+                                  attr.name,
+                                  v.id,
+                                );
+                                return (
+                                  <OptionCard
+                                    key={v.id}
+                                    selected={attrSelection[attr.name] === v.id}
+                                    disabled={!isAvailable}
+                                    onSelect={() => {
+                                      if (!isAvailable) return;
+                                      warm();
+                                      setAttrSelection((s) => ({
+                                        ...s,
+                                        [attr.name]: v.id,
+                                      }));
+                                    }}
+                                    title={v.label}
+                                    description={v.description ?? ""}
+                                    meta={
+                                      v.setupFee > 0 || v.perUnit > 0
+                                        ? `Setup fee: ${formatGhs(v.setupFee)} + ${formatGhs(v.perUnit)}/unit`
+                                        : undefined
+                                    }
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Section>
+                  );
+                })}
+
               {/* Select Size (label metadata-driven: Size / Width / Capacity …).
                   Skipped entirely for products without a Size axis (Wrap). */}
-              {hasSizes && (
+              {!attributeMode && hasSizes && (
                 <Section
                   title={`${sizeIdx + 1}. Select ${labels.size}`}
                   info
@@ -584,7 +734,8 @@ export function ProductCustomizer({
               {/* Choose Material — either one section per FACET (RSC: Board
                   Grade / Colour / Flute Type) or a single metadata-labelled
                   section (Colour / Window / Type / …). */}
-              {useFacets &&
+              {!attributeMode &&
+                useFacets &&
                 facetList.map((facet, fi) => (
                   <Section
                     key={facet.key}
@@ -616,7 +767,7 @@ export function ProductCustomizer({
                     })}
                   </Section>
                 ))}
-              {hasMaterials && !useFacets && (
+              {!attributeMode && hasMaterials && !useFacets && (
                 <Section
                   title={`${materialStart + 1}. Choose ${labels.material}`}
                   ref={(el) => {
@@ -648,7 +799,7 @@ export function ProductCustomizer({
               )}
 
               {/* Printing Options */}
-              {hasPrinting && (
+              {!attributeMode && hasPrinting && (
                 <Section
                   title={`${printingIdx + 1}. Printing Options`}
                   ref={(el) => {
@@ -849,7 +1000,7 @@ export function ProductCustomizer({
             <button
               type="button"
               onClick={() => addToCart()}
-              disabled={(hasSizes && !size) || comboOutOfStock}
+              disabled={selectionIncomplete || comboOutOfStock}
               className={cn(
                 "order-1 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button border px-6 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2 sm:w-auto",
                 justAdded
@@ -869,7 +1020,7 @@ export function ProductCustomizer({
             <button
               type="button"
               onClick={onBuyNowClick}
-              disabled={(hasSizes && !size) || comboOutOfStock}
+              disabled={selectionIncomplete || comboOutOfStock}
               className="order-2 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3 sm:w-auto"
             >
               {pendingKind === "buy" && (
@@ -886,10 +1037,7 @@ export function ProductCustomizer({
           item={{
             variantId: combo.variantId,
             quantity,
-            setupPrintingValue:
-              selectedPrinting && selectedPrinting.setupFee > 0
-                ? selectedPrinting.id
-                : undefined,
+            setupPrintingValue: setupSelectionId,
             notes: notes || undefined,
           }}
           onClose={() => setAuthOpen(false)}
