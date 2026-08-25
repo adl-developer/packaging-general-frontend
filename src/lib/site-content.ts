@@ -1,3 +1,8 @@
+import {
+  coerceAbout,
+  DEFAULT_ABOUT,
+  type AboutContent,
+} from "@/lib/about-content";
 import { sdk } from "@/lib/medusa";
 
 /**
@@ -56,12 +61,16 @@ interface SiteContentResponse {
   terms?: { effective_date: string; body: string; customized: boolean };
   privacy?: { effective_date: string; body: string; customized: boolean };
   business_hours?: { configured: boolean; hours: BusinessHours["hours"] };
+  about?: unknown;
 }
 
 interface SiteContentState {
   terms: LegalDoc | null;
   privacy: LegalDoc | null;
   businessHours: BusinessHours | null;
+  /** Null when the backend sent nothing usable — /about renders the built-in
+   *  `DEFAULT_ABOUT` then (same canonical copy the backend defaults to). */
+  about: AboutContent | null;
 }
 
 let cached: { state: SiteContentState; at: number } | undefined;
@@ -71,6 +80,7 @@ const EMPTY: SiteContentState = {
   terms: null,
   privacy: null,
   businessHours: null,
+  about: null,
 };
 
 function mapDoc(
@@ -98,6 +108,7 @@ async function getSiteContent(): Promise<SiteContentState> {
         res.business_hours && res.business_hours.configured === true
           ? { configured: true, hours: res.business_hours.hours }
           : null,
+      about: coerceAbout(res.about),
     };
     cached = { state, at: Date.now() };
     return state;
@@ -123,6 +134,12 @@ export async function getCustomLegalDoc(
  *  callers show no outside-hours notice then. */
 export async function getBusinessHours(): Promise<BusinessHours | null> {
   return (await getSiteContent()).businessHours;
+}
+
+/** The About Us page content — the backend's (admin-editable) version when
+ *  reachable and well-formed, otherwise the identical built-in default. */
+export async function getAboutContent(): Promise<AboutContent> {
+  return (await getSiteContent()).about ?? DEFAULT_ABOUT;
 }
 
 const DAY_ABBREV: Record<DayKey, string> = {
