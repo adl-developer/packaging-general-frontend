@@ -10,6 +10,7 @@ import { getAuthToken } from "@/lib/auth-token";
 import { getStockMap } from "@/lib/stock";
 import { shortfall } from "@/lib/stock-rules";
 import { decideBuyNowRoute, isPrefillComplete } from "@/lib/buy-now";
+import { pickShippingOption } from "@/lib/shipping-option";
 import {
   parseBuyNowItem,
   type BuyNowAuthState,
@@ -279,7 +280,9 @@ export async function saveDeliveryAddress(input: {
     const { shipping_options } = await sdk.store.fulfillment.listCartOptions({
       cart_id: id,
     });
-    const option = shipping_options[0];
+    // Not `shipping_options[0]`: a calculated (Yango) option that failed
+    // open to GH₵0 must never be attached — see lib/shipping-option.ts.
+    const option = pickShippingOption(shipping_options);
     if (!option) {
       return {
         ok: false,
