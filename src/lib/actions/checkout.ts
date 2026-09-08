@@ -280,9 +280,28 @@ export async function saveDeliveryAddress(input: {
     const { shipping_options } = await sdk.store.fulfillment.listCartOptions({
       cart_id: id,
     });
-    // Not `shipping_options[0]`: a calculated (Yango) option that failed
-    // open to GH₵0 must never be attached — see lib/shipping-option.ts.
-    const option = pickShippingOption(shipping_options);
+    // The list never prices CALCULATED options (Medusa quirk): "Yango
+    // Delivery" comes back without an amount until `calculate` runs for
+    // it. Price each calculated option here — the backend's Yango provider
+    // answers with the live quote + markup, or the configured fallback fee,
+    // and never throws — then prefer it over the flat rate. A calculate call
+    // that fails outright marks that option unpriced so the flat option is
+    // attached instead (see lib/shipping-option.ts).
+    const priced = await Promise.all(
+      shipping_options.map(async (o) => {
+        if (o.price_type !== "calculated") return o;
+        try {
+          const { shipping_option } = await sdk.store.fulfillment.calculate(o.id, {
+            cart_id: id,
+          });
+          return { ...o, ...shipping_option };
+        } catch (err) {
+          console.warn("[checkout] shipping calculate failed for", o.id, err);
+          return { ...o, amount: 0, calculated_price: null };
+        }
+      })
+    );
+    const option = pickShippingOption(priced);
     if (!option) {
       return {
         ok: false,
