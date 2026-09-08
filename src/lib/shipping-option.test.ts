@@ -9,7 +9,7 @@ const flat = { id: "so_flat", price_type: "flat", amount: 30 };
 const yangoOk = {
   id: "so_yango",
   price_type: "calculated",
-  amount: 0,
+  amount: 43.2,
   calculated_price: { calculated_amount: 43.2 },
 };
 const yangoFailedOpen = {
@@ -18,17 +18,20 @@ const yangoFailedOpen = {
   amount: 0,
   calculated_price: { calculated_amount: 0 },
 };
+const yangoUnpriced = { id: "so_yango_np", price_type: "calculated", amount: null };
 
 describe("pickShippingOption", () => {
-  it("keeps taking the first option when it is a flat rate", () => {
-    expect(pickShippingOption([flat, yangoOk])?.id).toBe("so_flat");
-  });
-
-  it("uses a calculated option that carries a real price", () => {
+  it("prefers a priced calculated (Yango) option even when a flat one is listed first", () => {
+    expect(pickShippingOption([flat, yangoOk])?.id).toBe("so_yango");
     expect(pickShippingOption([yangoOk, flat])?.id).toBe("so_yango");
   });
 
-  it("skips a calculated option whose quote failed open to zero", () => {
+  it("falls back to the flat option when the calculated one has no price", () => {
+    expect(pickShippingOption([yangoUnpriced, flat])?.id).toBe("so_flat");
+    expect(pickShippingOption([flat, yangoUnpriced])?.id).toBe("so_flat");
+  });
+
+  it("never attaches a calculated option priced at zero", () => {
     expect(pickShippingOption([yangoFailedOpen, flat])?.id).toBe("so_flat");
     expect(pickShippingOption([yangoFailedOpen])).toBeNull();
   });

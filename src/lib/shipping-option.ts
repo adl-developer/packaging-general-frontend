@@ -1,16 +1,19 @@
 /**
  * Which shipping option checkout attaches to the cart.
  *
- * Checkout shows no shipping choice today — it silently takes the first
- * option Medusa lists. That was fine while the only option was the flat
- * GH₵30 manual rate, but a CALCULATED option (the Yango provider) answers
- * GH₵0 whenever its upstream quote fails — the provider fails open so a
- * Yango outage cannot take the whole checkout down — and "first option"
- * would happily bill a customer nothing for a courier (review 2026-09-04,
- * latent until a Yango option exists in prod).
+ * Checkout shows no shipping choice. Since 2026-09-08 the intended option is
+ * the CALCULATED "Yango Delivery" one: the backend's Yango provider prices
+ * it live (Yango quote + markup) or at the configured fallback fee, so it
+ * always carries a price once Medusa's `calculate` call has run for it (the
+ * option LIST never prices calculated options — `saveDeliveryAddress` calls
+ * `calculate` per calculated option first).
  *
- * Rule: a calculated option is usable only with a positive price; flat
- * options are always usable. Among the usable ones, keep Medusa's order.
+ * Rule: prefer the first calculated option with a positive price; otherwise
+ * the first flat option (today's manual "Standard Delivery", which stays as
+ * the safety net for a store without the Yango option, or a `calculate`
+ * call that failed outright); otherwise none. A calculated option priced at
+ * zero is never attached — that was the Yango-outage fail-open case before
+ * the provider learned to return the fallback fee, and it stays guarded.
  */
 export type ShippingOptionLike = {
   id: string;
@@ -35,5 +38,10 @@ export function isUsableShippingOption(option: ShippingOptionLike): boolean {
 export function pickShippingOption<T extends ShippingOptionLike>(
   options: readonly T[] | null | undefined,
 ): T | null {
-  return (options ?? []).find(isUsableShippingOption) ?? null;
+  const usable = (options ?? []).filter(isUsableShippingOption);
+  return (
+    usable.find((o) => o.price_type === "calculated") ??
+    usable.find((o) => o.price_type !== "calculated") ??
+    null
+  );
 }
