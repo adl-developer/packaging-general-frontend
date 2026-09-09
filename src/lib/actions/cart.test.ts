@@ -107,13 +107,57 @@ describe("getCart sync policy", () => {
     expect(sdk.client.fetch).not.toHaveBeenCalled();
   });
 
-  it("by default runs the MOQ-tier sync before the platform-fee sync", async () => {
-    await getCart();
+  it("by default runs both charge syncs in ONE request and uses the cart it returns", async () => {
+    sdk.client.fetch.mockResolvedValue({
+      cart: { ...liveCart, total: 130 },
+      sync: { changed: true, moq_tiers: { changed: false }, platform_fee: { changed: true } },
+    });
 
+    const cart = await getCart();
+
+    expect(sdk.client.fetch).toHaveBeenCalledTimes(1);
+    const [path, init] = sdk.client.fetch.mock.calls[0];
+    expect(path).toBe("/store/carts/cart_1/sync");
+    expect(init.method).toBe("POST");
+    expect(String(init.query.fields)).toMatch(/^id,email,currency_code,metadata,\*items,/);
+    expect(String(init.query.fields)).toMatch(/completed_at$/);
+    // The sync answers with the cart, so there is no separate read at all.
+    expect(sdk.store.cart.retrieve).not.toHaveBeenCalled();
+    expect(cart?.total).toBe(130);
+  });
+
+  it("falls back to the two single-purpose routes when the backend has no /sync yet", async () => {
+    sdk.client.fetch.mockImplementation(async (path: string) => {
+      if (path.endsWith("/sync")) {
+        throw Object.assign(new Error("Not Found"), { status: 404 });
+      }
+      return path.endsWith("/moq-tiers")
+        ? { moq_tiers: { changed: false } }
+        : { platform_fee: { changed: false, percent: 0, fixed: 0, amount: 0 } };
+    });
+
+    const cart = await getCart();
+
+    expect(cart?.id).toBe("cart_1");
     const paths = sdk.client.fetch.mock.calls.map(([path]) => path);
     expect(paths).toEqual([
+      "/store/carts/cart_1/sync",
       "/store/carts/cart_1/moq-tiers",
       "/store/carts/cart_1/platform-fee",
     ]);
+    expect(sdk.store.cart.retrieve).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves the cart unsynced (and keeps the cookie) when the sync itself fails", async () => {
+    sdk.client.fetch.mockRejectedValue(
+      Object.assign(new Error("Internal Server Error"), { status: 500 }),
+    );
+
+    const cart = await getCart();
+
+    expect(cart?.id).toBe("cart_1");
+    expect(sdk.store.cart.retrieve).toHaveBeenCalledTimes(1);
+    expect(sdk.client.fetch).toHaveBeenCalledTimes(1);
+    expect(jar.get("pg_cart_id")).toBe("cart_1");
   });
 });
