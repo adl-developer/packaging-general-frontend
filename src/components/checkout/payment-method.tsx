@@ -6,7 +6,7 @@ import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { initiatePaystack } from "@/lib/actions/checkout";
 
@@ -100,7 +100,7 @@ export function PaymentMethod({
 
       <AnimatePresence mode="wait" initial={false}>
         {method === "mobile_money" ? (
-          <motion.div
+          <m.div
             key="momo"
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -127,9 +127,9 @@ export function PaymentMethod({
                 on this phone.
               </p>
             </div>
-          </motion.div>
+          </m.div>
         ) : (
-          <motion.p
+          <m.p
             key="card"
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -139,7 +139,7 @@ export function PaymentMethod({
           >
             You&apos;ll be securely redirected to Paystack to complete your card
             payment.
-          </motion.p>
+          </m.p>
         )}
       </AnimatePresence>
 

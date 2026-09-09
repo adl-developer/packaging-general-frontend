@@ -14,7 +14,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { logout } from "@/lib/actions/auth";
 import { navButton } from "./nav-button";
@@ -72,7 +72,7 @@ export function AccountMenu({ user }: { user?: AccountUser }) {
 
       <AnimatePresence>
         {open && (
-          <motion.div
+          <m.div
             role="menu"
             className="absolute right-0 top-[calc(100%+8px)] w-56 origin-top-right rounded-button border border-line bg-surface p-1 shadow-header"
             initial={{ opacity: 0, scale: 0.96, y: -4 }}
@@ -144,7 +144,7 @@ export function AccountMenu({ user }: { user?: AccountUser }) {
               </Link>
             </>
           )}
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

@@ -23,7 +23,7 @@ import {
   lookupOrderByToken,
   type OrderLookupResult,
 } from "@/lib/actions/orders";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import {
   DURATION,
   EASE_PREMIUM,
@@ -264,17 +264,17 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
   const mainItem = displayItems[0];
   const extraCount = displayItems.length - 1;
   const totalQty = displayItems.reduce((n, i) => n + i.quantity, 0);
-  const steps: TimelineStep[] = STEP_META.map((m, idx) => ({
-    title: m.title,
+  const steps: TimelineStep[] = STEP_META.map((meta, idx) => ({
+    title: meta.title,
     detail:
-      idx === o.current_step ? m.detail : idx < o.current_step ? "Completed" : "Pending",
+      idx === o.current_step ? meta.detail : idx < o.current_step ? "Completed" : "Pending",
     state:
       idx < o.current_step
         ? "completed"
         : idx === o.current_step
           ? "current"
           : "pending",
-    Icon: m.Icon,
+    Icon: meta.Icon,
   }));
   return {
     number: o.number,
@@ -664,7 +664,7 @@ export function TrackOrder({
 
       <AnimatePresence mode="wait">
         {lookupError && (
-          <motion.div
+          <m.div
             key="lookup-error"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -672,10 +672,10 @@ export function TrackOrder({
             transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
           >
             <LookupErrorAlert />
-          </motion.div>
+          </m.div>
         )}
         {notFound !== null && (
-          <motion.div
+          <m.div
             key="not-found"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -683,10 +683,10 @@ export function TrackOrder({
             transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
           >
             <NotFoundAlert query={notFound} />
-          </motion.div>
+          </m.div>
         )}
         {result && (
-          <motion.div
+          <m.div
             key="result"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -695,7 +695,7 @@ export function TrackOrder({
             className="flex flex-col gap-8"
           >
             <OrderResult order={result} />
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
 
@@ -758,7 +758,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
             </h2>
             <p className="text-sm text-muted sm:text-base">{order.placedOn}</p>
           </div>
-          <motion.span
+          <m.span
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={SPRING_SOFT}
@@ -775,7 +775,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
               <CheckCircle2 className="size-4 sm:size-5" aria-hidden />
             )}
             {order.status}
-          </motion.span>
+          </m.span>
         </div>
         <div className="p-4 sm:p-6">
           {order.canceled ? (
@@ -792,7 +792,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
               </div>
             </div>
           ) : (
-            <motion.ol
+            <m.ol
               variants={staggerContainer}
               initial="hidden"
               animate="visible"
@@ -806,7 +806,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                 aria-hidden
               />
               {order.steps.map((step) => (
-                <motion.li
+                <m.li
                   variants={staggerItem}
                   key={step.title}
                   className="relative flex items-start gap-4"
@@ -829,9 +829,9 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                     </p>
                     <p className="text-sm text-muted">{step.detail}</p>
                   </div>
-                </motion.li>
+                </m.li>
               ))}
-            </motion.ol>
+            </m.ol>
           )}
         </div>
       </section>

@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getShopCategoryBySlug } from "@/lib/categories";
-import { listProducts } from "@/lib/products";
-import { getStockMap } from "@/lib/stock";
-import { familyOutOfStock } from "@/lib/stock-rules";
+import { listProducts } from "@/lib/catalog";
+import { getCatalogStock } from "@/lib/stock";
 import { ProductCard } from "@/components/products/product-card";
 import { Reveal } from "@/components/motion/reveal";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
+import { StockedProductCard } from "./stocked-product-card";
 
 export async function generateMetadata({
   params,
@@ -42,16 +43,14 @@ export default async function CategoryPage({
   const products = all.filter((p) => p.category === cat.medusaName);
 
   // Live stock, fetched once for the whole page (never cached — see
-  // lib/stock.ts). Keyed by variant id; a family reads as out of stock only
-  // when every one of its variants is. A failed fetch returns an empty map,
-  // which familyOutOfStock reads as "not out of stock" (fail open).
-  const stock = await getStockMap(products.map((p) => p.id));
-  const isOutOfStock = (p: (typeof products)[number]) =>
-    familyOutOfStock(
-      p.variantIds
-        .map((id) => stock.get(id))
-        .filter((s) => s !== undefined),
-    );
+  // lib/stock.ts) and deliberately NOT awaited. Everything above is served
+  // from the shared catalogue cache (lib/catalog.ts), so the heading, copy and
+  // every card are sent straight away; each card then upgrades to its stocked
+  // version (out-of-stock pill + muted image) when this one shared promise
+  // settles, inside its own <Suspense> below — see stocked-product-card.tsx. A
+  // failed fetch resolves to an empty map, which familyOutOfStock reads as "not
+  // out of stock" (fail open), exactly as it did when the page awaited it.
+  const stock = getCatalogStock(products.map((p) => p.id));
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
@@ -85,7 +84,15 @@ export default async function CategoryPage({
         <Stagger className="grid grid-cols-1 gap-8 sm:grid-cols-2">
           {products.map((p) => (
             <StaggerItem key={p.id} className="h-full">
-              <ProductCard product={p} outOfStock={isOutOfStock(p)} />
+              {/* The fallback IS the card in its stock-unknown state — no
+                  pill, no muting, no "in stock" claim (ProductCard only ever
+                  asserts the negative) and the same markup, so the swap to
+                  the stocked card moves nothing. The boundary sits INSIDE
+                  the StaggerItem so the reveal animation runs once, on the
+                  item, and not again when stock lands. */}
+              <Suspense fallback={<ProductCard product={p} />}>
+                <StockedProductCard product={p} stock={stock} />
+              </Suspense>
             </StaggerItem>
           ))}
         </Stagger>

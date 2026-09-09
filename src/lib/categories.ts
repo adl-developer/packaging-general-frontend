@@ -20,7 +20,9 @@ import {
 } from "lucide-react";
 import { RscCartonIcon } from "@/components/ui/icons";
 import { sdk } from "@/lib/medusa";
-import { listProducts } from "@/lib/products";
+import { listProducts } from "@/lib/catalog";
+import { CACHE_TAGS } from "@/lib/revalidate";
+import { unstable_cache } from "next/cache";
 import {
   buildShopCategories,
   type CategoryIconKey,
@@ -109,11 +111,39 @@ const STATIC_FALLBACK: ShopCategory[] = [
   },
 ];
 
-/** Same 5-minute TTL and only-cache-success rule as the catalog caches in
- *  `products.ts` — categories ride the same "seed data, rarely changes"
- *  reasoning, and an admin edit shows within the TTL. */
-const CATEGORIES_TTL_MS = 5 * 60 * 1000;
-let categoriesCache: { data: ShopCategory[]; at: number } | null = null;
+/**
+ * The category CARDS (serialisable data only — icons are re-attached after)
+ * in Next's shared Data Cache: one entry for every function instance, an hour
+ * long, tagged so the backend's `POST /api/revalidate` drops it the moment a
+ * category or product is saved in the admin. Only a successful, non-empty
+ * build is stored: the loader throws otherwise, and `unstable_cache` never
+ * stores a rejection — the reader below falls back exactly as before.
+ */
+const CATEGORIES_REVALIDATE_SECONDS = 60 * 60;
+const cachedCategoryCards = unstable_cache(
+  async (): Promise<ShopCategoryData[]> => {
+    const [categories, products] = await Promise.all([
+      listStoreCategories(),
+      listProducts(),
+    ]);
+    const cards = buildShopCategories(
+      categories,
+      products.map((p) => ({ slug: p.slug, category: p.category })),
+    );
+    if (cards.length === 0) {
+      // Reachable backend but nothing to show usually means listProducts fell
+      // back to its sample data (whose category names match nothing here) —
+      // fail open, and never cache it.
+      throw new Error("no categories to show");
+    }
+    return cards;
+  },
+  ["shop-categories"],
+  {
+    tags: [CACHE_TAGS.categories, CACHE_TAGS.catalog],
+    revalidate: CATEGORIES_REVALIDATE_SECONDS,
+  },
+);
 
 async function listStoreCategories(): Promise<StoreCategorySummary[]> {
   const { product_categories } = await sdk.store.category.list({
@@ -131,26 +161,8 @@ async function listStoreCategories(): Promise<StoreCategorySummary[]> {
 }
 
 export async function getShopCategories(): Promise<ShopCategory[]> {
-  const cached = categoriesCache;
-  if (cached && Date.now() - cached.at < CATEGORIES_TTL_MS) return cached.data;
   try {
-    const [categories, products] = await Promise.all([
-      listStoreCategories(),
-      listProducts(),
-    ]);
-    const cards = buildShopCategories(
-      categories,
-      products.map((p) => ({ slug: p.slug, category: p.category })),
-    );
-    if (cards.length === 0) {
-      // Reachable backend but nothing to show usually means listProducts fell
-      // back to its sample data (whose category names match nothing here).
-      // Same fail-open posture, and deliberately not cached.
-      return STATIC_FALLBACK;
-    }
-    const result = cards.map(withIcon);
-    categoriesCache = { data: result, at: Date.now() };
-    return result;
+    return (await cachedCategoryCards()).map(withIcon);
   } catch (err) {
     console.error("[getShopCategories] Medusa unreachable; using static categories:", err);
     return STATIC_FALLBACK;

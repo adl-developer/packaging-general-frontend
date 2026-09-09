@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { DURATION, EASE_PREMIUM, SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
 import { takeReorderNotice } from "@/lib/reorder-notice";
@@ -86,7 +86,7 @@ async function fetchStockViaProxy(
 function EmptyCart() {
   return (
     <div className="mx-auto flex max-w-7xl flex-col px-4 py-16 sm:px-6 lg:px-8">
-      <motion.div
+      <m.div
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
@@ -107,7 +107,7 @@ function EmptyCart() {
         >
           Browse Products
         </Link>
-      </motion.div>
+      </m.div>
     </div>
   );
 }
@@ -141,7 +141,7 @@ function ConfirmDialog({
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
+        <m.div
           className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -152,7 +152,7 @@ function ConfirmDialog({
           aria-modal="true"
           aria-labelledby="confirm-title"
         >
-          <motion.div
+          <m.div
             onClick={(e) => e.stopPropagation()}
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -185,8 +185,8 @@ function ConfirmDialog({
                 Cancel
               </button>
             </div>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );
@@ -415,7 +415,7 @@ function CrossSellCard({
             </p>
             <p className="text-xs text-muted">{item.unitLabel}</p>
           </div>
-          <motion.button
+          <m.button
             type="button"
             onClick={onAdd}
             whileTap={{ scale: 0.97 }}
@@ -425,7 +425,7 @@ function CrossSellCard({
           >
             <ShoppingCart className="size-4" aria-hidden />
             Add to Cart
-          </motion.button>
+          </m.button>
         </div>
       </div>
     </div>

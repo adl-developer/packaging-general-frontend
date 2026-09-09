@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { CheckCircle2 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 
 /**
@@ -45,7 +45,7 @@ export function CartToast() {
     >
       <AnimatePresence>
         {visible && (
-          <motion.div
+          <m.div
             key={pulse}
             initial={{ opacity: 0, y: 40, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -59,7 +59,7 @@ export function CartToast() {
               aria-hidden
             />
             Added to cart!
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

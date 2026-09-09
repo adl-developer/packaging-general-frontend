@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import {
   DURATION,
   EASE_PREMIUM,
@@ -100,14 +100,14 @@ export function OrderConfirmation({
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-2xl flex-col items-center gap-8 rounded-card border-2 border-[#b9f8cf] bg-surface pb-6 pt-12 px-6 text-center">
-        <motion.span
+        <m.span
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={SPRING_SOFT}
           className="grid place-items-center rounded-full bg-[#dcfce7] p-8"
         >
           <CheckCircle2 className="size-20 text-[#16a34a]" aria-hidden />
-        </motion.span>
+        </m.span>
 
         <div className="flex flex-col gap-3">
           <h1 className="text-3xl font-bold leading-9 text-brand">
@@ -138,23 +138,23 @@ export function OrderConfirmation({
           <h2 className="text-base font-semibold leading-6 text-brand">
             What&apos;s Next?
           </h2>
-          <motion.ul
+          <m.ul
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
             className="mt-3 flex flex-col gap-2"
           >
             {WHATS_NEXT.map((item) => (
-              <motion.li
+              <m.li
                 variants={staggerItem}
                 key={item}
                 className="flex items-start gap-2 text-base leading-6 text-muted"
               >
                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-rust" aria-hidden />
                 {item}
-              </motion.li>
+              </m.li>
             ))}
-          </motion.ul>
+          </m.ul>
         </div>
 
         <NotificationPreferences orderNumber={orderNumber} email={email} />
@@ -338,7 +338,7 @@ function CreateAccountModal({
   }
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -348,7 +348,7 @@ function CreateAccountModal({
       aria-modal="true"
       aria-labelledby="create-account-title"
     >
-      <motion.div
+      <m.div
         initial={{ opacity: 0, scale: 0.96, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -516,8 +516,8 @@ function CreateAccountModal({
             </form>
           </>
         )}
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }
 

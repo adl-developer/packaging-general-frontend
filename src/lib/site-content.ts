@@ -3,7 +3,9 @@ import {
   DEFAULT_ABOUT,
   type AboutContent,
 } from "@/lib/about-content";
+import { unstable_cache } from "next/cache";
 import { sdk } from "@/lib/medusa";
+import { CACHE_TAGS } from "@/lib/revalidate";
 
 /**
  * Admin-editable site content, served by the custom backend route
@@ -73,8 +75,12 @@ interface SiteContentState {
   about: AboutContent | null;
 }
 
-let cached: { state: SiteContentState; at: number } | undefined;
-const TTL_MS = 60_000;
+/** Last-known-good copy, served only when the backend is unreachable. The
+ *  real cache is Next's shared Data Cache (`cachedSiteContent` below): an hour
+ *  long, tagged so the admin's Save (terms, privacy, hours, about) drops it at
+ *  once through POST /api/revalidate. */
+let lastKnown: SiteContentState | undefined;
+const SITE_CONTENT_REVALIDATE_SECONDS = 60 * 60;
 
 const EMPTY: SiteContentState = {
   terms: null,
@@ -95,13 +101,12 @@ function mapDoc(
   };
 }
 
-async function getSiteContent(): Promise<SiteContentState> {
-  if (cached && Date.now() - cached.at < TTL_MS) return cached.state;
-  try {
+const cachedSiteContent = unstable_cache(
+  async (): Promise<SiteContentState> => {
     const res = await sdk.client.fetch<SiteContentResponse>(
       "/store/site-content",
     );
-    const state: SiteContentState = {
+    return {
       terms: mapDoc(res.terms),
       privacy: mapDoc(res.privacy),
       businessHours:
@@ -110,13 +115,21 @@ async function getSiteContent(): Promise<SiteContentState> {
           : null,
       about: coerceAbout(res.about),
     };
-    cached = { state, at: Date.now() };
+  },
+  ["site-content"],
+  { tags: [CACHE_TAGS.siteContent], revalidate: SITE_CONTENT_REVALIDATE_SECONDS },
+);
+
+async function getSiteContent(): Promise<SiteContentState> {
+  try {
+    const state = await cachedSiteContent();
+    lastKnown = state;
     return state;
   } catch (err) {
     console.error("[site-content] fetch failed:", err);
     // Serve the stale value if we have one; otherwise fall back to built-in
     // legal pages and no business-hours notice.
-    return cached?.state ?? EMPTY;
+    return lastKnown ?? EMPTY;
   }
 }
 

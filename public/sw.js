@@ -14,6 +14,11 @@
  *    network-first. The cache is only used as a last resort when the network
  *    request itself fails (i.e. genuinely offline), and only to show the
  *    static offline fallback page — never a cached copy of the real page.
+ *  - Navigations use Navigation Preload: the browser starts the page request
+ *    in parallel with waking this worker instead of after it, and the fetch
+ *    handler consumes that response (`event.preloadResponse`) before it would
+ *    ever call `fetch()` itself. Still network-first, still no page cache —
+ *    it only removes the service-worker boot time from every navigation.
  *  - The ONLY thing ever cache-first: Next.js's own build output under
  *    `/_next/static/*`, which is content-hashed and immutable by
  *    construction (a given hash's bytes never change; a new deploy emits new
@@ -47,6 +52,17 @@ self.addEventListener("activate", (event) => {
       await Promise.all(
         keys.filter((key) => key !== STATIC_CACHE).map((key) => caches.delete(key)),
       );
+      // Navigation preload: without it, every navigation waits for this worker
+      // to boot before the request even leaves the device. With it the browser
+      // fires the request immediately and hands us the response in the fetch
+      // handler below. Unsupported in older Safari/Firefox — best-effort.
+      if (self.registration.navigationPreload) {
+        try {
+          await self.registration.navigationPreload.enable();
+        } catch {
+          // Unsupported or refused — the fetch handler falls back to fetch().
+        }
+      }
       await self.clients.claim();
     })(),
   );
@@ -87,6 +103,15 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         try {
+          // The preloaded response (see activate) IS the network request —
+          // use it rather than issuing a second one. `preloadResponse` is
+          // undefined when preload is disabled or unsupported, and rejects if
+          // the preload itself failed; in both cases fall through to a normal
+          // fetch so a preload hiccup alone never shows the offline page.
+          const preloaded = event.preloadResponse
+            ? await event.preloadResponse.catch(() => undefined)
+            : undefined;
+          if (preloaded) return preloaded;
           return await fetch(request);
         } catch {
           const cache = await caches.open(STATIC_CACHE);
@@ -98,8 +123,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Everything else — /store/*, /api/*, RSC payload fetches, cart, checkout,
-  // account, order routes, images, fonts, anything not matched above — is
-  // deliberately left alone. No `respondWith` call means the browser handles
-  // it exactly as if this service worker did not exist: network-only.
+  // Everything else — /store/*, /api/*, RSC payload fetches, server actions,
+  // cart, checkout, account, order routes, images, fonts, anything not matched
+  // above — is deliberately left alone. No `respondWith` call means the
+  // browser handles it exactly as if this service worker did not exist:
+  // network-only.
 });

@@ -10,8 +10,7 @@ import {
   Mail,
   X,
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
-import QRCode from "qrcode";
+import { m, AnimatePresence } from "motion/react";
 import { formatGhs } from "@/lib/format";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { emailInvoice } from "@/lib/actions/orders";
@@ -162,7 +161,7 @@ export function InvoiceDialog({
   return (
     <AnimatePresence>
       {open && invoice && (
-        <motion.div
+        <m.div
           className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/50 p-3 sm:p-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -173,7 +172,7 @@ export function InvoiceDialog({
           aria-modal="true"
           aria-labelledby="invoice-title"
         >
-          <motion.div
+          <m.div
             onClick={(e) => e.stopPropagation()}
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -426,8 +425,8 @@ export function InvoiceDialog({
                 )}
               </div>
             </div>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );
@@ -589,8 +588,13 @@ function printInvoice(invoice: InvoiceData) {
 
 /**
  * The invoice QR, encoding the signed `?t=…&invoice=1` link — scanning it on a
- * phone reopens this invoice. Rendered as inline SVG from `QRCode.create()`,
- * which is synchronous, so there's no async state or layout shift.
+ * phone reopens this invoice. Rendered as inline SVG from `QRCode.create()`.
+ *
+ * The `qrcode` encoder is loaded with a dynamic `import()` the first time a QR
+ * is actually rendered, so /track-order never ships it while the receipt QR is
+ * off (`RECEIPT_QR_ENABLED`) — and once it's back on, only when a receipt is
+ * opened. The parent box is a fixed 165px square, so the QR arriving a tick
+ * after the dialog causes no layout shift.
  *
  * One `<path>` of module rectangles rather than N `<rect>` elements: a v5 QR
  * is 37×37, so that's up to ~700 filled modules — as separate nodes it bloats
@@ -598,20 +602,28 @@ function printInvoice(invoice: InvoiceData) {
  * levels, which can break a scan.
  */
 function InvoiceQr({ payload }: { payload: string }) {
-  const qr = React.useMemo(() => {
-    try {
-      const { modules } = QRCode.create(payload, { errorCorrectionLevel: "M" });
-      const size = modules.size;
-      let d = "";
-      for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-          if (modules.data[y * size + x]) d += `M${x} ${y}h1v1h-1z`;
+  const [qr, setQr] = React.useState<{ size: number; d: string } | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    import("qrcode")
+      .then(({ create }) => {
+        const { modules } = create(payload, { errorCorrectionLevel: "M" });
+        const size = modules.size;
+        let d = "";
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            if (modules.data[y * size + x]) d += `M${x} ${y}h1v1h-1z`;
+          }
         }
-      }
-      return { size, d };
-    } catch {
-      return null;
-    }
+        if (!cancelled) setQr({ size, d });
+      })
+      .catch(() => {
+        if (!cancelled) setQr(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [payload]);
 
   if (!qr) return null;

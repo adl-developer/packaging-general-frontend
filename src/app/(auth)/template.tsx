@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 
 // Enter transition on auth route changes (sign-in <-> sign-up). Opacity only.
@@ -11,12 +11,12 @@ export default function AuthTemplate({
   children: React.ReactNode;
 }) {
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }

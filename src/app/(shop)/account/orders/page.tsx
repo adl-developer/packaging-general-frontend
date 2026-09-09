@@ -39,12 +39,19 @@ function statusLabel(order: {
 }
 
 export default async function AccountOrdersPage() {
-  const customer = await getCustomer();
+  // Independent reads, so they go out together: `listMyOrders` authenticates
+  // off the same auth cookie itself (and resolves to [] when there is none)
+  // rather than off `customer`, so nothing here needs the first result to
+  // start the second. The sign-in redirect is unchanged — it just waits for
+  // both, and the signed-out case costs nothing extra because listMyOrders
+  // returns before touching the backend.
+  const [customer, orders] = await Promise.all([
+    getCustomer(),
+    listMyOrders(),
+  ]);
   if (!customer) {
     redirect("/sign-in");
   }
-
-  const orders = await listMyOrders();
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
