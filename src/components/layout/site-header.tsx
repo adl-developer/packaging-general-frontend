@@ -1,33 +1,26 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { PromoBar } from "./promo-bar";
-import { AccountMenu, type AccountUser } from "./account-menu";
-import { CartLink } from "./cart-link";
-import { getCustomer } from "@/lib/actions/auth";
-import { getCartLineCount } from "@/lib/actions/cart";
+import { HeaderAccount, HeaderAccountFallback } from "./header-account";
+import { HeaderCart, HeaderCartFallback } from "./header-cart";
 
 /**
  * Global site header: brand lockup + Cart/Account, with the promo bar
  * stacked beneath it (matching the Figma). The whole block is sticky. The
  * cart count + bump animation come from useCartPulse via <CartLink/>.
  *
- * Server Component — resolves the signed-in customer so the account menu shows
- * the logged-in variant (name/email + My Orders/Logout) when authenticated.
+ * Synchronous shell — deliberately awaits nothing. The two per-request
+ * backend reads (signed-in customer, cart line count) live in <HeaderAccount>
+ * and <HeaderCart>, each behind its own <Suspense>, so the header — and the
+ * page's loading.tsx skeleton beneath this layout — is sent before either
+ * resolves; the pills then stream in with their real state. An `await` here
+ * would hold the entire document: loading.tsx wraps page.tsx, not the layout
+ * above it. <PromoBar> stays inline on purpose: its presence changes the
+ * header height, so streaming it would shift the page, and it is served
+ * from a 60 s in-process cache.
  */
-export async function SiteHeader() {
-  const [customer, cartCount] = await Promise.all([
-    getCustomer(),
-    getCartLineCount(),
-  ]);
-  const user: AccountUser | undefined = customer
-    ? {
-        name:
-          [customer.first_name, customer.last_name].filter(Boolean).join(" ") ||
-          customer.email,
-        email: customer.email,
-      }
-    : undefined;
-
+export function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 shadow-header">
       <div className="border-b border-line bg-surface">
@@ -56,8 +49,12 @@ export async function SiteHeader() {
           </Link>
 
           <nav className="flex items-center gap-2">
-            <CartLink initialCount={cartCount} />
-            <AccountMenu user={user} />
+            <Suspense fallback={<HeaderCartFallback />}>
+              <HeaderCart />
+            </Suspense>
+            <Suspense fallback={<HeaderAccountFallback />}>
+              <HeaderAccount />
+            </Suspense>
           </nav>
         </div>
       </div>

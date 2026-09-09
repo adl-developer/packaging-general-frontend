@@ -51,6 +51,15 @@ const CART_FIELDS =
 const CART_MUTATION_FIELDS =
   "id,completed_at,*items,*items.variant,*items.variant.options,items.variant.options.option.title,items.product.metadata";
 
+/**
+ * Field set for the checkout PREFILL reads (`/checkout`, `/checkout/delivery`).
+ *
+ * Those two pages show no prices — they only need what the customer typed on a
+ * previous visit — so they must not pay for the totals/items/payment graph,
+ * and they must not trigger the charge syncs (see `getCartForPrefill`).
+ */
+const CART_PREFILL_FIELDS = "id,email,metadata,completed_at,*shipping_address";
+
 async function readCartId(): Promise<string | undefined> {
   const store = await cookies();
   return store.get(CART_COOKIE)?.value;
@@ -141,8 +150,22 @@ async function withPlatformFee(
   }
 }
 
-/** Read the current cart (if any). Returns null when missing, invalid, or completed. */
-export async function getCart(): Promise<HttpTypes.StoreCart | null> {
+/**
+ * Read the current cart (if any). Returns null when missing, invalid, or completed.
+ *
+ * `sync` (default true) runs the charge syncs — MOQ tiers, then the platform
+ * fee — after the read. ⚠⚠ Leave it on for anything that shows or fixes money:
+ * the payment page, and `initiatePaystack`, whose `getCart()` is the money
+ * guarantee (the Paystack amount is fixed right after it). Pass `sync: false`
+ * only for plain renders whose numbers are already kept right by the
+ * mutations themselves (every cart mutation and promo change re-syncs the fee
+ * on the cart it returns) — e.g. the cart page. That turns three sequential
+ * backend round trips into one.
+ */
+export async function getCart(
+  options: { sync?: boolean } = {},
+): Promise<HttpTypes.StoreCart | null> {
+  const sync = options.sync ?? true;
   const id = await readCartId();
   if (!id) return null;
   try {
@@ -175,11 +198,39 @@ export async function getCart(): Promise<HttpTypes.StoreCart | null> {
       const { cart: refreshed } = await sdk.store.cart.retrieve(id, {
         fields: CART_FIELDS,
       });
-      return await withPlatformFee(refreshed, CART_FIELDS);
+      return sync ? await withPlatformFee(refreshed, CART_FIELDS) : refreshed;
     }
-    return await withPlatformFee(cart, CART_FIELDS);
+    return sync ? await withPlatformFee(cart, CART_FIELDS) : cart;
   } catch (err) {
     console.error("[cart] retrieve failed; clearing cookie:", err);
+    await clearCartId();
+    return null;
+  }
+}
+
+/**
+ * The cart as the checkout prefill needs it: contact email + metadata and the
+ * shipping address, nothing else. One slim round trip, no charge syncs, no
+ * stale-line pruning (there are no lines in this field set — the next full
+ * `getCart()` on the payment page still does that). Same cookie hygiene as
+ * `getCart()`: a completed or vanished cart clears the cookie and reads as
+ * "no cart". Measured 2026-09-08: the full money-sync read cost the delivery
+ * page ~1.2 s; this read is a third of one call.
+ */
+export async function getCartForPrefill(): Promise<HttpTypes.StoreCart | null> {
+  const id = await readCartId();
+  if (!id) return null;
+  try {
+    const { cart } = await sdk.store.cart.retrieve(id, {
+      fields: CART_PREFILL_FIELDS,
+    });
+    if (cart.completed_at) {
+      await clearCartId();
+      return null;
+    }
+    return cart;
+  } catch (err) {
+    console.error("[cart] prefill retrieve failed; clearing cookie:", err);
     await clearCartId();
     return null;
   }

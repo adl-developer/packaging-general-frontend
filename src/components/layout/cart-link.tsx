@@ -8,13 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useCartPulse } from "@/lib/cart-events";
 import { DURATION, EASE_PREMIUM, SPRING_TAP } from "@/lib/motion";
-
-const navButton =
-  "inline-flex h-8 items-center gap-2 rounded-button border border-line bg-background px-3 text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
+import { navButton } from "./nav-button";
 
 /**
  * Header Cart link (client island). Seeded with the live Medusa line count
- * (server-fetched in SiteHeader) so the badge is right on first paint, then
+ * (server-fetched in <HeaderCart>, streamed into SiteHeader) so the badge is
+ * right on first paint, then
  * subscribes to "cart:add"/"cart:set" events fired by Add-to-Cart buttons and
  * the cart page; bumps the icon (scale + tilt) and spring-pops the badge on
  * each event. Reduced motion is handled globally by
