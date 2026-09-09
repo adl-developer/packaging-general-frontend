@@ -116,7 +116,19 @@ beforeEach(() => {
   sdk.store.customer.listAddress.mockResolvedValue({ addresses: [] });
   sdk.store.customer.updateAddress.mockResolvedValue({ customer: {} });
   sdk.store.customer.createAddress.mockResolvedValue({ customer: {} });
-  sdk.client.fetch.mockResolvedValue({});
+  sdk.client.fetch.mockImplementation(async (path: string) => {
+    if (path.endsWith("/delivery")) {
+      return {
+        cart: {
+          ...liveCart,
+          shipping_methods: [{ shipping_option_id: "so_flat", amount: 30, name: "Standard Delivery" }],
+        },
+        delivery: { option_id: "so_flat", name: "Standard Delivery", price_type: "flat", amount: 30, fell_back: false },
+      };
+    }
+    if (path.endsWith("/sync")) return { cart: liveCart, sync: { changed: false } };
+    return {};
+  });
 });
 
 describe("saveContactInfo", () => {
@@ -157,23 +169,73 @@ describe("saveContactInfo", () => {
 });
 
 describe("saveDeliveryAddress", () => {
-  it("saves the address, attaches the flat option, and never revalidates", async () => {
+  it("saves the address and attaches the delivery option in ONE backend request", async () => {
+    const result = await saveDeliveryAddress(delivery);
+
+    expect(result).toEqual({ ok: true });
+    expect(sdk.client.fetch).toHaveBeenCalledTimes(1);
+    const [path, init] = sdk.client.fetch.mock.calls[0];
+    expect(path).toBe("/store/carts/cart_1/delivery");
+    expect(init.method).toBe("POST");
+    expect(init.body.email).toBe("ama@example.com");
+    expect(init.body.shipping_address.address_1).toBe("1 Probe Street, Osu");
+    expect(init.body.shipping_address.metadata).toMatchObject({
+      instructions: "Call on arrival",
+      lat: 5.6037,
+      lng: -0.187,
+    });
+    expect(init.body.billing_address).toEqual(init.body.shipping_address);
+    expect(String(init.query.fields)).toContain("shipping_methods");
+    // None of the old four calls run.
+    expect(sdk.store.cart.update).not.toHaveBeenCalled();
+    expect(sdk.store.fulfillment.listCartOptions).not.toHaveBeenCalled();
+    expect(sdk.store.fulfillment.calculate).not.toHaveBeenCalled();
+    expect(sdk.store.cart.addShippingMethod).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(scheduled).toHaveLength(0);
+  });
+
+  it("surfaces the backend's message when the cart has no delivery option", async () => {
+    sdk.client.fetch.mockRejectedValue(
+      Object.assign(
+        new Error("No delivery options are available right now. Please contact support."),
+        { status: 409 },
+      ),
+    );
+
+    const result = await saveDeliveryAddress(delivery);
+
+    expect(result).toEqual({
+      ok: false,
+      error: "No delivery options are available right now. Please contact support.",
+    });
+    expect(sdk.store.cart.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses to continue when the one-request path answered without a shipping method", async () => {
+    sdk.client.fetch.mockResolvedValue({ cart: { ...liveCart, shipping_methods: [] } });
+
+    const result = await saveDeliveryAddress(delivery);
+
+    expect(result.ok).toBe(false);
+  });
+
+  it("falls back to the four-call sequence when the backend has no /delivery yet", async () => {
+    sdk.client.fetch.mockRejectedValue(
+      Object.assign(new Error("Not Found"), { status: 404 }),
+    );
+
     const result = await saveDeliveryAddress(delivery);
 
     expect(result).toEqual({ ok: true });
     expect(sdk.store.cart.update).toHaveBeenCalledTimes(1);
     const [, body] = sdk.store.cart.update.mock.calls[0];
     expect(body.shipping_address.address_1).toBe("1 Probe Street, Osu");
-    expect(body.shipping_address.metadata).toMatchObject({
-      instructions: "Call on arrival",
-      lat: 5.6037,
-      lng: -0.187,
-    });
+    expect(sdk.store.fulfillment.listCartOptions).toHaveBeenCalledTimes(1);
     expect(sdk.store.cart.addShippingMethod).toHaveBeenCalledWith("cart_1", {
       option_id: "so_flat",
     });
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(scheduled).toHaveLength(0);
   });
 
   it("defers the signed-in address upsert: updates the default address after the response", async () => {

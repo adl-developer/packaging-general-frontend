@@ -283,48 +283,50 @@ export async function saveDeliveryAddress(input: {
     metadata: addressMetadata,
   };
 
+  // ONE backend request does the whole step — addresses, option choice,
+  // attach, zero-price guard (backend `POST /store/carts/:id/delivery`). It
+  // used to be four sequential calls (update → list options → price the
+  // calculated option → attach), 2.3–2.7 s end to end. A 404 means the backend
+  // predates the route (deploy skew): the four-call sequence below still
+  // works and is kept for exactly that case.
+  let useLegacySequence = false;
   try {
-    await sdk.store.cart.update(id, {
-      email,
-      shipping_address: address,
-      billing_address: address,
-    });
-
-    const { shipping_options } = await sdk.store.fulfillment.listCartOptions({
-      cart_id: id,
-    });
-    // The list never prices CALCULATED options (Medusa quirk): "Yango
-    // Delivery" comes back without an amount until `calculate` runs for
-    // it. Price each calculated option here — the backend's Yango provider
-    // answers with the live quote + markup, or the configured fallback fee,
-    // and never throws — then prefer it over the flat rate. A calculate call
-    // that fails outright marks that option unpriced so the flat option is
-    // attached instead (see lib/shipping-option.ts).
-    const priced = await Promise.all(
-      shipping_options.map(async (o) => {
-        if (o.price_type !== "calculated") return o;
-        try {
-          const { shipping_option } = await sdk.store.fulfillment.calculate(o.id, {
-            cart_id: id,
-          });
-          return { ...o, ...shipping_option };
-        } catch (err) {
-          console.warn("[checkout] shipping calculate failed for", o.id, err);
-          return { ...o, amount: 0, calculated_price: null };
-        }
-      })
+    const { cart } = await sdk.client.fetch<{ cart: HttpTypes.StoreCart }>(
+      `/store/carts/${id}/delivery`,
+      {
+        method: "POST",
+        body: { email, shipping_address: address, billing_address: address },
+        query: { fields: "id,*shipping_methods" },
+      }
     );
-    const option = pickShippingOption(priced);
-    if (!option) {
+    if (!cart.shipping_methods?.length) {
+      // The route never answers 200 without a method; belt-and-braces so a
+      // customer can never reach payment with no delivery on the cart.
       return {
         ok: false,
         error: "No delivery options are available right now. Please contact support.",
       };
     }
-    await sdk.store.cart.addShippingMethod(id, { option_id: option.id });
   } catch (err) {
-    console.error("[checkout] saveDeliveryAddress failed:", err);
-    return { ok: false, error: "Couldn't save your delivery details. Please try again." };
+    const status = (err as { status?: number })?.status;
+    if (status === 404) {
+      useLegacySequence = true;
+    } else if (status === 409) {
+      return {
+        ok: false,
+        error:
+          (err as Error).message ||
+          "No delivery options are available right now. Please contact support.",
+      };
+    } else {
+      console.error("[checkout] saveDeliveryAddress failed:", err);
+      return { ok: false, error: "Couldn't save your delivery details. Please try again." };
+    }
+  }
+
+  if (useLegacySequence) {
+    const legacy = await saveDeliveryAddressLegacy(id, email, address);
+    if (!legacy.ok) return legacy;
   }
 
   // Best-effort: upsert the signed-in customer's default saved address so the
@@ -365,6 +367,63 @@ export async function saveDeliveryAddress(input: {
   }
 
   // No revalidatePath here on purpose — see saveContactInfo.
+  return { ok: true };
+}
+
+/**
+ * The pre-2026-09-09 delivery step: four sequential backend calls. Kept ONLY
+ * for deploy skew (a backend without `POST /store/carts/:id/delivery`); the
+ * one-request path above is what runs otherwise. Same choice rule
+ * (`pickShippingOption`), same messages.
+ */
+async function saveDeliveryAddressLegacy(
+  id: string,
+  email: string,
+  address: HttpTypes.StoreAddAddress
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await sdk.store.cart.update(id, {
+      email,
+      shipping_address: address,
+      billing_address: address,
+    });
+
+    const { shipping_options } = await sdk.store.fulfillment.listCartOptions({
+      cart_id: id,
+    });
+    // The list never prices CALCULATED options (Medusa quirk): "Yango
+    // Delivery" comes back without an amount until `calculate` runs for
+    // it. Price each calculated option here — the backend's Yango provider
+    // answers with the live quote + markup, or the configured fallback fee,
+    // and never throws — then prefer it over the flat rate. A calculate call
+    // that fails outright marks that option unpriced so the flat option is
+    // attached instead (see lib/shipping-option.ts).
+    const priced = await Promise.all(
+      shipping_options.map(async (o) => {
+        if (o.price_type !== "calculated") return o;
+        try {
+          const { shipping_option } = await sdk.store.fulfillment.calculate(o.id, {
+            cart_id: id,
+          });
+          return { ...o, ...shipping_option };
+        } catch (err) {
+          console.warn("[checkout] shipping calculate failed for", o.id, err);
+          return { ...o, amount: 0, calculated_price: null };
+        }
+      })
+    );
+    const option = pickShippingOption(priced);
+    if (!option) {
+      return {
+        ok: false,
+        error: "No delivery options are available right now. Please contact support.",
+      };
+    }
+    await sdk.store.cart.addShippingMethod(id, { option_id: option.id });
+  } catch (err) {
+    console.error("[checkout] saveDeliveryAddress (legacy) failed:", err);
+    return { ok: false, error: "Couldn't save your delivery details. Please try again." };
+  }
   return { ok: true };
 }
 

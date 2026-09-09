@@ -107,11 +107,41 @@ async function syncMoqTiers(cartId: string): Promise<boolean> {
   }
 }
 
+/** True when the SDK error is a 404 — the cart is gone, or (for a route that
+ *  is newer than the deployed backend) the route does not exist yet. */
+function isNotFound(err: unknown): boolean {
+  return (err as { status?: number })?.status === 404;
+}
+
+/**
+ * Both server-computed charges — MOQ tier prices, then the platform fee — and
+ * the cart, in ONE backend request (`POST /store/carts/:id/sync?fields=…`,
+ * backend `utils/cart-charges.ts`). Returns the cart the backend read back
+ * after syncing, so the caller never needs a separate retrieve.
+ *
+ * Throws like a retrieve would: a 404 means the cart is gone OR the backend
+ * predates this route — callers fall back to `withPlatformFee` (the old
+ * two-route sync) in that case, which then 404s itself if the cart is truly
+ * gone.
+ */
+async function syncedCart(
+  cartId: string,
+  fields: string,
+): Promise<HttpTypes.StoreCart> {
+  const { cart } = await sdk.client.fetch<{ cart: HttpTypes.StoreCart }>(
+    `/store/carts/${cartId}/sync`,
+    { method: "POST", query: { fields } },
+  );
+  return cart;
+}
+
 /**
  * Re-derive the server-computed charges — MOQ tier prices, then the platform
  * fee — for a cart we have just read or mutated, and re-fetch only if a line
  * actually moved. (Named for the fee it started with; since 2026-08-14 it
- * also runs the tier sync.)
+ * also runs the tier sync.) Since 2026-09-09 this is the DEPLOY-SKEW FALLBACK
+ * for reads (`syncedCart` does it in one request); mutations still use it on
+ * the cart they already hold.
  *
  * ⚠ TIERS FIRST, FEE SECOND — the order is load-bearing. The fee's base is
  * `unit_price × quantity` over the goods lines, so it must be computed from
@@ -169,9 +199,7 @@ export async function getCart(
   const id = await readCartId();
   if (!id) return null;
   try {
-    const { cart } = await sdk.store.cart.retrieve(id, {
-      fields: CART_FIELDS,
-    });
+    const cart = await readCart(id, sync);
     // Cart was checked out — don't keep handing it back. Next add starts fresh.
     if (cart.completed_at) {
       await clearCartId();
@@ -195,16 +223,45 @@ export async function getCart(
           console.error("[cart] failed to prune stale line item:", err);
         }
       }
-      const { cart: refreshed } = await sdk.store.cart.retrieve(id, {
-        fields: CART_FIELDS,
-      });
-      return sync ? await withPlatformFee(refreshed, CART_FIELDS) : refreshed;
+      return await readCart(id, sync);
     }
-    return sync ? await withPlatformFee(cart, CART_FIELDS) : cart;
+    return cart;
   } catch (err) {
     console.error("[cart] retrieve failed; clearing cookie:", err);
     await clearCartId();
     return null;
+  }
+}
+
+/**
+ * One read of the cart with `CART_FIELDS`, synced or not.
+ *
+ * Synced = one `POST …/sync` request that runs tiers → fee and answers with
+ * the cart. If that route answers 404 the backend may simply predate it, so
+ * the old path runs instead — a plain retrieve (which throws its own 404 when
+ * the cart is really gone) followed by the two single-purpose sync routes.
+ * Any OTHER sync failure serves the cart unsynced: a fee that won't sync must
+ * not take the customer's cart away with it (the retrieve's own errors still
+ * propagate and clear the cookie as before).
+ */
+async function readCart(
+  id: string,
+  sync: boolean,
+): Promise<HttpTypes.StoreCart> {
+  if (!sync) {
+    const { cart } = await sdk.store.cart.retrieve(id, { fields: CART_FIELDS });
+    return cart;
+  }
+  try {
+    return await syncedCart(id, CART_FIELDS);
+  } catch (err) {
+    if (isNotFound(err)) {
+      const { cart } = await sdk.store.cart.retrieve(id, { fields: CART_FIELDS });
+      return await withPlatformFee(cart, CART_FIELDS);
+    }
+    console.error("[cart] charge sync failed; serving the cart unsynced:", err);
+    const { cart } = await sdk.store.cart.retrieve(id, { fields: CART_FIELDS });
+    return cart;
   }
 }
 
