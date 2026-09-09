@@ -9,9 +9,12 @@ import { supportWhatsappUrl } from "@/lib/whatsapp";
 // produce wrong messages on most pages.
 const SUPPORT_MESSAGE = "Hi Packaging General — I need help with an order.";
 
+// "Contact" is deliberately absent: there is no /contact page yet, and a
+// footer link to a 404 (plus its prefetch on every page view) is worse than no
+// link. Support reaches customers through the WhatsApp CTA in the same footer.
+// Re-add `{ label: "Contact", href: "/contact" }` once the page exists.
 const companyLinks = [
   { label: "About Us", href: "/about" },
-  { label: "Contact", href: "/contact" },
 ];
 
 const legalLinks = [
