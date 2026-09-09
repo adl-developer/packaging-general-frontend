@@ -11,8 +11,13 @@ Sentry.init({
   sendDefaultPii: true,
   tracesSampleRate: process.env.NODE_ENV === "development" ? 1.0 : 0.1,
 
-  // Attach local variable values to stack frames (server only).
-  includeLocalVariables: true,
+  // ⚠⚠ MUST STAY OFF. `includeLocalVariables: true` attaches Node's inspector
+  // to capture locals on every caught exception, and React/Next throw many
+  // during SSR. Measured on Vercel 2026-09-09 (canary vs identical build):
+  // /checkout/delivery HTML 4.0–5.2 s → 0.85 s, home 6.4–6.9 s → 0.6–0.9 s.
+  // It was the single largest cost of every hard page load on the site. The
+  // only thing lost is local-variable values in error reports.
+  includeLocalVariables: false,
 
   enableLogs: true,
 });
