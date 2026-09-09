@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Building2, Loader2 } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { saveContactInfo } from "@/lib/actions/checkout";
 import {
@@ -111,7 +111,7 @@ export function CompanyInfoForm({ initial }: { initial?: CompanyInfoInitial }) {
         Back to Cart
       </Link>
 
-      <motion.form
+      <m.form
         ref={formRef}
         initial={{ y: 12 }}
         animate={{ y: 0 }}
@@ -173,7 +173,7 @@ export function CompanyInfoForm({ initial }: { initial?: CompanyInfoInitial }) {
           {isPending && <Loader2 className="size-4 animate-spin" aria-hidden />}
           {isPending ? "Saving…" : "Continue to Delivery"}
         </button>
-      </motion.form>
+      </m.form>
     </div>
   );
 }

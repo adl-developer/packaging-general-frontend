@@ -99,6 +99,32 @@ own price** — per-variant pricing stays the source of truth; no tiers = flat p
 - Tier-priced lines are flagged `metadata.pg_moq_tiered` so removing a product's tiers
   walks its cart lines back to base; unflagged lines are never touched.
 
+## Shared Data Cache + admin-triggered revalidation (2026-09-09)
+
+Catalogue, categories, promotions and site content are read through Next's shared
+Data Cache (`unstable_cache`), NOT per-instance module Maps any more:
+`src/lib/catalog.ts` (`listProducts`, `getProductBySlug`, `listCrossSellProducts`,
+region id — catalogue tag, 1 h), `src/lib/categories.ts` (cards; icons re-attached after
+the cache because components don't serialise), `src/lib/promotions.ts` (5 min),
+`src/lib/site-content.ts` (1 h). Tags live in `src/lib/revalidate.ts` and MUST match the
+backend's `utils/storefront-revalidate.ts` verbatim.
+
+- ⚠ `src/lib/products.ts` is imported by CLIENT components for its pure helpers — it
+  must never import `next/cache` or the SDK. The loaders moved to `lib/catalog.ts`.
+- Every cached loader THROWS on failure/empty so `unstable_cache` never stores a bad
+  result; the exported reader catches and applies the old fallback (sample products,
+  null, [], last-known-good state). Keep that shape when adding readers.
+- `POST /api/revalidate` (`x-revalidate-secret` = `REVALIDATE_SECRET`, body `{tags}` or
+  `{all:true}`) expires tags immediately. The backend calls it from a subscriber on
+  product/variant/category events and from the admin settings routes. Both live
+  storefronts (prod alias + staging domain) have separate caches — the backend's
+  `FRONTEND_URL` list covers both.
+- ⚠ Stock (`lib/stock.ts`) and carts are NEVER cached. Not in scope for the Data Cache.
+- Cache Components (`cacheComponents: true`, `"use cache"`, static shells at the edge) was
+  deliberately NOT enabled — it is a whole-app migration (navigation semantics change,
+  `force-dynamic` disallowed, build errors for uncached data outside Suspense) that
+  needs its own browser-verified session. Candidate for a later phase.
+
 ## ⚠ Category browse is DATA-DRIVEN (2026-08-14)
 
 The hard-coded `SHOP_CATEGORIES` list is gone. Homepage cards, `/products` and

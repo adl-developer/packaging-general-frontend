@@ -1,4 +1,6 @@
+import { unstable_cache } from "next/cache";
 import { sdk } from "@/lib/medusa";
+import { CACHE_TAGS } from "@/lib/revalidate";
 
 /** The live code-triggered promotion advertised across the storefront
  *  (promo bar, cart promo box). Served by the custom backend route
@@ -34,24 +36,26 @@ interface ActivePromotionResponse {
   banner?: { live: boolean; message: string };
 }
 
-// Promotions change rarely but the header renders on every request — keep a
-// short module-level cache (same pattern as cachedRegionId in lib/products.ts)
-// so we don't hit the backend per page view.
+// Promotions change rarely but the header renders on every request. The
+// state lives in Next's shared Data Cache (one entry for every function
+// instance) for five minutes, tagged so an admin save of the banner drops it
+// immediately via POST /api/revalidate; a Medusa promotion toggled in the
+// admin shows within the five minutes. The module-level copy below is only
+// the last-known-good value served when the backend is unreachable.
 interface PromoState {
   promo: ActivePromotion | null;
   banner: PromoBanner;
 }
 
-let cached: { state: PromoState; at: number } | undefined;
-const TTL_MS = 60_000;
+let lastKnown: PromoState | undefined;
+const PROMO_REVALIDATE_SECONDS = 5 * 60;
 
 /** What a backend that predates the banner field implies: bar on, no override.
  *  Deploy order must never blank the promo bar. */
 const DEFAULT_BANNER: PromoBanner = { live: true, message: "" };
 
-async function getPromoState(): Promise<PromoState> {
-  if (cached && Date.now() - cached.at < TTL_MS) return cached.state;
-  try {
+const cachedPromoState = unstable_cache(
+  async (): Promise<PromoState> => {
     const { promotion, banner } =
       await sdk.client.fetch<ActivePromotionResponse>(
         "/store/active-promotion"
@@ -74,12 +78,21 @@ async function getPromoState(): Promise<PromoState> {
           }
         : DEFAULT_BANNER,
     };
-    cached = { state, at: Date.now() };
+    return state;
+  },
+  ["promo-state"],
+  { tags: [CACHE_TAGS.promotions], revalidate: PROMO_REVALIDATE_SECONDS },
+);
+
+async function getPromoState(): Promise<PromoState> {
+  try {
+    const state = await cachedPromoState();
+    lastKnown = state;
     return state;
   } catch (err) {
     console.error("[promotions] active-promotion fetch failed:", err);
     // Serve the stale value if we have one; otherwise hide promo UI.
-    return cached?.state ?? { promo: null, banner: DEFAULT_BANNER };
+    return lastKnown ?? { promo: null, banner: DEFAULT_BANNER };
   }
 }
 

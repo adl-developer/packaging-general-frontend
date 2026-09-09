@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { MotionConfig } from "motion/react";
+import { MotionProvider } from "@/components/motion/motion-provider";
 import { Analytics } from "@vercel/analytics/next";
 import { PwaClient } from "@/components/pwa/pwa-client";
 import "./globals.css";
@@ -75,11 +75,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} h-full`}>
       <body className="min-h-full bg-background text-brand">
-        {/* reducedMotion="user": disables transform/layout animations for users
-            who prefer reduced motion, while keeping opacity fades. Centralized
-            here so motion components never branch their render tree on the
-            client-only preference (which would cause SSR hydration mismatches). */}
-        <MotionConfig reducedMotion="user">{children}</MotionConfig>
+        {/* LazyMotion (domAnimation, strict) + MotionConfig reducedMotion="user",
+            composed in one client component — motion-provider.tsx explains
+            both. Every animated element renders `m.*`, never `motion.*`. */}
+        <MotionProvider>{children}</MotionProvider>
         <Analytics />
         <PwaClient />
       </body>

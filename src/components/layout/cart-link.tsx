@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ShoppingCart } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useCartPulse } from "@/lib/cart-events";
@@ -26,7 +26,7 @@ export function CartLink({ initialCount = 0 }: { initialCount?: number }) {
   return (
     <Link href="/cart" className={cn(navButton, "relative")}>
       {/* Icon: re-keyed on each bump so the keyframes replay once per add. */}
-      <motion.span
+      <m.span
         key={`icon-${lastBumpAt}`}
         animate={
           lastBumpAt === 0
@@ -37,11 +37,11 @@ export function CartLink({ initialCount = 0 }: { initialCount?: number }) {
         className="inline-flex"
       >
         <ShoppingCart className="size-4" aria-hidden />
-      </motion.span>
+      </m.span>
       <span className="hidden sm:inline">Cart</span>
       <AnimatePresence>
         {count > 0 && (
-          <motion.span
+          <m.span
             key={count}
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -50,7 +50,7 @@ export function CartLink({ initialCount = 0 }: { initialCount?: number }) {
             className="absolute -right-2 -top-2"
           >
             <Badge>{count}</Badge>
-          </motion.span>
+          </m.span>
         )}
       </AnimatePresence>
     </Link>

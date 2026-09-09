@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { staggerContainer, staggerItem } from "@/lib/motion";
 
 interface DivProps {
@@ -17,7 +17,7 @@ interface DivProps {
  */
 export function Stagger({ children, className }: DivProps) {
   return (
-    <motion.div
+    <m.div
       className={className}
       variants={staggerContainer}
       initial="hidden"
@@ -25,15 +25,15 @@ export function Stagger({ children, className }: DivProps) {
       viewport={{ once: true, margin: "0px 0px -80px 0px" }}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
 /** One staggered child. Inherits hidden/visible from the parent Stagger. */
 export function StaggerItem({ children, className }: DivProps) {
   return (
-    <motion.div className={className} variants={staggerItem}>
+    <m.div className={className} variants={staggerItem}>
       {children}
-    </motion.div>
+    </m.div>
   );
 }

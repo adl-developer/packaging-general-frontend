@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { AlertCircle, CheckCircle2, Loader2, MailCheck, X } from "lucide-react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { buyNowAuth } from "@/lib/actions/checkout";
@@ -85,7 +85,7 @@ export function BuyNowAuthDialog({
 
   return (
     <AnimatePresence>
-      <motion.div
+      <m.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -96,7 +96,7 @@ export function BuyNowAuthDialog({
         aria-modal="true"
         aria-labelledby="buy-now-auth-title"
       >
-        <motion.div
+        <m.div
           ref={panelRef}
           tabIndex={-1}
           initial={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -187,8 +187,8 @@ export function BuyNowAuthDialog({
               </form>
             </div>
           )}
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
     </AnimatePresence>
   );
 }

@@ -24,7 +24,7 @@ import { buyNow } from "@/lib/actions/checkout";
 import { beginOptimisticAdd, requestAddCommit } from "@/lib/cart-handoff";
 import { setReorderNotice } from "@/lib/reorder-notice";
 import { TAX_RATE, type CartItem } from "@/app/(shop)/cart/map-cart";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd } from "@/lib/cart-events";
 import { CartSkeleton } from "@/app/(shop)/cart/cart-skeleton";
@@ -171,19 +171,19 @@ export function ProductCustomizer({
       product.combos.filter((c) => c.sizeId === sizeId).map((c) => c.materialId),
     );
     if (!forSize.has(material)) {
-      const first = product.materials.find((m) => forSize.has(m.id));
+      const first = product.materials.find((mat) => forSize.has(mat.id));
       if (first) setMaterial(first.id);
     }
   };
 
   // ── Faceted-material helpers ──
-  const currentMaterial = product.materials.find((m) => m.id === material);
+  const currentMaterial = product.materials.find((mat) => mat.id === material);
   /** A facet value is offered when SOME material carrying it exists for the
    *  selected size — cross-facet conflicts are auto-corrected on click, size
    *  gaps (White only in 400³) are disabled. */
   const facetAvailable = (key: string, value: string) =>
     product.materials.some(
-      (m) => m.facets?.[key] === value && availableMaterials.has(m.id),
+      (mat) => mat.facets?.[key] === value && availableMaterials.has(mat.id),
     );
   /** Select a facet value: switch to the available material that carries it
    *  and agrees with the most other currently-selected facets (so picking
@@ -191,13 +191,13 @@ export function ProductCustomizer({
    *  Single Wall — the only spec White exists in). */
   const pickFacetValue = (key: string, value: string) => {
     const candidates = product.materials.filter(
-      (m) => m.facets?.[key] === value && availableMaterials.has(m.id),
+      (mat) => mat.facets?.[key] === value && availableMaterials.has(mat.id),
     );
     if (!candidates.length) return;
     const current = currentMaterial?.facets ?? {};
-    const agreement = (m: MaterialOption) =>
+    const agreement = (mat: MaterialOption) =>
       Object.entries(current).filter(
-        ([k, v]) => k !== key && m.facets?.[k] === v,
+        ([k, v]) => k !== key && mat.facets?.[k] === v,
       ).length;
     const best = candidates.reduce((a, b) =>
       agreement(b) > agreement(a) ? b : a,
@@ -774,22 +774,22 @@ export function ProductCustomizer({
                     sectionsRef.current[materialStart] = el;
                   }}
                 >
-                  {product.materials.map((m) => {
-                    const available = availableMaterials.has(m.id);
+                  {product.materials.map((mat) => {
+                    const available = availableMaterials.has(mat.id);
                     return (
                       <OptionCard
-                        key={m.id}
-                        selected={material === m.id}
+                        key={mat.id}
+                        selected={material === mat.id}
                         disabled={!available}
                         onSelect={() => {
                           if (!available) return;
                           warm();
-                          setMaterial(m.id);
+                          setMaterial(mat.id);
                         }}
-                        title={m.label}
+                        title={mat.label}
                         description={
                           available
-                            ? m.description
+                            ? mat.description
                             : `Not available in ${size || "this " + labels.size.toLowerCase()}`
                         }
                       />
@@ -1113,7 +1113,7 @@ function OptionCard({
         )}
       >
         {selected && (
-          <motion.span
+          <m.span
             className="size-2 rounded-full bg-brand"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
@@ -1127,13 +1127,13 @@ function OptionCard({
         {meta && <span className="text-sm text-muted">{meta}</span>}
       </span>
       {selected && (
-        <motion.span
+        <m.span
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={SPRING_TAP}
         >
           <Check className="size-5 shrink-0 text-brand" aria-hidden />
-        </motion.span>
+        </m.span>
       )}
     </button>
   );

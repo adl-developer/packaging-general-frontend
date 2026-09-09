@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { CartClient } from "./cart-client";
 import { mapLineItem, type CartItem } from "./map-cart";
 import { getCart } from "@/lib/actions/cart";
-import { listCrossSellProducts } from "@/lib/products";
+import { listCrossSellProducts } from "@/lib/catalog";
 import { getActivePromotion } from "@/lib/promotions";
 
 export const metadata: Metadata = {

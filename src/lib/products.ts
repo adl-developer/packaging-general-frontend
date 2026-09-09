@@ -7,9 +7,13 @@
 // SPARSE (White RSC only in 400³) — the customizer disables unavailable ones.
 // The static `products` array remains ONLY as a browse fallback when the
 // backend is unreachable.
+//
+// ⚠ This module is imported by CLIENT components (the customizer) for its pure
+// helpers, so it must stay free of server-only imports. The catalogue LOADERS
+// (listProducts, getProductBySlug, listCrossSellProducts) live in
+// `lib/catalog.ts`, which wraps them in Next's shared Data Cache.
 
 import type { HttpTypes } from "@medusajs/types";
-import { sdk } from "@/lib/medusa";
 import { parseMoqTiers, type MoqTier } from "@/lib/moq-tiers";
 import {
   parseAttributes,
@@ -285,43 +289,13 @@ export interface ProductSummary {
   variantIds: string[];
 }
 
-let cachedRegionId: string | undefined;
-
-/** Ghana region id — needed so the Store API returns GHS calculated prices. */
-async function getRegionId(): Promise<string | undefined> {
-  if (cachedRegionId) return cachedRegionId;
-  const { regions } = await sdk.store.region.list();
-  cachedRegionId =
-    (regions.find((r) => r.currency_code === "ghs") ?? regions[0])?.id;
-  return cachedRegionId;
-}
-
-/**
- * Catalog caches (module scope, per server instance).
- *
- * Products/prices are seed data that effectively never change at runtime, yet
- * every /products and /products/[slug] navigation was re-fetching them from
- * Medusa — a full backend round-trip that made "Place Order" feel slow (the
- * detail page fetches TWICE: generateMetadata + the page). A short TTL keeps a
- * re-seed from wedging a long-lived instance with stale data. Only SUCCESSFUL
- * backend responses are cached — a transient failure must not stick.
- */
-const CATALOG_TTL_MS = 5 * 60 * 1000;
-type Cached<T> = { data: T; at: number };
-function fresh<T>(entry: Cached<T> | null | undefined): T | undefined {
-  return entry && Date.now() - entry.at < CATALOG_TTL_MS ? entry.data : undefined;
-}
-let listProductsCache: Cached<ProductSummary[]> | null = null;
-const productBySlugCache = new Map<string, Cached<Product | null>>();
-let crossSellCache: Cached<CrossSellProduct[]> | null = null;
-
 /** Internal service products (e.g. the print-setup fee) are purchasable but
  *  never browsed directly. */
-function isServiceProduct(p: HttpTypes.StoreProduct): boolean {
+export function isServiceProduct(p: HttpTypes.StoreProduct): boolean {
   return Boolean((p.metadata as Record<string, unknown> | null)?.service);
 }
 
-function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
+export function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
   const prices = (p.variants ?? [])
     .map((v) => v.calculated_price?.calculated_amount)
     .filter((n): n is number => typeof n === "number");
@@ -346,33 +320,9 @@ function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
 // Two-field pattern: `*variants` returns the scalar columns,
 // `variants.calculated_price` adds the computed price, `*variants.options` +
 // `variants.options.option.title` expose which option values a variant holds.
-const DETAIL_FIELDS =
+export const DETAIL_FIELDS =
   "id,title,handle,description,thumbnail,images.url,metadata,*categories,*variants,variants.calculated_price,*variants.options,variants.options.option.title";
 
-/** Fetch a single product by handle (slug) for the detail page. Returns null
- *  on miss or backend error. */
-export async function getProductBySlug(slug: string): Promise<Product | null> {
-  const cached = fresh(productBySlugCache.get(slug));
-  if (cached !== undefined) return cached;
-  try {
-    const region_id = await getRegionId();
-    const { products: live } = await sdk.store.product.list({
-      region_id,
-      handle: slug,
-      fields: DETAIL_FIELDS,
-      limit: 1,
-    });
-    const p = live[0];
-    const result = !p || isServiceProduct(p) ? null : toFullProduct(p);
-    productBySlugCache.set(slug, { data: result, at: Date.now() });
-    return result;
-  } catch (err) {
-    console.error(`[getProductBySlug] failed for "${slug}":`, err);
-    return null; // transient — don't cache
-  }
-}
-
-/** A variant's option values keyed by option title (Size/Material/Printing). */
 export function variantOptionMap(
   v: HttpTypes.StoreProductVariant,
 ): Record<string, string> {
@@ -384,7 +334,7 @@ export function variantOptionMap(
   return map;
 }
 
-function toFullProduct(p: HttpTypes.StoreProduct): Product {
+export function toFullProduct(p: HttpTypes.StoreProduct): Product {
   const summary = toSummary(p);
   const meta = (p.metadata ?? {}) as Record<string, unknown>;
   const variants = p.variants ?? [];
@@ -589,53 +539,10 @@ export interface CrossSellProduct {
   unitLabel: string;
 }
 
-/** Fetch the cross-sell accessory variants with live GHS prices. Returns []
- *  when the backend is unreachable or the accessories aren't seeded — the
- *  cart section hides itself in that case. */
-export async function listCrossSellProducts(): Promise<CrossSellProduct[]> {
-  const cached = fresh(crossSellCache);
-  if (cached !== undefined) return cached;
-  try {
-    const region_id = await getRegionId();
-    const handles = [...new Set(CROSS_SELL_ITEMS.map((i) => i.handle))];
-    const { products: live } = await sdk.store.product.list({
-      region_id,
-      handle: handles,
-      fields:
-        "id,title,handle,description,metadata,*variants,variants.calculated_price",
-      limit: handles.length,
-    });
-    const result = CROSS_SELL_ITEMS.map((item): CrossSellProduct | null => {
-      const p = live.find((x) => x.handle === item.handle);
-      if (!p) return null;
-      const variant = item.sku
-        ? p.variants?.find((v) => v.sku === item.sku)
-        : p.variants?.[0];
-      if (!variant) return null;
-      const meta = (p.metadata ?? {}) as Record<string, unknown>;
-      return {
-        id: variant.id,
-        variantId: variant.id,
-        slug: p.handle ?? p.id,
-        name: item.name ?? p.title,
-        description: p.description ?? "",
-        pricePerUnit: variant.calculated_price?.calculated_amount ?? 0,
-        unitLabel:
-          typeof meta.unit_label === "string" ? meta.unit_label : "per unit",
-      };
-    }).filter((p): p is CrossSellProduct => p !== null);
-    crossSellCache = { data: result, at: Date.now() };
-    return result;
-  } catch (err) {
-    console.error("[listCrossSellProducts] failed:", err);
-    return []; // transient — don't cache
-  }
-}
-
 /** ProductSummary projection of the static `products` array — the Figma
  *  sample products. Used as a fallback when the Medusa backend is offline so
  *  the browse page still renders meaningful content. */
-const SAMPLE_PRODUCTS: ProductSummary[] = products.map((p) => ({
+export const SAMPLE_PRODUCTS: ProductSummary[] = products.map((p) => ({
   id: p.id,
   slug: p.slug,
   category: p.category,
@@ -650,29 +557,3 @@ const SAMPLE_PRODUCTS: ProductSummary[] = products.map((p) => ({
   // false, so these never show a spurious out-of-stock badge.
   variantIds: [],
 }));
-
-/** Fetch the live catalog for the browse grid. Falls back to the static sample
- *  products (Figma Browse frame) if the backend is unreachable, so /products
- *  is never empty in dev or when Medusa is down. Service products (print-setup
- *  fee) are excluded. */
-export async function listProducts(): Promise<ProductSummary[]> {
-  const cached = fresh(listProductsCache);
-  if (cached !== undefined) return cached;
-  try {
-    const region_id = await getRegionId();
-    const { products: live } = await sdk.store.product.list({
-      region_id,
-      fields:
-        "id,title,handle,description,thumbnail,images.url,metadata,*categories,*variants,variants.calculated_price",
-      limit: 100,
-    });
-    const browsable = live.filter((p) => !isServiceProduct(p));
-    const result = browsable.length ? browsable.map(toSummary) : SAMPLE_PRODUCTS;
-    // Only cache real catalog data — not the empty→sample fallback.
-    if (browsable.length) listProductsCache = { data: result, at: Date.now() };
-    return result;
-  } catch (err) {
-    console.error("[listProducts] Medusa unreachable; using sample products:", err);
-    return SAMPLE_PRODUCTS;
-  }
-}

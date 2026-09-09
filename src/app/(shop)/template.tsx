@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 
 // Enter transition on every shop route change. Opacity only — a transform here
@@ -16,12 +16,12 @@ export default function ShopTemplate({
   children: React.ReactNode;
 }) {
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: DURATION.fast, ease: EASE_PREMIUM }}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }

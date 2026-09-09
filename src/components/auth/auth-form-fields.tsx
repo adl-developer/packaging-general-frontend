@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
-import { motion } from "motion/react";
+import { LazyMotion, domMax, m } from "motion/react";
 import { cn } from "@/lib/utils";
 import { SPRING_SOFT } from "@/lib/motion";
 import { GH_PHONE_PATTERN, PHONE_ERROR } from "@/lib/validation";
@@ -26,7 +26,15 @@ export const socialButton =
   "flex h-11 w-full items-center justify-center gap-2 rounded-button border border-line bg-background text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
 
 /** Sign In / Sign Up tablist. `layoutId` is a prop so two instances could
- *  never fight over the same shared-layout pill. */
+ *  never fight over the same shared-layout pill.
+ *
+ *  The pill is a shared-layout animation (`layoutId`), which needs motion's
+ *  `layout` feature — part of `domMax`, not the `domAnimation` set the root
+ *  <MotionProvider> loads. Loading `domMax` here, synchronously and before
+ *  the pill first renders, keeps the slide identical while only the routes
+ *  that render these tabs (/sign-in, /sign-up, the Buy Now dialog) pay for the
+ *  drag + layout/projection code. Features register globally, so this nested
+ *  <LazyMotion> is additive, not a replacement. */
 export function AuthTabs({
   tab,
   onTabChange,
@@ -37,36 +45,38 @@ export function AuthTabs({
   layoutId?: string;
 }) {
   return (
-    <div
-      role="tablist"
-      aria-label="Authentication"
-      className="grid grid-cols-2 gap-1 rounded-option bg-line p-1"
-    >
-      {(["signin", "signup"] as const).map((t) => (
-        <button
-          key={t}
-          type="button"
-          role="tab"
-          aria-selected={tab === t}
-          onClick={() => onTabChange(t)}
-          className={cn(
-            "relative h-8 rounded-button px-3 text-sm font-medium transition-colors",
-            tab === t ? "text-brand" : "text-muted hover:text-brand",
-          )}
-        >
-          {tab === t && (
-            <motion.span
-              layoutId={layoutId}
-              transition={SPRING_SOFT}
-              className="absolute inset-0 rounded-button bg-background shadow-sm"
-            />
-          )}
-          <span className="relative">
-            {t === "signin" ? "Sign In" : "Sign Up"}
-          </span>
-        </button>
-      ))}
-    </div>
+    <LazyMotion features={domMax} strict>
+      <div
+        role="tablist"
+        aria-label="Authentication"
+        className="grid grid-cols-2 gap-1 rounded-option bg-line p-1"
+      >
+        {(["signin", "signup"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => onTabChange(t)}
+            className={cn(
+              "relative h-8 rounded-button px-3 text-sm font-medium transition-colors",
+              tab === t ? "text-brand" : "text-muted hover:text-brand",
+            )}
+          >
+            {tab === t && (
+              <m.span
+                layoutId={layoutId}
+                transition={SPRING_SOFT}
+                className="absolute inset-0 rounded-button bg-background shadow-sm"
+              />
+            )}
+            <span className="relative">
+              {t === "signin" ? "Sign In" : "Sign Up"}
+            </span>
+          </button>
+        ))}
+      </div>
+    </LazyMotion>
   );
 }
 
