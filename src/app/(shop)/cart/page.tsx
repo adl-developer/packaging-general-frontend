@@ -17,8 +17,13 @@ export default async function CartPage() {
   // CartClient paints from that instantly. Direct visits resolve this promise
   // client-side (same wait as before, now behind the page shell, not the
   // route-level skeleton).
-  const itemsPromise: Promise<CartItem[]> = getCart().then((cart) =>
-    (cart?.items ?? []).map(mapLineItem)
+  // `sync: false`: one round trip instead of three. Every cart mutation and
+  // promo change already re-syncs the tier prices and the fee on the cart it
+  // returns, and the payment page + initiatePaystack read with the sync on —
+  // so this render can only be stale if the admin changed the fee/tier config
+  // since the customer's last cart action, and the payment page corrects that.
+  const itemsPromise: Promise<CartItem[]> = getCart({ sync: false }).then(
+    (cart) => (cart?.items ?? []).map(mapLineItem)
   );
   // Both module-cached (5 min / 60 s) — cheap to await, and the sections they
   // fill render in the first paint.

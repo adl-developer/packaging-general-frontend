@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import { getFooterHoursLines } from "@/lib/site-content";
@@ -55,8 +56,34 @@ const STATIC_HOURS_LINES = [
   "Sat: 9:00 AM - 2:00 PM (GMT)",
 ];
 
-/** Global site footer (Figma: 4-column + business hours + copyright). */
-export async function SiteFooter() {
+function HoursLines({ lines }: { lines: string[] }) {
+  return (
+    <>
+      {lines.map((line) => (
+        <p key={line} className="text-xs text-muted">
+          {line}
+        </p>
+      ))}
+    </>
+  );
+}
+
+/**
+ * The hours lines, streamed. `getFooterHoursLines()` is the footer's only
+ * backend read, so it is the only part behind a <Suspense> — the rest of the
+ * footer is part of the shell. Admin-configured hours (Settings → Business
+ * Hours) win once saved; the static lines render until then or when the
+ * backend is unreachable. The Suspense fallback is those same static lines,
+ * so the swap is either a no-op or a text change within the same block.
+ */
+async function FooterHours() {
+  const hoursLines = (await getFooterHoursLines()) ?? STATIC_HOURS_LINES;
+  return <HoursLines lines={hoursLines} />;
+}
+
+/** Global site footer (Figma: 4-column + business hours + copyright).
+ *  Synchronous shell — the one await lives in <FooterHours>. */
+export function SiteFooter() {
   // supportWhatsappUrl returns null when NEXT_PUBLIC_SUPPORT_WHATSAPP is
   // unset/blank. The heading + sub-line + button are ONE CTA unit: the
   // sub-line ("Chat with our support team") is a verbal promise the button
@@ -66,9 +93,6 @@ export async function SiteFooter() {
   // content (posted opening hours are useful whether or not chat is
   // configured) and always renders regardless.
   const whatsappUrl = supportWhatsappUrl(SUPPORT_MESSAGE);
-  // Admin-configured hours (Settings → Business Hours) win once saved; the
-  // static lines above render until then or when the backend is unreachable.
-  const hoursLines = (await getFooterHoursLines()) ?? STATIC_HOURS_LINES;
 
   return (
     <footer className="mt-auto border-t border-line bg-surface">
@@ -118,11 +142,9 @@ export async function SiteFooter() {
               <p className="text-sm font-semibold text-brand">
                 Business Hours
               </p>
-              {hoursLines.map((line) => (
-                <p key={line} className="text-xs text-muted">
-                  {line}
-                </p>
-              ))}
+              <Suspense fallback={<HoursLines lines={STATIC_HOURS_LINES} />}>
+                <FooterHours />
+              </Suspense>
             </div>
           </div>
         </div>

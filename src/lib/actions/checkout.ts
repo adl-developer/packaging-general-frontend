@@ -2,9 +2,15 @@
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk, authHeaders } from "@/lib/medusa";
-import { getCart, getCartLineCount, addConfiguredLineItem } from "./cart";
+import {
+  getCart,
+  getCartForPrefill,
+  getCartLineCount,
+  addConfiguredLineItem,
+} from "./cart";
 import { getCustomer, signInCustomer, signUpCustomer } from "./auth";
 import { getAuthToken } from "@/lib/auth-token";
 import { getStockMap } from "@/lib/stock";
@@ -119,8 +125,10 @@ export interface CheckoutPrefill {
  * gaps. Guests start blank once their previous cart completes.
  */
 export async function getCheckoutPrefill(): Promise<CheckoutPrefill> {
+  // Slim read on purpose: these pages show no prices, so the full cart graph
+  // and the charge syncs would be three round trips spent on nothing.
   const [cart, customer, saved] = await Promise.all([
-    getCart(),
+    getCartForPrefill(),
     getCustomer(),
     getSavedAddress(),
   ]);
@@ -205,21 +213,26 @@ export async function saveContactInfo(input: {
   }
 
   // Best-effort: keep the signed-in customer's profile in sync so their NEXT
-  // checkout prefills these details. Never blocks the current checkout.
+  // checkout prefills these details. Nothing on the next page reads it, so it
+  // runs after the response has been sent (`after`), off the critical path.
   const token = await getAuthToken();
   if (token) {
-    try {
-      await sdk.store.customer.update(
-        { company_name: input.companyName, phone },
-        {},
-        authHeaders(token)
-      );
-    } catch (err) {
-      console.error("[checkout] customer profile sync failed:", err);
-    }
+    after(async () => {
+      try {
+        await sdk.store.customer.update(
+          { company_name: input.companyName, phone },
+          {},
+          authHeaders(token)
+        );
+      } catch (err) {
+        console.error("[checkout] customer profile sync failed:", err);
+      }
+    });
   }
 
-  revalidatePath("/checkout/delivery");
+  // No revalidatePath here on purpose: /checkout/delivery is force-dynamic, so
+  // the router.push that follows fetches it fresh anyway. The call used to
+  // re-render the page being LEFT inside this response (4-6 backend calls).
   return { ok: true };
 }
 
@@ -315,40 +328,43 @@ export async function saveDeliveryAddress(input: {
   }
 
   // Best-effort: upsert the signed-in customer's default saved address so the
-  // NEXT checkout prefills it. Never blocks the current checkout.
+  // NEXT checkout prefills it. Two more round trips that nothing on the payment
+  // page needs, so they run after the response has been sent (`after`).
   const token = await getAuthToken();
   if (token) {
-    try {
-      const payload = {
-        first_name: address.first_name,
-        last_name: address.last_name,
-        phone,
-        address_1: input.address,
-        city: "Accra",
-        country_code: "gh",
-        metadata: addressMetadata,
-      };
-      const { addresses } = await sdk.store.customer.listAddress(
-        {},
-        authHeaders(token)
-      );
-      const target =
-        addresses.find((a) => a.is_default_shipping) ?? addresses[0];
-      if (target) {
-        await sdk.store.customer.updateAddress(target.id, payload, {}, authHeaders(token));
-      } else {
-        await sdk.store.customer.createAddress(
-          { ...payload, is_default_shipping: true },
+    after(async () => {
+      try {
+        const payload = {
+          first_name: address.first_name,
+          last_name: address.last_name,
+          phone,
+          address_1: input.address,
+          city: "Accra",
+          country_code: "gh",
+          metadata: addressMetadata,
+        };
+        const { addresses } = await sdk.store.customer.listAddress(
           {},
           authHeaders(token)
         );
+        const target =
+          addresses.find((a) => a.is_default_shipping) ?? addresses[0];
+        if (target) {
+          await sdk.store.customer.updateAddress(target.id, payload, {}, authHeaders(token));
+        } else {
+          await sdk.store.customer.createAddress(
+            { ...payload, is_default_shipping: true },
+            {},
+            authHeaders(token)
+          );
+        }
+      } catch (err) {
+        console.error("[checkout] saving customer address failed:", err);
       }
-    } catch (err) {
-      console.error("[checkout] saving customer address failed:", err);
-    }
+    });
   }
 
-  revalidatePath("/checkout/payment");
+  // No revalidatePath here on purpose — see saveContactInfo.
   return { ok: true };
 }
 

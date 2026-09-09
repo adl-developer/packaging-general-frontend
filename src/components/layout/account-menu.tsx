@@ -17,14 +17,12 @@ import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { logout } from "@/lib/actions/auth";
+import { navButton } from "./nav-button";
 
 export interface AccountUser {
   name: string;
   email: string;
 }
-
-const navButton =
-  "inline-flex h-8 items-center gap-2 rounded-button border border-line bg-background px-3 text-sm font-medium text-brand transition-colors hover:bg-line/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
 
 const menuItem =
   "flex w-full items-center gap-2 rounded-[12px] px-2 py-1.5 text-sm text-brand transition-colors hover:bg-line/30";

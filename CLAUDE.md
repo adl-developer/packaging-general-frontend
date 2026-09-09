@@ -55,6 +55,14 @@ charges it as a line item flagged `metadata.pg_platform_fee`. Helpers: `src/lib/
   `initiatePaymentSession`; if that call order ever changes, the sync needs its own
   explicit call there. Cart mutations sync too, but only so the cart page isn't showing
   the previous basket's fee.
+- **Read policy (2026-09-09 speed review):** `getCart({ sync: false })` skips both
+  charge syncs — one round trip instead of three — and is used ONLY by the cart page
+  render, whose numbers the mutations already keep right. The payment page and
+  `initiatePaystack` keep the default `sync: true`. The checkout prefill pages read via
+  `getCartForPrefill()` (email + metadata + shipping address, no syncs, no items).
+  `saveContactInfo`/`saveDeliveryAddress` no longer call `revalidatePath` (their targets
+  are `force-dynamic`, and the call re-rendered the page being left inside the action
+  response) and run their signed-in profile/address syncs in `after()`.
 - ⚠⚠ **IT IS NEVER PRESENTED AS A PRODUCT** (client, 2026-08-11). It is a charge, in the
   same family as VAT/NHIL and delivery, and belongs beside the total — never in an item
   list, never in an item count, never with a stepper or a delete button. It was briefly
