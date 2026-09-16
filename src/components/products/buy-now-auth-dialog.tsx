@@ -154,7 +154,7 @@ export function BuyNowAuthDialog({
                 onTabChange={setTab}
                 layoutId="buyNowAuthTabPill"
               />
-              <AuthSocialRow />
+              <AuthSocialRow dividerBackground="bg-background" />
               <form action={formAction} className="flex flex-col gap-4">
                 <AuthFormBody
                   tab={tab}

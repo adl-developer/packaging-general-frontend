@@ -13,14 +13,16 @@ export const metadata: Metadata = {
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ reset?: string }>;
+  searchParams: Promise<{ reset?: string; password?: string }>;
 }) {
   // Already signed in — nothing to do here.
   if (await getCustomer()) redirect("/account/orders");
-  const { reset } = await searchParams;
+  const { reset, password } = await searchParams;
   const notice =
     reset === "success"
       ? "Your password has been reset. Please sign in with your new password."
-      : undefined;
+      : password === "changed"
+        ? "Your password has been updated. Please sign in with your new password."
+        : undefined;
   return <AuthCard defaultTab="signin" notice={notice} />;
 }

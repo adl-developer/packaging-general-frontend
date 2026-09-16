@@ -725,7 +725,7 @@ export async function resetPassword(
   redirect("/sign-in?reset=success");
 }
 
-/* ─── Account settings (change email / delete account) ─── */
+/* ─── Account settings (change email / password / delete account) ─── */
 
 export type AccountSettingsState = { ok: boolean; error: string | null };
 
@@ -775,6 +775,123 @@ export async function changeAccountEmail(
 
   revalidatePath("/", "layout");
   return { ok: true, error: null };
+}
+
+/**
+ * Signed-in password change. The backend re-verifies the current password,
+ * rewrites the hash, signs out every OTHER session (tokens issued before the
+ * change are rejected from then on) and returns a fresh token for this
+ * browser, which replaces the cookie so the customer stays signed in here.
+ *
+ * ⚠ If no fresh token comes back the OLD one is already dead (issued before
+ * the change), so the only honest move is to drop it and send them to sign
+ * in with the new password.
+ */
+export async function changeAccountPassword(
+  _prev: AccountSettingsState,
+  formData: FormData
+): Promise<AccountSettingsState> {
+  const currentPassword = String(formData.get("current_password") || "");
+  const newPassword = String(formData.get("new_password") || "");
+  const confirm = String(formData.get("confirm") || "");
+
+  if (!currentPassword) {
+    return { ok: false, error: "Please enter your current password." };
+  }
+  if (newPassword.length < 8) {
+    return { ok: false, error: "Password must be at least 8 characters." };
+  }
+  if (newPassword !== confirm) {
+    return { ok: false, error: "Passwords don't match." };
+  }
+  if (newPassword === currentPassword) {
+    return {
+      ok: false,
+      error: "Your new password must be different from your current one.",
+    };
+  }
+
+  const token = await getAuthToken();
+  if (!token) redirect("/sign-in");
+
+  let freshToken: string | null = null;
+  try {
+    const result = await sdk.client.fetch<{
+      changed: boolean;
+      token: string | null;
+    }>("/store/account/password", {
+      method: "POST",
+      body: { current_password: currentPassword, new_password: newPassword },
+      headers: authHeaders(token),
+    });
+    freshToken = result?.token ?? null;
+  } catch (err) {
+    console.error("[auth] change password failed:", err);
+    return {
+      ok: false,
+      error: settingsError(
+        err,
+        "We couldn't update your password. Please try again."
+      ),
+    };
+  }
+
+  // redirect() throws NEXT_REDIRECT, so it must live outside any try/catch.
+  if (!freshToken) {
+    await clearAuthToken();
+    revalidatePath("/", "layout");
+    redirect("/sign-in?password=changed");
+  }
+
+  await setAuthToken(freshToken);
+  return { ok: true, error: null };
+}
+
+/**
+ * "Forgotten your current password?" from the settings page — request the
+ * standard reset email for the SIGNED-IN account. The address comes from the
+ * session, never from the form, so this can't be pointed at someone else.
+ */
+export async function sendAccountResetLink(): Promise<AccountSettingsState> {
+  const token = await getAuthToken();
+  if (!token) redirect("/sign-in");
+
+  let email: string | undefined;
+  try {
+    const { customer } = await sdk.store.customer.retrieve(
+      { fields: "email" },
+      authHeaders(token)
+    );
+    email = customer?.email?.trim().toLowerCase();
+  } catch (err) {
+    console.error("[auth] sendAccountResetLink lookup failed:", err);
+  }
+  if (!email) {
+    return {
+      ok: false,
+      error: "We couldn't send the reset link right now. Please try again.",
+    };
+  }
+
+  try {
+    await createAuthClient().auth.resetPassword("customer", "emailpass", {
+      identifier: email,
+    });
+    return { ok: true, error: null };
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status === 429) {
+      return {
+        ok: false,
+        error: "Too many requests. Please wait a few minutes and try again.",
+      };
+    }
+    console.error("[auth] sendAccountResetLink failed:", err);
+    return {
+      ok: false,
+      error: "We couldn't send the reset link right now. Please try again.",
+    };
+  }
 }
 
 export async function deleteAccount(

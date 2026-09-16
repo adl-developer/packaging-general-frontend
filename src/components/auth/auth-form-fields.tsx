@@ -83,7 +83,13 @@ export function AuthTabs({
 /** Social providers + "Or continue with email" divider.
  *  ⚠ The Google button is not wired to anything — it never has been. Kept for
  *  visual parity with /sign-in; wire it or hide it before launch. */
-export function AuthSocialRow() {
+export function AuthSocialRow({
+  dividerBackground,
+}: {
+  /** Background of the panel the row sits on — the divider label masks the
+   *  rule with it, so it must match or the label shows as a pill. */
+  dividerBackground?: string;
+}) {
   return (
     <>
       <div className="flex flex-col gap-3">
@@ -92,7 +98,7 @@ export function AuthSocialRow() {
           Continue with Google
         </button>
       </div>
-      <Divider label="Or continue with email" />
+      <Divider label="Or continue with email" background={dividerBackground} />
     </>
   );
 }
@@ -277,11 +283,25 @@ export function PasswordToggle({
   );
 }
 
-export function Divider({ label }: { label: string }) {
+/** `background` is the Tailwind bg class of the surrounding panel; the label
+ *  paints it over the rule to make the gap. Defaults to the auth pages'
+ *  `bg-surface`; the Buy Now dialog sits on `bg-background` and passes that. */
+export function Divider({
+  label,
+  background = "bg-surface",
+}: {
+  label: string;
+  background?: string;
+}) {
   return (
     <div className="relative flex items-center">
       <span className="h-px w-full bg-line" aria-hidden />
-      <span className="absolute left-1/2 -translate-x-1/2 bg-surface px-2 text-xs text-muted">
+      <span
+        className={cn(
+          "absolute left-1/2 -translate-x-1/2 px-2 text-xs text-muted",
+          background,
+        )}
+      >
         {label}
       </span>
     </div>
