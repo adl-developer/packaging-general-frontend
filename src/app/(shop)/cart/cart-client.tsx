@@ -34,8 +34,8 @@ import {
   takeOptimisticAdd,
 } from "@/lib/cart-handoff";
 import type { CrossSellProduct } from "@/lib/products";
-import type { ActivePromotion } from "@/lib/promotions";
-import { promoOffer, promoScope } from "@/lib/promo-copy";
+import type { ActivePromotion, PromoBanner } from "@/lib/promotions";
+import { promoMessage } from "@/lib/promo-copy";
 
 export type { CartItem } from "./map-cart";
 
@@ -436,13 +436,18 @@ export function CartClient({
   itemsPromise,
   crossSell,
   promo,
+  banner,
 }: {
   /** The live cart's mapped items, streamed from the server render — NOT
    *  awaited there, so the page shell paints without waiting on the backend. */
   itemsPromise: Promise<CartItem[]>;
   crossSell: CrossSellProduct[];
   promo: ActivePromotion | null;
+  /** The admin-typed announcement — the promo box shows ITS text, same as the
+   *  header bar, so the two can never claim different discounts. */
+  banner: PromoBanner;
 }) {
+  const promoBox = promoMessage(promo, banner);
   const [items, setItems] = React.useState<CartItem[]>([]);
   // False until the first real cart snapshot is adopted (handoff or promise);
   // the skeleton renders meanwhile so the pre-adoption [] never flashes as an
@@ -1087,18 +1092,27 @@ export function CartClient({
         >
           Keep Shopping
         </Link>
-        {/* Promo / discount-code prompt — the live active promotion from
-            Medusa (GET /store/active-promotion). Hidden when none is active. */}
-        {promo && (
+        {/* Promo / discount-code prompt. The message is the SAME text the
+            header promo bar shows (`promoMessage`: the admin-typed banner,
+            else copy derived from the live promotion) — the two surfaces
+            cannot advertise different discounts. The code line beneath is a
+            fact of the promotion record, not a claim. Hidden when there is
+            nothing to advertise. */}
+        {promoBox && (
           <div className="mt-1 rounded-option border border-line bg-surface px-4 py-3">
-            <p className="text-xs text-muted">Use code</p>
-            <p className="text-base font-bold tracking-wider text-brand">
-              {promo.code}
-            </p>
-            {/* Same wording as the header promo bar (shared promo-copy
-                helpers) so the two advertised messages can't drift. */}
+            {/* Same three-line layout as before (label / code / message);
+                only the message text changed source. */}
+            {promo && (
+              <>
+                <p className="text-xs text-muted">Use code</p>
+                <p className="text-base font-bold tracking-wider text-brand">
+                  {promo.code}
+                </p>
+              </>
+            )}
             <p className="text-xs text-muted">
-              at checkout — enjoy {promoOffer(promo)} {promoScope(promo)}
+              {promoBox.headline}
+              {promoBox.subMessage ? ` ${promoBox.subMessage}` : ""}
             </p>
           </div>
         )}
