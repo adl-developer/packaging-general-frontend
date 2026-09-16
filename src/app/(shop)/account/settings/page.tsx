@@ -37,7 +37,7 @@ export default async function AccountSettingsPage() {
           Account Settings
         </h1>
         <p className="text-base leading-6 text-muted">
-          Manage the email you sign in with, or close your account.
+          Manage the email and password you sign in with, or close your account.
         </p>
       </Reveal>
 
