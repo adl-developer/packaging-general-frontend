@@ -53,7 +53,10 @@ function LinkList({
 
 /** The footer's original static hours — still shown until business hours are
  *  configured in the admin portal (Settings → Business Hours), so the footer
- *  never goes blank on a store that has not saved any. */
+ *  never goes blank on a store that has not saved any.
+ *  ⚠ The admin editor's prefill (`backend/src/api/admin/pg/settings/
+ *  site-content.ts`, `defaultBusinessHours`) mirrors these exact times —
+ *  change both together. */
 const STATIC_HOURS_LINES = [
   "Mon - Fri: 8:00 AM - 6:00 PM (GMT)",
   "Sat: 9:00 AM - 2:00 PM (GMT)",

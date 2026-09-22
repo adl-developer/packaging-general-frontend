@@ -331,8 +331,8 @@ export function ProductCustomizer({
     : null;
 
   const images = React.useMemo(
-    () => toProductImages(product.images, product.name),
-    [product.images, product.name],
+    () => toProductImages(product.images, product.name, product.thumbnail),
+    [product.images, product.name, product.thumbnail],
   );
 
   // The action bar is `fixed`, so it covers the last ~70px of the page — which

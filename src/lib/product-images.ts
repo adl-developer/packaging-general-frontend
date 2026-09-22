@@ -27,9 +27,26 @@ export interface ProductImage {
   alt: string;
 }
 
-/** Converts ordered Medusa product-media URLs into gallery-ready images. */
-export function toProductImages(urls: readonly string[], name: string): ProductImage[] {
-  return urls.map((src, i) => ({
+/**
+ * Converts ordered Medusa product-media URLs into gallery-ready images.
+ *
+ * The product's cover (`thumbnail`, chosen in the admin) leads the gallery
+ * when it is one of the images, so the picture on the product card is also
+ * the first one on the product page. The admin now moves the cover to first
+ * on "Set cover" too; this handles products saved before it did. A cover that
+ * isn't among the images (or none) leaves Medusa's order untouched.
+ */
+export function toProductImages(
+  urls: readonly string[],
+  name: string,
+  thumbnail?: string | null,
+): ProductImage[] {
+  const coverIndex = thumbnail ? urls.indexOf(thumbnail) : -1;
+  const ordered =
+    coverIndex > 0
+      ? [urls[coverIndex], ...urls.slice(0, coverIndex), ...urls.slice(coverIndex + 1)]
+      : urls;
+  return ordered.map((src, i) => ({
     src,
     alt: i === 0 ? name : name + " — view " + (i + 1),
   }));

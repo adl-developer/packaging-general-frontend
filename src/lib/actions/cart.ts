@@ -32,8 +32,13 @@ const COOKIE_OPTS = {
   path: "/",
 };
 
+// `items.tax_lines.rate` is what prices the cart page's per-line "incl. tax"
+// figures (map-cart.ts `lineTaxRate`) — the rate is admin-configurable and may
+// be 0, so it can't be a constant. Both field sets carry it: a mutation's
+// response replaces the mapped lines wholesale, and a line without it would
+// snap back to the statutory 20% fallback.
 const CART_FIELDS =
-  "id,email,currency_code,metadata,*items,*items.variant,*items.variant.options,items.variant.options.option.title,*items.product,region,*shipping_address,*billing_address,*shipping_methods,*promotions,*payment_collection,payment_collection.payment_sessions,total,subtotal,tax_total,discount_total,shipping_total,item_total,item_subtotal,item_tax_total,completed_at";
+  "id,email,currency_code,metadata,*items,items.tax_lines.rate,*items.variant,*items.variant.options,items.variant.options.option.title,*items.product,region,*shipping_address,*billing_address,*shipping_methods,*promotions,*payment_collection,payment_collection.payment_sessions,total,subtotal,tax_total,discount_total,shipping_total,item_total,item_subtotal,item_tax_total,completed_at";
 
 /**
  * Slim field set for LINE-ITEM MUTATIONS only (add / qty / remove / empty).
@@ -49,7 +54,7 @@ const CART_FIELDS =
  * the payment/shipping/promotion graph (see storefront/CLAUDE.md).
  */
 const CART_MUTATION_FIELDS =
-  "id,completed_at,*items,*items.variant,*items.variant.options,items.variant.options.option.title,items.product.metadata";
+  "id,completed_at,*items,items.tax_lines.rate,*items.variant,*items.variant.options,items.variant.options.option.title,items.product.metadata";
 
 /**
  * Field set for the checkout PREFILL reads (`/checkout`, `/checkout/delivery`).
