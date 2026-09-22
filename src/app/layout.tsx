@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { MotionProvider } from "@/components/motion/motion-provider";
 import { Analytics } from "@vercel/analytics/next";
 import { PwaClient } from "@/components/pwa/pwa-client";
+import { FeedbackWidget } from "@/components/feedback/feedback-widget";
 import "./globals.css";
 
 const inter = Inter({
@@ -78,7 +79,12 @@ export default function RootLayout({
         {/* LazyMotion (domAnimation, strict) + MotionConfig reducedMotion="user",
             composed in one client component — motion-provider.tsx explains
             both. Every animated element renders `m.*`, never `motion.*`. */}
-        <MotionProvider>{children}</MotionProvider>
+        <MotionProvider>
+          {children}
+          {/* Floating feedback button on every route (shop + auth). Inside
+              MotionProvider because it animates with `m.*`. */}
+          <FeedbackWidget />
+        </MotionProvider>
         <Analytics />
         <PwaClient />
       </body>

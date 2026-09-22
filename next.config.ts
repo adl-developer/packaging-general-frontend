@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
+  // Dev-only Next.js badge. Its default corner (bottom-left) is where the
+  // floating feedback button lives, and the badge sits on top of it.
+  devIndicators: { position: "bottom-right" },
   images: {
     remotePatterns: [
       {
