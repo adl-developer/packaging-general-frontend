@@ -28,6 +28,7 @@ import {
   EMAIL_ERROR,
   PHONE_ERROR,
 } from "@/lib/validation";
+import { chosenMethod, isPickupCart } from "@/lib/fulfillment";
 
 /**
  * Checkout server actions — wire forms + payment to Medusa, then to Paystack.
@@ -116,6 +117,13 @@ export interface CheckoutPrefill {
   instructions: string;
   lat: number | null;
   lng: number | null;
+  /** Customer self-pickup (2026-09-22): what the cart last chose, so the
+   *  delivery step re-opens the same card. Null = never chosen. */
+  fulfillmentMethod: "delivery" | "pickup" | null;
+  /** Who will collect — the collector saved on a pickup cart, else the
+   *  contact step's person and phone. */
+  pickupName: string;
+  pickupPhone: string;
 }
 
 /**
@@ -134,7 +142,17 @@ export async function getCheckoutPrefill(): Promise<CheckoutPrefill> {
   ]);
 
   const meta = (cart?.metadata ?? null) as Record<string, unknown> | null;
-  const cartAddr = cart?.shipping_address;
+  // ⚠ A pickup cart's shipping address is the WAREHOUSE (the backend puts the
+  // collector at the pickup point). It must never be offered back as the
+  // customer's delivery address — nor treated as one by Buy Now's
+  // `isPrefillComplete` — so the delivery fields skip it.
+  const pickupCart = isPickupCart(
+    meta,
+    cart?.shipping_address?.metadata as Record<string, unknown> | null,
+  );
+  const pickupAddr = pickupCart ? cart?.shipping_address : null;
+  const cartAddr = pickupCart ? null : cart?.shipping_address;
+  const fulfillmentMethod = chosenMethod(meta);
   const customerName = customer
     ? [customer.first_name, customer.last_name].filter(Boolean).join(" ")
     : "";
@@ -165,6 +183,18 @@ export async function getCheckoutPrefill(): Promise<CheckoutPrefill> {
       metaString(saved?.metadata as Record<string, unknown> | null, "instructions"),
     lat: metaNumber(cartAddr?.metadata as Record<string, unknown> | null, "lat"),
     lng: metaNumber(cartAddr?.metadata as Record<string, unknown> | null, "lng"),
+    fulfillmentMethod,
+    pickupName:
+      (pickupAddr
+        ? [pickupAddr.first_name, pickupAddr.last_name].filter(Boolean).join(" ")
+        : "") ||
+      metaString(meta, "contact_person") ||
+      customerName,
+    pickupPhone:
+      pickupAddr?.phone ||
+      metaString(meta, "contact_phone") ||
+      customer?.phone ||
+      "",
   };
 }
 
@@ -235,6 +265,70 @@ export async function saveContactInfo(input: {
   // re-render the page being LEFT inside this response (4-6 backend calls).
   return { ok: true };
 }
+
+/**
+ * Customer self-pickup (2026-09-22): attach the free pickup option. The
+ * backend puts the COLLECTOR (name + phone) at the store's pickup point — the
+ * street address is always the server's, never ours — so every "has an
+ * address" gate downstream (payment page, Paystack start) passes unchanged.
+ *
+ * The contact step already saved company, contact person and email, so this
+ * asks only who will collect. 409 = pickup isn't available right now (no
+ * pickup point / phone / option) and the backend left the cart untouched; a
+ * 400 means a backend that predates pickup — both read as "choose delivery".
+ */
+export async function savePickup(input: {
+  collectorName: string;
+  phone: string;
+  email: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const id = await readCartId();
+  if (!id) return { ok: false, error: "Your cart has expired. Please add an item again." };
+
+  const email = input.email.trim();
+  const phone = normalizeGhanaPhone(input.phone);
+  const name = input.collectorName.trim();
+  if (!name) return { ok: false, error: "Please tell us who will collect the order." };
+  if (!phone) return { ok: false, error: PHONE_ERROR };
+  if (email && !isValidEmail(email)) return { ok: false, error: EMAIL_ERROR };
+
+  const [firstName, ...rest] = name.split(/\s+/);
+  try {
+    const { cart } = await sdk.client.fetch<{ cart: HttpTypes.StoreCart }>(
+      `/store/carts/${id}/delivery`,
+      {
+        method: "POST",
+        body: {
+          method: "pickup",
+          ...(email ? { email } : {}),
+          // Only the collector's details — the backend supplies the address.
+          shipping_address: {
+            first_name: firstName,
+            last_name: rest.join(" "),
+            phone,
+          },
+        },
+        query: { fields: "id,*shipping_methods" },
+      }
+    );
+    if (!cart.shipping_methods?.length) {
+      return { ok: false, error: PICKUP_UNAVAILABLE };
+    }
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status === 409) {
+      return { ok: false, error: (err as Error).message || PICKUP_UNAVAILABLE };
+    }
+    if (status === 400) return { ok: false, error: PICKUP_UNAVAILABLE };
+    console.error("[checkout] savePickup failed:", err);
+    return { ok: false, error: "Couldn't save your pickup details. Please try again." };
+  }
+  // No revalidatePath — see saveContactInfo.
+  return { ok: true };
+}
+
+const PICKUP_UNAVAILABLE =
+  "Pickup isn't available right now. Please choose delivery or contact support.";
 
 /** Persist the shipping address and auto-select the first shipping option for
  *  the cart. In Ghana we currently have a single Standard Delivery option, so

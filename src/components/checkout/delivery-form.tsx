@@ -49,7 +49,18 @@ interface Coords {
   lng: number;
 }
 
-export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
+export function DeliveryForm({
+  initial,
+  embedded = false,
+}: {
+  initial?: DeliveryInitial;
+  /** Customer self-pickup (2026-09-22): rendered INSIDE the "Deliver to me"
+   *  card of `FulfillmentChooser` — no progress strip, page frame, card
+   *  chrome or heading of its own (the card supplies them). Standalone is
+   *  the page exactly as it was before pickup existed, and is still what
+   *  shows when pickup is not offered. */
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -263,30 +274,30 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
     });
   }
 
-  return (
-    <>
-      <OrderProgress
-        step={3}
-        back={<ProgressBackLink href="/cart">Back to Cart</ProgressBackLink>}
-      />
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+  const form = (
         <m.form
           ref={formRef}
-          initial={{ y: 12 }}
+          initial={embedded ? false : { y: 12 }}
           animate={{ y: 0 }}
           transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
           onSubmit={onSubmit}
           onInput={revalidate}
-          className="mx-auto flex max-w-2xl flex-col gap-6 rounded-card border border-line bg-surface p-6"
+          className={
+            embedded
+              ? "flex flex-col gap-6"
+              : "mx-auto flex max-w-2xl flex-col gap-6 rounded-card border border-line bg-surface p-6"
+          }
         >
-          <div className="flex flex-col gap-1">
-            <h1 className="text-base font-medium text-brand">
-              Delivery Information
-            </h1>
-            <p className="text-base text-muted">
-              Where should we deliver your order?
-            </p>
-          </div>
+          {!embedded && (
+            <div className="flex flex-col gap-1">
+              <h1 className="text-base font-medium text-brand">
+                Delivery Information
+              </h1>
+              <p className="text-base text-muted">
+                Where should we deliver your order?
+              </p>
+            </div>
+          )}
 
           <div
             className="flex items-start gap-3 rounded-option border border-accent/40 bg-accent/10 px-3 py-2.5 text-sm text-brand"
@@ -460,6 +471,17 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
             {isPending ? "Saving…" : "Continue to Payment"}
           </button>
         </m.form>
+  );
+
+  if (embedded) return form;
+  return (
+    <>
+      <OrderProgress
+        step={3}
+        back={<ProgressBackLink href="/cart">Back to Cart</ProgressBackLink>}
+      />
+      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {form}
       </div>
     </>
   );

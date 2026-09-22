@@ -14,6 +14,7 @@ import {
 import { PaymentMethod } from "@/components/checkout/payment-method";
 import { getCart } from "@/lib/actions/cart";
 import { goodsLines, platformFeeTotal } from "@/lib/platform-fee";
+import { isPickupCart } from "@/lib/fulfillment";
 import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-progress";
 
 export const metadata: Metadata = {
@@ -70,6 +71,12 @@ export default async function PaymentPage({
   const appliedCode =
     (cart.promotions ?? []).map((p) => p.code).find((c) => !!c) ?? null;
   const deliveryAddress = formatAddress(cart.shipping_address);
+  // Customer self-pickup (2026-09-22): the backend puts the collector at the
+  // pickup point and flags the address; the cart records the choice too.
+  const pickup = isPickupCart(
+    cart.metadata as Record<string, unknown> | null,
+    cart.shipping_address?.metadata as Record<string, unknown> | null,
+  );
 
   return (
     <>
@@ -89,6 +96,7 @@ export default async function PaymentPage({
             shippingMethod={shippingMethod}
             appliedCode={appliedCode}
             deliveryAddress={deliveryAddress}
+            pickup={pickup}
           />
 
           <Card className="flex flex-col gap-6">

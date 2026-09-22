@@ -54,3 +54,17 @@ describe("price reading", () => {
     expect(isUsableShippingOption(yangoFailedOpen)).toBe(false);
   });
 });
+
+describe("pickShippingOption — never the pickup option (self-pickup)", () => {
+  const pickup = { id: "so_pickup", price_type: "flat", amount: 0, type: { code: "pickup" } };
+  const flat = { id: "so_flat", price_type: "flat", amount: 30 };
+  const calc0 = { id: "so_yango", price_type: "calculated", calculated_price: { calculated_amount: 0 } };
+
+  it("skips a free pickup option listed first", () => {
+    expect(pickShippingOption([pickup, flat])?.id).toBe("so_flat");
+  });
+
+  it("returns nothing rather than pickup when delivery can't be priced", () => {
+    expect(pickShippingOption([pickup, calc0])).toBeNull();
+  });
+});

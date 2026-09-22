@@ -3,6 +3,7 @@
 import type { HttpTypes } from "@medusajs/types";
 import { sdk, authHeaders } from "@/lib/medusa";
 import { getAuthToken } from "@/lib/auth-token";
+import type { PickupLocation } from "@/lib/pickup";
 
 /**
  * Customer order history. All store order endpoints require the customer JWT —
@@ -53,6 +54,11 @@ export interface OrderLookupResult {
   invoice_url?: string | null;
   address: string;
   delivery_instructions: string;
+  /** Customer self-pickup (2026-09-22). Absent on an older backend →
+   *  delivery. For pickup, `address` is the pickup point and
+   *  `current_step` 2 means "ready for pickup". */
+  fulfillment_method?: "delivery" | "pickup";
+  pickup_location?: PickupLocation | null;
   items: {
     title: string;
     variant_title?: string | null;
