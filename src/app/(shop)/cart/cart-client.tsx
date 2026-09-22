@@ -842,7 +842,10 @@ export function CartClient({
         name: c.name,
         specs: [],
         unitPrice: c.pricePerUnit,
-        taxRate: TAX_RATE,
+        // The rate the store actually charges is on every mapped line; copy
+        // it so a 0%-tax store doesn't flash a +20% price until the server
+        // cart lands. `TAX_RATE` only when there is no line to copy from.
+        taxRate: xs.find((x) => !x.isPlatformFee)?.taxRate ?? TAX_RATE,
         quantity: 1,
         productSlug: c.slug,
         isService: false,

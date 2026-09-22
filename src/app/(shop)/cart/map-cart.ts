@@ -3,9 +3,31 @@ import { isPlatformFeeLine } from "@/lib/platform-fee";
 
 /** Ghana VAT 15% + NHIL 2.5% + GETFund 2.5% on the same base = 20% flat
  *  (VAT Act 2025, Act 1151, effective 1 Jan 2026 — matches the backend tax
- *  region seeded in seed-ghana.ts). Used to display "Total incl. tax" per
- *  line until live tax totals are wired from the cart's tax_total. */
+ *  region seeded in seed-ghana.ts).
+ *
+ *  ⚠ A FALLBACK, not the truth. The rate is configurable in the admin portal
+ *  (Settings → Platform; since 2026-09-22 it may legitimately be 0%), so a
+ *  real cart line reads its rate from Medusa's `tax_lines` via `lineTaxRate`.
+ *  This constant only prices the OPTIMISTIC lines staged before a server cart
+ *  exists, and lines whose tax lines were not fetched. */
 export const TAX_RATE = 0.2;
+
+/** The tax rate Medusa actually applied to a line, as a fraction (0.2 = 20%).
+ *
+ *  Sums the line's `tax_lines[].rate` (percentages) — the system tax provider
+ *  emits one line per applicable rate, INCLUDING a rate-0 line when the store
+ *  charges no tax, so a fetched, non-empty list is authoritative even when it
+ *  sums to 0. An absent or empty list means the relation wasn't requested or
+ *  tax hasn't been computed yet, and falls back to the statutory `TAX_RATE`
+ *  rather than displaying 0% tax on a cart that will be charged some. */
+export function lineTaxRate(
+  item: Pick<HttpTypes.StoreCartLineItem, "tax_lines">,
+): number {
+  const lines = item.tax_lines;
+  if (!Array.isArray(lines) || lines.length === 0) return TAX_RATE;
+  const percent = lines.reduce((sum, l) => sum + (Number(l?.rate) || 0), 0);
+  return percent / 100;
+}
 
 export interface CartItem {
   id: string;
@@ -122,7 +144,7 @@ export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
     name: item.product_title || item.title || "Item",
     specs,
     unitPrice: Number(item.unit_price ?? 0),
-    taxRate: TAX_RATE,
+    taxRate: lineTaxRate(item),
     quantity: Number(item.quantity ?? 1),
     productSlug: isService ? undefined : (item.product_handle ?? undefined),
     isService,
