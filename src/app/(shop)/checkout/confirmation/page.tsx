@@ -6,6 +6,7 @@ import { OrderConfirmation } from "@/components/checkout/order-confirmation";
 import { sdk } from "@/lib/medusa";
 import { formatOrderNumber } from "@/lib/order-number";
 import { getCustomer, getOrderEmailAccountStatus } from "@/lib/actions/auth";
+import { OrderProgress } from "@/components/checkout/order-progress";
 
 export const metadata: Metadata = {
   title: "Order Confirmed",
@@ -85,17 +86,20 @@ export default async function ConfirmationPage({
       : "none";
 
   return (
-    <OrderConfirmation
-      orderNumber={formatted}
-      email={email}
-      company={company}
-      contactPerson={contactPerson}
-      total={total}
-      paymentProviderId={paymentProviderId}
-      deliveryOption={deliveryOption}
-      isLoggedIn={isLoggedIn}
-      accountStatus={accountStatus}
-    />
+    <>
+      <OrderProgress step={5} />
+      <OrderConfirmation
+        orderNumber={formatted}
+        email={email}
+        company={company}
+        contactPerson={contactPerson}
+        total={total}
+        paymentProviderId={paymentProviderId}
+        deliveryOption={deliveryOption}
+        isLoggedIn={isLoggedIn}
+        accountStatus={accountStatus}
+      />
+    </>
   );
 }
 
@@ -112,45 +116,48 @@ export default async function ConfirmationPage({
  */
 function PendingConfirmation({ reference }: { reference?: string }) {
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-2xl flex-col items-center gap-8 rounded-card border-2 border-[#fde68a] bg-surface pb-6 pt-12 px-6 text-center">
-        <span className="grid place-items-center rounded-full bg-[#fef3c7] p-8">
-          <Clock className="size-20 text-[#b45309]" aria-hidden />
-        </span>
+    <>
+      <OrderProgress step={5} />
+      <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-2xl flex-col items-center gap-8 rounded-card border-2 border-[#fde68a] bg-surface pb-6 pt-12 px-6 text-center">
+          <span className="grid place-items-center rounded-full bg-[#fef3c7] p-8">
+            <Clock className="size-20 text-[#b45309]" aria-hidden />
+          </span>
 
-        <div className="flex flex-col gap-3">
-          <h1 className="text-3xl font-bold leading-9 text-brand">
-            Payment received — your order needs confirmation
-          </h1>
-          <p className="text-lg text-muted">
-            We&apos;ve received your payment. Our team has already been
-            notified and will confirm your order shortly.
-          </p>
-        </div>
-
-        {reference && (
-          <div className="flex w-full max-w-[448px] flex-col gap-2 rounded-option border border-[#e5e7eb] bg-[#f9fafb] p-[25px] text-left">
-            <span className="text-sm text-muted">Payment Reference:</span>
-            <span className="break-all font-mono text-base font-bold text-brand">
-              {reference}
-            </span>
+          <div className="flex flex-col gap-3">
+            <h1 className="text-3xl font-bold leading-9 text-brand">
+              Payment received — your order needs confirmation
+            </h1>
+            <p className="text-lg text-muted">
+              We&apos;ve received your payment. Our team has already been
+              notified and will confirm your order shortly.
+            </p>
           </div>
-        )}
 
-        <p className="max-w-[448px] text-sm text-muted">
-          Please keep this reference for your records. If you&apos;d like to
-          check in sooner, contact our support team and quote it.
-        </p>
+          {reference && (
+            <div className="flex w-full max-w-[448px] flex-col gap-2 rounded-option border border-[#e5e7eb] bg-[#f9fafb] p-[25px] text-left">
+              <span className="text-sm text-muted">Payment Reference:</span>
+              <span className="break-all font-mono text-base font-bold text-brand">
+                {reference}
+              </span>
+            </div>
+          )}
 
-        <div className="flex w-full max-w-[448px] gap-4">
-          <Link
-            href="/products"
-            className="inline-flex h-10 flex-1 items-center justify-center rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
-          >
-            Continue Shopping
-          </Link>
+          <p className="max-w-[448px] text-sm text-muted">
+            Please keep this reference for your records. If you&apos;d like to
+            check in sooner, contact our support team and quote it.
+          </p>
+
+          <div className="flex w-full max-w-[448px] gap-4">
+            <Link
+              href="/products"
+              className="inline-flex h-10 flex-1 items-center justify-center rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
+            >
+              Continue Shopping
+            </Link>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

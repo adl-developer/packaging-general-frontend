@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import {
-  ArrowLeft,
   Box,
   Loader2,
   Minus,
@@ -28,6 +27,7 @@ import {
 import { shortfall, type StockState } from "@/lib/stock-rules";
 import { mapLineItem, TAX_RATE, type CartItem } from "./map-cart";
 import { CartSkeleton } from "./cart-skeleton";
+import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-progress";
 import {
   isOptimisticLine,
   onAddSettled,
@@ -904,6 +904,12 @@ export function CartClient({
   if (goods.length === 0)
     return (
       <>
+        <OrderProgress
+          step={1}
+          back={
+            <ProgressBackLink href="/products">Continue Shopping</ProgressBackLink>
+          }
+        />
         {(addFailed || reorderNotice) && (
           <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 pt-8 sm:px-6 lg:px-8">
             {addFailed && <AddFailedBanner />}
@@ -923,212 +929,213 @@ export function CartClient({
     );
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-4">
-          <Link
-            href="/products"
-            className="inline-flex items-center gap-2 text-sm font-medium text-brand transition-colors hover:text-brand/70"
-          >
-            <ArrowLeft className="size-4" aria-hidden />
-            Continue Shopping
-          </Link>
-          <button
-            type="button"
-            onClick={() => setConfirmEmpty(true)}
-            // Also frozen while an add commit is in flight — emptying then
-            // would race the commit and resurrect the new line afterwards.
-            disabled={isPending || goods.some((x) => isOptimisticLine(x.id))}
-            className="inline-flex h-9 items-center gap-2 rounded-button bg-rust px-3 text-sm font-medium text-white transition-colors hover:bg-rust/90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPending ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-            ) : (
-              <Trash2 className="size-4" aria-hidden />
-            )}
-            Empty Cart
-          </button>
-        </div>
-        <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-semibold leading-9 text-brand">
-            Shopping Cart
-          </h1>
-          <p className="text-base text-muted">
-            {goods.length} item{goods.length === 1 ? "" : "s"} in your cart
-          </p>
-        </div>
-      </div>
-
-      {addFailed && <AddFailedBanner />}
-      {reorderNotice && <ReorderNoticeBanner message={reorderNotice} />}
-
-      <div className="flex flex-col gap-4">
-        {goods.map((item) => (
-          <CartLine
-            key={item.id}
-            item={item}
-            // Optimistic lines have no server id yet — freeze their controls
-            // for the ~1s until the commit settles and swaps in the real id.
-            pending={isPending || isOptimisticLine(item.id)}
-            onRemove={remove}
-            onStep={stepQty}
-            shortfallInfo={shortfallFor(item)}
-            onReduce={(reduceTo) => reduceLine(item, reduceTo)}
-          />
-        ))}
-      </div>
-
-      {visibleCrossSell.length > 0 && (
-        <div className="rounded-card border border-line bg-surface p-4 sm:p-6">
-          <h2 className="text-lg font-medium text-brand">
-            People who usually order your order also order...
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Add these items to your order and save on delivery fees
-          </p>
-          <div
-            className="-mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0"
-            role="list"
-          >
-            {visibleCrossSell.map((c) => (
-              <div
-                key={c.id}
-                role="listitem"
-                className="snap-start sm:snap-align-none"
-              >
-                <CrossSellCard item={c} onAdd={() => addCrossSell(c)} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Order Summary — narrower card centered on desktop per Figma; on
-          mobile spans the full width like the other cart sections. Includes
-          per-line breakdown, total, both checkout actions, and the promo
-          code box. */}
-      <div className="mx-auto flex w-full flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:max-w-xl sm:p-6">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-base font-medium text-brand">
-            Order Summary
-          </h2>
-          <p className="text-sm text-muted">
-            {goods.length} item{goods.length === 1 ? "" : "s"}
-          </p>
-        </div>
-        <ul className="flex flex-col gap-1.5">
-          {goods.map((item) => (
-            <li
-              key={item.id}
-              className="flex items-baseline justify-between gap-3 text-sm"
-            >
-              <span className="truncate text-muted">{item.name}</span>
-              <span className="shrink-0 font-medium text-brand tabular-nums">
-                {formatGhs(lineTotal(item))}
-              </span>
-            </li>
-          ))}
-        </ul>
-        {/* The fee's one appearance: a charge line under the items, above the
-            total — where a shopper looks for VAT and delivery, not among the
-            things they chose. Hidden entirely when no fee is configured. */}
-        {platformFee > 0 && (
-          <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3 text-sm">
-            <span className="text-muted">Platform Fee</span>
-            <span className="shrink-0 font-medium text-brand tabular-nums">
-              {formatGhs(platformFee)}
-            </span>
-          </div>
-        )}
-        <div className="flex flex-col gap-1 border-t border-line pt-3">
-          <div className="flex items-center justify-between">
-            <span className="text-base font-semibold text-brand">
-              Total
-            </span>
-            <span className="text-base font-semibold text-brand tabular-nums">
-              {formatGhs(total)}
-            </span>
-          </div>
-          <p className="text-xs text-muted">
-            Includes VAT, NHIL, and all applicable fees
-          </p>
-        </div>
-        {shortItems.length > 0 ? (
-          <div className="mt-1 flex flex-col gap-1.5">
+    <>
+      <OrderProgress
+        step={1}
+        back={
+          <ProgressBackLink href="/products">Continue Shopping</ProgressBackLink>
+        }
+      />
+      <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-end justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <h1 className="text-3xl font-semibold leading-9 text-brand">
+                Shopping Cart
+              </h1>
+              <p className="text-base text-muted">
+                {goods.length} item{goods.length === 1 ? "" : "s"} in your cart
+              </p>
+            </div>
             <button
               type="button"
-              disabled
-              aria-disabled="true"
+              onClick={() => setConfirmEmpty(true)}
+              // Also frozen while an add commit is in flight — emptying then
+              // would race the commit and resurrect the new line afterwards.
+              disabled={isPending || goods.some((x) => isOptimisticLine(x.id))}
+              className="inline-flex h-9 items-center gap-2 rounded-button bg-rust px-3 text-sm font-medium text-white transition-colors hover:bg-rust/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isPending ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              ) : (
+                <Trash2 className="size-4" aria-hidden />
+              )}
+              Empty Cart
+            </button>
+          </div>
+        </div>
+
+        {addFailed && <AddFailedBanner />}
+        {reorderNotice && <ReorderNoticeBanner message={reorderNotice} />}
+
+        <div className="flex flex-col gap-4">
+          {goods.map((item) => (
+            <CartLine
+              key={item.id}
+              item={item}
+              // Optimistic lines have no server id yet — freeze their controls
+              // for the ~1s until the commit settles and swaps in the real id.
+              pending={isPending || isOptimisticLine(item.id)}
+              onRemove={remove}
+              onStep={stepQty}
+              shortfallInfo={shortfallFor(item)}
+              onReduce={(reduceTo) => reduceLine(item, reduceTo)}
+            />
+          ))}
+        </div>
+
+        {visibleCrossSell.length > 0 && (
+          <div className="rounded-card border border-line bg-surface p-4 sm:p-6">
+            <h2 className="text-lg font-medium text-brand">
+              People who usually order your order also order...
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              Add these items to your order and save on delivery fees
+            </p>
+            <div
+              className="-mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0"
+              role="list"
+            >
+              {visibleCrossSell.map((c) => (
+                <div
+                  key={c.id}
+                  role="listitem"
+                  className="snap-start sm:snap-align-none"
+                >
+                  <CrossSellCard item={c} onAdd={() => addCrossSell(c)} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Order Summary — narrower card centered on desktop per Figma; on
+            mobile spans the full width like the other cart sections. Includes
+            per-line breakdown, total, both checkout actions, and the promo
+            code box. */}
+        <div className="mx-auto flex w-full flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:max-w-xl sm:p-6">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-base font-medium text-brand">
+              Order Summary
+            </h2>
+            <p className="text-sm text-muted">
+              {goods.length} item{goods.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {goods.map((item) => (
+              <li
+                key={item.id}
+                className="flex items-baseline justify-between gap-3 text-sm"
+              >
+                <span className="truncate text-muted">{item.name}</span>
+                <span className="shrink-0 font-medium text-brand tabular-nums">
+                  {formatGhs(lineTotal(item))}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {/* The fee's one appearance: a charge line under the items, above the
+              total — where a shopper looks for VAT and delivery, not among the
+              things they chose. Hidden entirely when no fee is configured. */}
+          {platformFee > 0 && (
+            <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3 text-sm">
+              <span className="text-muted">Platform Fee</span>
+              <span className="shrink-0 font-medium text-brand tabular-nums">
+                {formatGhs(platformFee)}
+              </span>
+            </div>
+          )}
+          <div className="flex flex-col gap-1 border-t border-line pt-3">
+            <div className="flex items-center justify-between">
+              <span className="text-base font-semibold text-brand">
+                Total
+              </span>
+              <span className="text-base font-semibold text-brand tabular-nums">
+                {formatGhs(total)}
+              </span>
+            </div>
+            <p className="text-xs text-muted">
+              Includes VAT, NHIL, and all applicable fees
+            </p>
+          </div>
+          {shortItems.length > 0 ? (
+            <div className="mt-1 flex flex-col gap-1.5">
+              <button
+                type="button"
+                disabled
+                aria-disabled="true"
+                className={buttonVariants({
+                  variant: "primary",
+                  size: "lg",
+                  fullWidth: true,
+                })}
+              >
+                Proceed to Checkout
+              </button>
+              <p className="text-center text-xs text-muted">
+                Please resolve the highlighted item
+                {shortItems.length === 1 ? "" : "s"} above before checking out.
+              </p>
+            </div>
+          ) : (
+            <Link
+              href="/checkout"
               className={buttonVariants({
                 variant: "primary",
                 size: "lg",
                 fullWidth: true,
+                className: "mt-1",
               })}
             >
               Proceed to Checkout
-            </button>
-            <p className="text-center text-xs text-muted">
-              Please resolve the highlighted item
-              {shortItems.length === 1 ? "" : "s"} above before checking out.
-            </p>
-          </div>
-        ) : (
+            </Link>
+          )}
           <Link
-            href="/checkout"
+            href="/products"
             className={buttonVariants({
-              variant: "primary",
+              variant: "outline",
               size: "lg",
               fullWidth: true,
-              className: "mt-1",
             })}
           >
-            Proceed to Checkout
+            Keep Shopping
           </Link>
-        )}
-        <Link
-          href="/products"
-          className={buttonVariants({
-            variant: "outline",
-            size: "lg",
-            fullWidth: true,
-          })}
-        >
-          Keep Shopping
-        </Link>
-        {/* Promo / discount-code prompt. The message is the SAME text the
-            header promo bar shows (`promoMessage`: the admin-typed banner,
-            else copy derived from the live promotion) — the two surfaces
-            cannot advertise different discounts. The code line beneath is a
-            fact of the promotion record, not a claim. Hidden when there is
-            nothing to advertise. */}
-        {promoBox && (
-          <div className="mt-1 rounded-option border border-line bg-surface px-4 py-3">
-            {/* Same three-line layout as before (label / code / message);
-                only the message text changed source. */}
-            {promo && (
-              <>
-                <p className="text-xs text-muted">Use code</p>
-                <p className="text-base font-bold tracking-wider text-brand">
-                  {promo.code}
-                </p>
-              </>
-            )}
-            <p className="text-xs text-muted">
-              {promoBox.headline}
-              {promoBox.subMessage ? ` ${promoBox.subMessage}` : ""}
-            </p>
-          </div>
-        )}
-      </div>
+          {/* Promo / discount-code prompt. The message is the SAME text the
+              header promo bar shows (`promoMessage`: the admin-typed banner,
+              else copy derived from the live promotion) — the two surfaces
+              cannot advertise different discounts. The code line beneath is a
+              fact of the promotion record, not a claim. Hidden when there is
+              nothing to advertise. */}
+          {promoBox && (
+            <div className="mt-1 rounded-option border border-line bg-surface px-4 py-3">
+              {/* Same three-line layout as before (label / code / message);
+                  only the message text changed source. */}
+              {promo && (
+                <>
+                  <p className="text-xs text-muted">Use code</p>
+                  <p className="text-base font-bold tracking-wider text-brand">
+                    {promo.code}
+                  </p>
+                </>
+              )}
+              <p className="text-xs text-muted">
+                {promoBox.headline}
+                {promoBox.subMessage ? ` ${promoBox.subMessage}` : ""}
+              </p>
+            </div>
+          )}
+        </div>
 
-      <ConfirmDialog
-        open={confirmEmpty}
-        title="Empty your cart?"
-        description={`You will remove all ${goods.length} item${goods.length === 1 ? "" : "s"} from your cart. This action cannot be undone.`}
-        confirmLabel="Empty Cart"
-        onConfirm={doEmptyCart}
-        onCancel={() => setConfirmEmpty(false)}
-      />
-    </div>
+        <ConfirmDialog
+          open={confirmEmpty}
+          title="Empty your cart?"
+          description={`You will remove all ${goods.length} item${goods.length === 1 ? "" : "s"} from your cart. This action cannot be undone.`}
+          confirmLabel="Empty Cart"
+          onConfirm={doEmptyCart}
+          onCancel={() => setConfirmEmpty(false)}
+        />
+      </div>
+    </>
   );
 }

@@ -55,15 +55,6 @@ export function FeedbackWidget() {
     if (phase === "open") titleRef.current?.focus();
   }, [phase]);
 
-  React.useEffect(() => {
-    if (phase !== "open" && phase !== "sending") return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && phase === "open") close();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [phase]);
-
   React.useEffect(
     () => () => {
       if (sentTimer.current) window.clearTimeout(sentTimer.current);
@@ -80,6 +71,15 @@ export function FeedbackWidget() {
     setPhase("closed");
     setError(null);
   };
+
+  React.useEffect(() => {
+    if (phase !== "open" && phase !== "sending") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && phase === "open") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [phase]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
