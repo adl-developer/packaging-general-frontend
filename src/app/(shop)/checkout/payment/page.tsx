@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -16,6 +14,7 @@ import {
 import { PaymentMethod } from "@/components/checkout/payment-method";
 import { getCart } from "@/lib/actions/cart";
 import { goodsLines, platformFeeTotal } from "@/lib/platform-fee";
+import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-progress";
 
 export const metadata: Metadata = {
   title: "Payment",
@@ -73,38 +72,36 @@ export default async function PaymentPage({
   const deliveryAddress = formatAddress(cart.shipping_address);
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        href="/checkout/delivery"
-        className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-brand transition-colors hover:text-brand/70"
-      >
-        <ArrowLeft className="size-4" aria-hidden />
-        Back to Delivery
-      </Link>
+    <>
+      <OrderProgress
+        step={4}
+        back={<ProgressBackLink href="/checkout/delivery">Back to Delivery</ProgressBackLink>}
+      />
+      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <OrderSummary
+            items={items}
+            subtotal={subtotal}
+            platformFee={platformFee}
+            total={total}
+            discount={discount}
+            shipping={shipping}
+            shippingMethod={shippingMethod}
+            appliedCode={appliedCode}
+            deliveryAddress={deliveryAddress}
+          />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <OrderSummary
-          items={items}
-          subtotal={subtotal}
-          platformFee={platformFee}
-          total={total}
-          discount={discount}
-          shipping={shipping}
-          shippingMethod={shippingMethod}
-          appliedCode={appliedCode}
-          deliveryAddress={deliveryAddress}
-        />
-
-        <Card className="flex flex-col gap-6">
-          <CardHeader>
-            <CardTitle>Payment Method</CardTitle>
-            <CardDescription>Choose how you&apos;d like to pay</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <PaymentMethod total={total} initialError={error} />
-          </CardContent>
-        </Card>
+          <Card className="flex flex-col gap-6">
+            <CardHeader>
+              <CardTitle>Payment Method</CardTitle>
+              <CardDescription>Choose how you&apos;d like to pay</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <PaymentMethod total={total} initialError={error} />
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

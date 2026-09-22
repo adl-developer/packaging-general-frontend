@@ -29,6 +29,7 @@ import { SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd } from "@/lib/cart-events";
 import { CartSkeleton } from "@/app/(shop)/cart/cart-skeleton";
 import { ProductGallery } from "@/components/products/product-gallery";
+import { OrderProgress, progressBackClass } from "@/components/checkout/order-progress";
 import { toProductImages } from "@/lib/product-images";
 import { BuyNowAuthDialog } from "./buy-now-auth-dialog";
 import type { ContinueRoute } from "@/lib/buy-now-auth";
@@ -51,14 +52,15 @@ const SECTION_ORDER = Object.keys(SECTION_LABELS) as StorefrontSection[];
  * Sections (Select Size, Choose Material, Printing Options, Order Quantity +
  * notes) are unchanged.
  * Selected option cards use a taupe tint (rgba(196,188,176,0.3)) + line border.
- * The sticky "Step N of M" progress reflects scroll position through the form.
+ * The sticky header shows where the shopper is in the whole order (step 1 of
+ * 5, "Shopping & cart") — see components/checkout/order-progress.tsx.
  *
  * Since the enriched backend model, every section is live data: materials and
  * printing come from product metadata, the (size, material, printing) choice
  * resolves to a real Medusa variant, and printed options add a one-time
  * setup-fee line.
  * Products without material/printing choices (accessories) skip those
- * sections — the step count adapts.
+ * sections.
  */
 export function ProductCustomizer({
   product,
@@ -220,8 +222,8 @@ export function ProductCustomizer({
   // Attribute mode: one section per distinct StorefrontSection present among
   // product.attributes, in the canonical SECTION_ORDER (never per-attribute —
   // several attributes can share a section, e.g. two "type"-section axes).
-  // attrSectionIdx maps each present section to its cursor slot so the JSX
-  // and the scroll-spy (sectionsRef) agree on indices.
+  // attrSectionIdx maps each present section to its cursor slot, which
+  // numbers the section titles ("1. Select Size").
   const presentSections: StorefrontSection[] = attributeMode
     ? SECTION_ORDER.filter((s) => product.attributes.some((a) => a.section === s))
     : [];
@@ -240,8 +242,6 @@ export function ProductCustomizer({
     printingIdx = hasPrinting ? nextIndex++ : -1;
   }
   const quantityIdx = nextIndex++;
-  const reviewIdx = nextIndex++;
-  const sectionCount = nextIndex;
 
   // Live selection → variant + pricing.
   const combo = attributeMode
@@ -535,24 +535,6 @@ export function ProductCustomizer({
     setAuthOpen(true);
   };
 
-  // "Step N of M" tracks the furthest section scrolled past the sticky header.
-  const sectionsRef = React.useRef<Array<HTMLElement | null>>([]);
-  const [step, setStep] = React.useState(1);
-
-  React.useEffect(() => {
-    const onScroll = () => {
-      const offset = 200; // height of the two stacked sticky headers
-      let current = 1;
-      sectionsRef.current.forEach((el, i) => {
-        if (el && el.getBoundingClientRect().top <= offset) current = i + 1;
-      });
-      setStep(Math.min(current, sectionCount));
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [sectionCount]);
-
   return (
     // Full-width root so the pinned action bar can run edge-to-edge; the
     // progress header + body keep their own max-w-7xl wrapper.
@@ -570,33 +552,26 @@ export function ProductCustomizer({
         </div>
       )}
       <div className="mx-auto w-full max-w-7xl">
-        {/* Sticky progress header */}
-        <div className="sticky top-[121px] z-40 border-b border-line bg-surface">
-          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  // Return to wherever the shopper came from; fall back to the
-                  // catalog when there's no in-app history (direct load / new tab).
-                  if (window.history.length > 1) router.back();
-                  else router.push("/products");
-                }}
-                className="inline-flex items-center gap-1.5 rounded-button px-3 text-sm font-medium text-brand transition-colors hover:text-brand/70"
-              >
-                <ArrowLeft className="size-4" aria-hidden />
-                Back
-              </button>
-              <span className="text-sm text-muted">Step {step} of {sectionCount}</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#f3f4f6]">
-              <div
-                className="h-full rounded-full bg-brand transition-all"
-                style={{ width: `${(step / sectionCount) * 100}%` }}
-              />
-            </div>
-          </div>
-        </div>
+        {/* Sticky order-progress header — step 1 of the order. */}
+        <OrderProgress
+          step={1}
+          className="sticky top-[121px] z-40"
+          back={
+            <button
+              type="button"
+              onClick={() => {
+                // Return to wherever the shopper came from; fall back to the
+                // catalog when there's no in-app history (direct load / new tab).
+                if (window.history.length > 1) router.back();
+                else router.push("/products");
+              }}
+              className={progressBackClass}
+            >
+              <ArrowLeft className="size-4" aria-hidden />
+              Back
+            </button>
+          }
+        />
 
         {/* Figma body container: 32px top / 96px bottom padding — the bottom
             padding is the clearance for the pinned action bar. */}
@@ -659,9 +634,6 @@ export function ProductCustomizer({
                     <Section
                       key={section}
                       title={`${idx + 1}. ${SECTION_LABELS[section]}`}
-                      ref={(el) => {
-                        sectionsRef.current[idx] = el;
-                      }}
                     >
                       <div className="flex flex-col gap-6">
                         {sectionAttrs.map((attr) => (
@@ -712,9 +684,6 @@ export function ProductCustomizer({
                 <Section
                   title={`${sizeIdx + 1}. Select ${labels.size}`}
                   info
-                  ref={(el) => {
-                    sectionsRef.current[sizeIdx] = el;
-                  }}
                 >
                   {product.sizes.map((s) => (
                     <OptionCard
@@ -740,9 +709,6 @@ export function ProductCustomizer({
                   <Section
                     key={facet.key}
                     title={`${materialStart + fi + 1}. Choose ${facet.label}`}
-                    ref={(el) => {
-                      sectionsRef.current[materialStart + fi] = el;
-                    }}
                   >
                     {facet.values.map((v) => {
                       const available = facetAvailable(facet.key, v.id);
@@ -770,9 +736,6 @@ export function ProductCustomizer({
               {!attributeMode && hasMaterials && !useFacets && (
                 <Section
                   title={`${materialStart + 1}. Choose ${labels.material}`}
-                  ref={(el) => {
-                    sectionsRef.current[materialStart] = el;
-                  }}
                 >
                   {product.materials.map((mat) => {
                     const available = availableMaterials.has(mat.id);
@@ -802,9 +765,6 @@ export function ProductCustomizer({
               {!attributeMode && hasPrinting && (
                 <Section
                   title={`${printingIdx + 1}. Printing Options`}
-                  ref={(el) => {
-                    sectionsRef.current[printingIdx] = el;
-                  }}
                 >
                   {product.printing.map((p) => (
                     <OptionCard
@@ -829,9 +789,6 @@ export function ProductCustomizer({
               {/* Order Quantity */}
               <Section
                 title={`${quantityIdx + 1}. Order Quantity`}
-                ref={(el) => {
-                  sectionsRef.current[quantityIdx] = el;
-                }}
               >
                 <div className="flex flex-col gap-3">
                   <input
@@ -953,16 +910,6 @@ export function ProductCustomizer({
                   </div>
                 </div>
               </Section>
-
-              {/* End-of-form anchor — the actions themselves now live in the
-                  pinned bar below, but the scroll-spy still needs a marker for
-                  the final step. */}
-              <div
-                ref={(el) => {
-                  sectionsRef.current[reviewIdx] = el;
-                }}
-                aria-hidden
-              />
             </div>
           </div>
         </div>

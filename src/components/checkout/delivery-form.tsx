@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CalendarClock, Loader2, Navigation } from "lucide-react";
+import { CalendarClock, Loader2, Navigation } from "lucide-react";
 import { m } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { saveDeliveryAddress } from "@/lib/actions/checkout";
@@ -15,6 +14,7 @@ import {
   GH_PHONE_PATTERN,
 } from "@/lib/validation";
 import { DeliveryLocation, type MapCoordSource } from "./delivery-map";
+import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-progress";
 
 /**
  * Checkout — Delivery step (Figma frame 424:2869). Persists the shipping +
@@ -264,206 +264,204 @@ export function DeliveryForm({ initial }: { initial?: DeliveryInitial }) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        href="/cart"
-        className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-brand transition-colors hover:text-brand/70"
-      >
-        <ArrowLeft className="size-4" aria-hidden />
-        Back to Cart
-      </Link>
-
-      <m.form
-        ref={formRef}
-        initial={{ y: 12 }}
-        animate={{ y: 0 }}
-        transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
-        onSubmit={onSubmit}
-        onInput={revalidate}
-        className="mx-auto flex max-w-2xl flex-col gap-6 rounded-card border border-line bg-surface p-6"
-      >
-        <div className="flex flex-col gap-1">
-          <h1 className="text-base font-medium text-brand">
-            Delivery Information
-          </h1>
-          <p className="text-base text-muted">
-            Where should we deliver your order?
-          </p>
-        </div>
-
-        <div
-          className="flex items-start gap-3 rounded-option border border-accent/40 bg-accent/10 px-3 py-2.5 text-sm text-brand"
-          role="status"
+    <>
+      <OrderProgress
+        step={3}
+        back={<ProgressBackLink href="/cart">Back to Cart</ProgressBackLink>}
+      />
+      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <m.form
+          ref={formRef}
+          initial={{ y: 12 }}
+          animate={{ y: 0 }}
+          transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
+          onSubmit={onSubmit}
+          onInput={revalidate}
+          className="mx-auto flex max-w-2xl flex-col gap-6 rounded-card border border-line bg-surface p-6"
         >
-          <CalendarClock className="mt-0.5 size-4 shrink-0 text-plum" aria-hidden />
-          <p className="leading-snug">
-            <span className="font-medium">Arrives in 2–3 business days.</span>{" "}
-            <span className="text-muted">
-              We schedule pickup with Yango Delivery the next business morning;
-              you can track the courier from your order page.
-            </span>
-          </p>
-        </div>
-
-        <fieldset className="flex flex-col gap-4">
-          <legend className="mb-2 text-lg font-medium leading-7 text-brand">
-            Contact Details
-          </legend>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field id="contact-name" label="Contact Name *">
-              <input id="contact-name" name="contactName" type="text" autoComplete="name" placeholder="Emmanuel Ntim" defaultValue={initial?.contactName} className={inputCls} required />
-            </Field>
-            <Field id="contact-phone" label="Phone Number *">
-              <input id="contact-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 24 123 4567" pattern={GH_PHONE_PATTERN} title={PHONE_ERROR} defaultValue={initial?.phone} className={inputCls} required />
-            </Field>
+          <div className="flex flex-col gap-1">
+            <h1 className="text-base font-medium text-brand">
+              Delivery Information
+            </h1>
+            <p className="text-base text-muted">
+              Where should we deliver your order?
+            </p>
           </div>
 
-          <Field id="contact-email" label="Email Address *">
-            <input id="contact-email" name="email" type="email" autoComplete="email" placeholder="entim@gmail.com" defaultValue={initial?.email} className={inputCls} required />
-          </Field>
-        </fieldset>
-
-        <div className="h-px w-full bg-line" aria-hidden />
-
-        <div className="flex flex-col gap-4">
-          <Field id="address" label="Delivery Address *">
-            <input
-              ref={addressRef}
-              id="address"
-              name="address"
-              type="text"
-              // Google Places writes the chosen address back here; turn off
-              // the browser's native autofill so it doesn't fight the dropdown.
-              autoComplete="off"
-              placeholder="Enter your street address, area, or landmark"
-              defaultValue={initial?.address}
-              onFocus={activateMaps}
-              onKeyDown={(e) => {
-                // Don't let Enter submit the form while picking a suggestion.
-                if (e.key === "Enter") e.preventDefault();
-              }}
-              className={inputCls}
-              required
-            />
-          </Field>
-
-          <div className="flex items-center gap-3">
-            <span className="h-px flex-1 bg-input" aria-hidden />
-            <span className="text-sm text-muted">or</span>
-            <span className="h-px flex-1 bg-input" aria-hidden />
-          </div>
-
-          <button
-            type="button"
-            onClick={locateMe}
-            disabled={geoState === "loading"}
-            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background text-sm font-medium text-brand transition-colors hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-70"
+          <div
+            className="flex items-start gap-3 rounded-option border border-accent/40 bg-accent/10 px-3 py-2.5 text-sm text-brand"
+            role="status"
           >
-            {geoState === "loading" ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-            ) : (
-              <Navigation className="size-4" aria-hidden />
-            )}
-            {geoState === "loading" ? "Finding your location…" : "Use My Current Location"}
-          </button>
-          {geoState === "error" && geoError && (
-            <p
-              role="alert"
-              className="rounded-button bg-[rgba(231,0,11,0.06)] px-3 py-2 text-xs text-[#7e2a0c]"
+            <CalendarClock className="mt-0.5 size-4 shrink-0 text-plum" aria-hidden />
+            <p className="leading-snug">
+              <span className="font-medium">Arrives in 2–3 business days.</span>{" "}
+              <span className="text-muted">
+                We schedule pickup with Yango Delivery the next business morning;
+                you can track the courier from your order page.
+              </span>
+            </p>
+          </div>
+
+          <fieldset className="flex flex-col gap-4">
+            <legend className="mb-2 text-lg font-medium leading-7 text-brand">
+              Contact Details
+            </legend>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field id="contact-name" label="Contact Name *">
+                <input id="contact-name" name="contactName" type="text" autoComplete="name" placeholder="Emmanuel Ntim" defaultValue={initial?.contactName} className={inputCls} required />
+              </Field>
+              <Field id="contact-phone" label="Phone Number *">
+                <input id="contact-phone" name="phone" type="tel" autoComplete="tel" placeholder="+233 24 123 4567" pattern={GH_PHONE_PATTERN} title={PHONE_ERROR} defaultValue={initial?.phone} className={inputCls} required />
+              </Field>
+            </div>
+
+            <Field id="contact-email" label="Email Address *">
+              <input id="contact-email" name="email" type="email" autoComplete="email" placeholder="entim@gmail.com" defaultValue={initial?.email} className={inputCls} required />
+            </Field>
+          </fieldset>
+
+          <div className="h-px w-full bg-line" aria-hidden />
+
+          <div className="flex flex-col gap-4">
+            <Field id="address" label="Delivery Address *">
+              <input
+                ref={addressRef}
+                id="address"
+                name="address"
+                type="text"
+                // Google Places writes the chosen address back here; turn off
+                // the browser's native autofill so it doesn't fight the dropdown.
+                autoComplete="off"
+                placeholder="Enter your street address, area, or landmark"
+                defaultValue={initial?.address}
+                onFocus={activateMaps}
+                onKeyDown={(e) => {
+                  // Don't let Enter submit the form while picking a suggestion.
+                  if (e.key === "Enter") e.preventDefault();
+                }}
+                className={inputCls}
+                required
+              />
+            </Field>
+
+            <div className="flex items-center gap-3">
+              <span className="h-px flex-1 bg-input" aria-hidden />
+              <span className="text-sm text-muted">or</span>
+              <span className="h-px flex-1 bg-input" aria-hidden />
+            </div>
+
+            <button
+              type="button"
+              onClick={locateMe}
+              disabled={geoState === "loading"}
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-button border border-line bg-background text-sm font-medium text-brand transition-colors hover:bg-line/30 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {geoError}
+              {geoState === "loading" ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              ) : (
+                <Navigation className="size-4" aria-hidden />
+              )}
+              {geoState === "loading" ? "Finding your location…" : "Use My Current Location"}
+            </button>
+            {geoState === "error" && geoError && (
+              <p
+                role="alert"
+                className="rounded-button bg-[rgba(231,0,11,0.06)] px-3 py-2 text-xs text-[#7e2a0c]"
+              >
+                {geoError}
+              </p>
+            )}
+
+            <div ref={sectionRef} className="flex flex-col gap-2">
+              <span className={labelCls}>Location Coordinates</span>
+              <DeliveryLocation
+                active={mapsActive}
+                addressInputRef={addressRef}
+                coords={coords}
+                onCoordsChange={handleMapChange}
+                manualOpen={manualOpen}
+                onToggleManual={() => {
+                  setManualOpen((v) => !v);
+                  activateMaps();
+                }}
+                geocodeRequest={geocodeRequest}
+              />
+            </div>
+
+            {manualOpen && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field id="lat" label="Latitude">
+                  <input
+                    id="lat"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.000001"
+                    placeholder="5.603700"
+                    defaultValue={coords?.lat ?? ""}
+                    onChange={(e) => {
+                      const lat = Number(e.target.value);
+                      if (!Number.isFinite(lat)) return;
+                      const next = { lat, lng: coords?.lng ?? 0 };
+                      setCoords(next);
+                      setCoordSource("manual");
+                      requestGeocode(next.lat, next.lng);
+                    }}
+                    className={inputCls}
+                  />
+                </Field>
+                <Field id="lng" label="Longitude">
+                  <input
+                    id="lng"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.000001"
+                    placeholder="-0.187000"
+                    defaultValue={coords?.lng ?? ""}
+                    onChange={(e) => {
+                      const lng = Number(e.target.value);
+                      if (!Number.isFinite(lng)) return;
+                      const next = { lat: coords?.lat ?? 0, lng };
+                      setCoords(next);
+                      setCoordSource("manual");
+                      requestGeocode(next.lat, next.lng);
+                    }}
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
+            )}
+
+            <Field id="instructions" label="Delivery Instructions / Landmarks *">
+              <textarea
+                id="instructions"
+                name="instructions"
+                rows={2}
+                placeholder="e.g., Behind Shell Fuel Station, ask for Mr. Mensah"
+                defaultValue={initial?.instructions}
+                className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none"
+                required
+              />
+            </Field>
+          </div>
+
+          {error && (
+            <p role="alert" className="rounded-button bg-[rgba(231,0,11,0.08)] px-3 py-2 text-sm font-medium text-[#7e2a0c]">
+              {error}
             </p>
           )}
 
-          <div ref={sectionRef} className="flex flex-col gap-2">
-            <span className={labelCls}>Location Coordinates</span>
-            <DeliveryLocation
-              active={mapsActive}
-              addressInputRef={addressRef}
-              coords={coords}
-              onCoordsChange={handleMapChange}
-              manualOpen={manualOpen}
-              onToggleManual={() => {
-                setManualOpen((v) => !v);
-                activateMaps();
-              }}
-              geocodeRequest={geocodeRequest}
-            />
-          </div>
-
-          {manualOpen && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field id="lat" label="Latitude">
-                <input
-                  id="lat"
-                  type="number"
-                  inputMode="decimal"
-                  step="0.000001"
-                  placeholder="5.603700"
-                  defaultValue={coords?.lat ?? ""}
-                  onChange={(e) => {
-                    const lat = Number(e.target.value);
-                    if (!Number.isFinite(lat)) return;
-                    const next = { lat, lng: coords?.lng ?? 0 };
-                    setCoords(next);
-                    setCoordSource("manual");
-                    requestGeocode(next.lat, next.lng);
-                  }}
-                  className={inputCls}
-                />
-              </Field>
-              <Field id="lng" label="Longitude">
-                <input
-                  id="lng"
-                  type="number"
-                  inputMode="decimal"
-                  step="0.000001"
-                  placeholder="-0.187000"
-                  defaultValue={coords?.lng ?? ""}
-                  onChange={(e) => {
-                    const lng = Number(e.target.value);
-                    if (!Number.isFinite(lng)) return;
-                    const next = { lat: coords?.lat ?? 0, lng };
-                    setCoords(next);
-                    setCoordSource("manual");
-                    requestGeocode(next.lat, next.lng);
-                  }}
-                  className={inputCls}
-                />
-              </Field>
-            </div>
-          )}
-
-          <Field id="instructions" label="Delivery Instructions / Landmarks *">
-            <textarea
-              id="instructions"
-              name="instructions"
-              rows={2}
-              placeholder="e.g., Behind Shell Fuel Station, ask for Mr. Mensah"
-              defaultValue={initial?.instructions}
-              className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none"
-              required
-            />
-          </Field>
-        </div>
-
-        {error && (
-          <p role="alert" className="rounded-button bg-[rgba(231,0,11,0.08)] px-3 py-2 text-sm font-medium text-[#7e2a0c]">
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={isPending || !canContinue}
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          {isPending && <Loader2 className="size-4 animate-spin" aria-hidden />}
-          {isPending ? "Saving…" : "Continue to Payment"}
-        </button>
-      </m.form>
-    </div>
+          <button
+            type="submit"
+            disabled={isPending || !canContinue}
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {isPending && <Loader2 className="size-4 animate-spin" aria-hidden />}
+            {isPending ? "Saving…" : "Continue to Payment"}
+          </button>
+        </m.form>
+      </div>
+    </>
   );
 }
 
