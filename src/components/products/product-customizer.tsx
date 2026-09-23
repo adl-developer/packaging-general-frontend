@@ -866,7 +866,7 @@ export function ProductCustomizer({
                         <span>{formatGhs(estimatedTotal)}</span>
                       </span>
                       <span className="text-xs text-muted">
-                        Excludes tax and delivery — final totals at checkout.
+                        Excludes tax and delivery. Final totals at checkout.
                       </span>
                     </div>
                   )}

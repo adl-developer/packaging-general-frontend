@@ -8,7 +8,7 @@ import { BrandLockup } from "./brand-lockup";
 // Neutral opener — deliberately not page-aware. A footer button is a
 // general-purpose entry point; guessing intent from the current URL would
 // produce wrong messages on most pages.
-const SUPPORT_MESSAGE = "Hi Packaging General — I need help with an order.";
+const SUPPORT_MESSAGE = "Hi Packaging General, I need help with an order.";
 
 // "Contact" is deliberately absent: there is no /contact page yet, and a
 // footer link to a 404 (plus its prefetch on every page view) is worse than no

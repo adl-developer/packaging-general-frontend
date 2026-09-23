@@ -9,7 +9,7 @@ import { Stagger, StaggerItem } from "@/components/motion/stagger";
 export const metadata: Metadata = {
   title: "Browse Packaging Solutions",
   description:
-    "Browse quality packaging by category — RSC cartons, die cut boxes, food packaging, and accessories. Instant pricing, built for West African markets.",
+    "Browse quality packaging by category: RSC cartons, die cut boxes, food packaging, and accessories. Instant pricing, built for West African markets.",
   alternates: { canonical: "/products" },
 };
 

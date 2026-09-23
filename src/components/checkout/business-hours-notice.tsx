@@ -33,7 +33,7 @@ export async function BusinessHoursNotice() {
           <span className="font-semibold">
             You&apos;re ordering outside our working hours.
           </span>{" "}
-          {todayLine} You can still place your order now — we&apos;ll start
+          {todayLine} You can still place your order now. We&apos;ll start
           processing it when we&apos;re next open, so confirmation and delivery
           may take a little longer than usual.
         </p>

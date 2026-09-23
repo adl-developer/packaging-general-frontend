@@ -171,13 +171,13 @@ function buildInvoice(order: TrackedOrder): InvoiceData {
     },
     totalAmount: total,
     eVat: {
-      sdcId: "—",
-      receiptNumber: "—",
-      internalData: "—",
-      receiptCounter: "—",
-      mrc: "—",
-      dateTime: "—",
-      lineItemCount: "—",
+      sdcId: "-",
+      receiptNumber: "-",
+      internalData: "-",
+      receiptCounter: "-",
+      mrc: "-",
+      dateTime: "-",
+      lineItemCount: "-",
     },
     qrPayload: order.invoiceUrl,
   };
@@ -233,7 +233,7 @@ const PICKUP_STEP_META: typeof STEP_META = [
   STEP_META[1],
   {
     title: "Ready for Pickup",
-    detail: "Your order is ready — come and collect it",
+    detail: "Your order is ready to collect",
     Icon: Store,
   },
   {
@@ -246,7 +246,10 @@ const PICKUP_STEP_META: typeof STEP_META = [
 /** Build ordered spec entries from an options object.
  *  Returns [option-title, value] pairs in canonical order:
  *  Size, Material, Printing first (if present), then remainder alphabetically.
- *  Values of "—" are filtered out. */
+ *  Placeholder values ("-", or the em dash older catalogue data may still
+ *  carry as an option value) are filtered out. */
+const BLANK_VALUES = new Set(["-", String.fromCharCode(0x2014)]);
+
 function orderedSpecEntries(
   opts: Record<string, string | undefined>,
 ): [string, string][] {
@@ -256,7 +259,7 @@ function orderedSpecEntries(
 
   for (const key of legacy) {
     const val = opts[key];
-    if (val && val !== "—") {
+    if (val && !BLANK_VALUES.has(val)) {
       entries.push([key, val]);
       seen.add(key);
     }
@@ -268,7 +271,7 @@ function orderedSpecEntries(
 
   for (const key of remaining) {
     const val = opts[key];
-    if (val && val !== "—") {
+    if (val && !BLANK_VALUES.has(val)) {
       entries.push([key, val]);
     }
   }
@@ -312,8 +315,8 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
     canceled,
     steps,
     customer: {
-      name: o.customer.name || "—",
-      phone: o.customer.phone || "—",
+      name: o.customer.name || "-",
+      phone: o.customer.phone || "-",
       email: o.customer.email,
     },
     products: displayItems.map((item) => {
@@ -324,11 +327,11 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
         specs:
           specEntries.map(([_, val]) => val).join(" • ") ||
           item.variant_title ||
-          "—",
+          "-",
         quantity: `${item.quantity} ${item.quantity === 1 ? "unit" : "units"}`,
       };
     }),
-    address: o.address || "—",
+    address: o.address || "-",
     // Invoice lines cover EVERY charged item, service/fee lines included, so
     // the amounts sum to item_total (the invoice's Subtotal). Amount is
     // unit_price × quantity — `item.total` carries tax and would double-count

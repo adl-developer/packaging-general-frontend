@@ -307,7 +307,7 @@ function CartLine({
               {item.productSlug && (
                 <Link
                   href={`/products/${item.productSlug}`}
-                  aria-label={`Edit ${item.name} — change size, material, printing or quantity`}
+                  aria-label={`Edit ${item.name}: change size, material, printing or quantity`}
                   className="grid size-8 place-items-center rounded-button text-muted transition-[color,background-color] duration-200 hover:bg-line/30 hover:text-brand"
                 >
                   <Pencil className="size-4" aria-hidden />
@@ -357,7 +357,7 @@ function CartLine({
                 // The PLATFORM FEE never reaches here: it is filtered out of
                 // the card list and rendered once beside the total instead.
                 <span className="text-sm text-muted">
-                  One-time fee — charged once per print type
+                  One-time fee, charged once per print type
                 </span>
               ) : (
                 <>

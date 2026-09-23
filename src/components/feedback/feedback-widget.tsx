@@ -175,7 +175,7 @@ export function FeedbackWidget() {
                     Feedback sent
                   </p>
                   <p className="text-sm text-muted">
-                    Thank you — the team will take a look.
+                    Thank you. The team will take a look.
                   </p>
                 </div>
               ) : (

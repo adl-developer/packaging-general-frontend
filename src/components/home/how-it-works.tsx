@@ -17,7 +17,7 @@ const steps = [
   {
     n: 3,
     title: "Review",
-    description: "See instant pricing with full breakdown — no hidden fees",
+    description: "See instant pricing with full breakdown, no hidden fees",
   },
   {
     n: 4,
@@ -38,7 +38,7 @@ export function HowItWorks() {
         <Reveal className="mx-auto mb-10 flex max-w-2xl flex-col items-center gap-3 text-center">
           <SectionHeading className="text-[#1b1b1c]">How It Works</SectionHeading>
           <SectionSubtitle className="text-muted">
-            Order custom packaging in minutes, not days — 5 easy steps
+            Order custom packaging in minutes, not days, in 5 easy steps
           </SectionSubtitle>
         </Reveal>
 

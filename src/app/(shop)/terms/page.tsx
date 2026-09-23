@@ -83,9 +83,9 @@ function BuiltInTerms() {
 
       <LegalSection id="services" title="1. Our services">
         <LegalText>
-          Packaging General supplies standardized and custom packaging —
-          including boxes, bags, pouches, food packaging, and related products
-          — together with optional branding and design, to businesses across
+          Packaging General supplies standardized and custom packaging
+          (including boxes, bags, pouches, food packaging, and related
+          products), together with optional branding and design, to businesses across
           Ghana and West Africa. Product images, descriptions, dimensions, and
           samples are provided to help you choose and are indicative; slight
           variations in colour, size, and finish can occur, particularly for
@@ -112,9 +112,9 @@ function BuiltInTerms() {
           binding contract is formed only when we confirm acceptance of your
           order (for example, by an order confirmation) or, for custom work,
           when we confirm your approved specification and any required deposit.
-          We may decline or cancel an order before that point — for example, if
+          We may decline or cancel an order before that point (for example, if
           a product is unavailable, there is a pricing or description error,
-          payment fails, or we suspect fraud or misuse — in which case we will
+          payment fails, or we suspect fraud or misuse), in which case we will
           refund any amount already paid for that order.
         </LegalText>
       </LegalSection>

@@ -20,7 +20,7 @@ const siteUrl =
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Packaging General — Digital-First Packaging in West Africa",
+    default: "Packaging General | Digital-First Packaging in West Africa",
     template: "%s | Packaging General",
   },
   description:
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "Packaging General",
-    title: "Packaging General — Digital-First Packaging in West Africa",
+    title: "Packaging General | Digital-First Packaging in West Africa",
     description:
       "Browse and buy quality packaging supplies online. Built for SMEs and growing brands across West Africa.",
     url: siteUrl,
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     // "summary" renders the logo as a compact square thumbnail; the logo is
     // portrait, so the large-image card would letterbox it badly.
     card: "summary",
-    title: "Packaging General — Digital-First Packaging in West Africa",
+    title: "Packaging General | Digital-First Packaging in West Africa",
     description:
       "Browse and buy quality packaging supplies online. Built for West Africa.",
     images: ["/logo.png"],

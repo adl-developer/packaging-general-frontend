@@ -80,28 +80,28 @@ function BuiltInPrivacyPolicy() {
         <LegalSubheading>Information you give us</LegalSubheading>
         <LegalList>
           <li>
-            <strong>Account details</strong> — your name, business name, email,
+            <strong>Account details</strong>: your name, business name, email,
             phone/WhatsApp number, and password when you register or sign in.
           </li>
           <li>
-            <strong>Order and enquiry details</strong> — the packaging
+            <strong>Order and enquiry details</strong>: the packaging
             products, quantities, sizes, colours, branding/artwork, timelines,
             and any notes you submit when you request a quote or place an
             order.
           </li>
           <li>
-            <strong>Delivery information</strong> — delivery address, recipient
+            <strong>Delivery information</strong>: delivery address, recipient
             name and contact number, and any delivery instructions.
           </li>
           <li>
-            <strong>Payment information</strong> — payment is processed by our
+            <strong>Payment information</strong>: payment is processed by our
             third-party payment providers. We receive confirmation of payment
             and limited details (such as the payment method type and a
             transaction reference); we do not store your full card or
             mobile-money credentials.
           </li>
           <li>
-            <strong>Communications</strong> — messages you send us by email,
+            <strong>Communications</strong>: messages you send us by email,
             WhatsApp, phone, or web form, and our correspondence with you
             (including support and feedback).
           </li>
@@ -109,13 +109,13 @@ function BuiltInPrivacyPolicy() {
         <LegalSubheading>Information we collect automatically</LegalSubheading>
         <LegalList>
           <li>
-            <strong>Device and usage data</strong> — IP address, browser and
+            <strong>Device and usage data</strong>: IP address, browser and
             device type, pages viewed, and how you interact with the site,
             collected through cookies and similar technologies and our server
             logs.
           </li>
           <li>
-            <strong>Transaction history</strong> — a record of your orders,
+            <strong>Transaction history</strong>: a record of your orders,
             quotes, and account activity.
           </li>
         </LegalList>
@@ -183,28 +183,28 @@ function BuiltInPrivacyPolicy() {
         </LegalText>
         <LegalList>
           <li>
-            <strong>Payment processors</strong> — to take payment and confirm
+            <strong>Payment processors</strong>: to take payment and confirm
             transactions;
           </li>
           <li>
-            <strong>Delivery and logistics partners</strong> — to fulfil and
+            <strong>Delivery and logistics partners</strong>: to fulfil and
             deliver your orders;
           </li>
           <li>
-            <strong>Production and supply partners</strong> — where an order
+            <strong>Production and supply partners</strong>: where an order
             (for example, custom or branded packaging) is produced with a
             partner;
           </li>
           <li>
-            <strong>Technology providers</strong> — hosting, database, email,
+            <strong>Technology providers</strong>: hosting, database, email,
             and SMS/messaging providers that operate our platform;
           </li>
           <li>
-            <strong>Professional advisers</strong> — such as accountants and
+            <strong>Professional advisers</strong>: such as accountants and
             lawyers, where reasonably necessary; and
           </li>
           <li>
-            <strong>Authorities</strong> — where we are required to by law, or
+            <strong>Authorities</strong>: where we are required to by law, or
             to protect our rights, users, or others.
           </li>
         </LegalList>

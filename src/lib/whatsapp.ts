@@ -19,5 +19,5 @@ export function supportWhatsappUrl(message: string): string | null {
 
 export function outOfStockEnquiry(o: { product: string; specs: string[]; quantity: number }): string {
   const spec = o.specs.length ? `, ${o.specs.join(", ")}` : "";
-  return `Hi Packaging General — I'd like to order ${o.product}${spec}, quantity ${o.quantity}. It's showing out of stock online, could you help with lead time?`;
+  return `Hi Packaging General, I'd like to order ${o.product}${spec}, quantity ${o.quantity}. It's showing out of stock online, could you help with lead time?`;
 }
