@@ -8,6 +8,10 @@ import { formatGhs } from "@/lib/format";
 import { formatOrderNumber } from "@/lib/order-number";
 import { Reveal } from "@/components/motion/reveal";
 import { ReorderActions } from "@/components/account/reorder-actions";
+import { ChargeRows } from "@/components/charge-rows";
+import { chargeBreakdown } from "@/lib/charge-breakdown";
+import { goodsLines, orderPlatformFee } from "@/lib/platform-fee";
+import { getLevies } from "@/lib/site-content";
 
 export const metadata: Metadata = {
   title: "My Orders",
@@ -45,9 +49,10 @@ export default async function AccountOrdersPage() {
   // start the second. The sign-in redirect is unchanged — it just waits for
   // both, and the signed-out case costs nothing extra because listMyOrders
   // returns before touching the backend.
-  const [customer, orders] = await Promise.all([
+  const [customer, orders, levies] = await Promise.all([
     getCustomer(),
     listMyOrders(),
+    getLevies(),
   ]);
   if (!customer) {
     redirect("/sign-in");
@@ -105,9 +110,31 @@ export default async function AccountOrdersPage() {
         <ul className="flex flex-col gap-4">
           {orders.map((order) => {
             const status = statusLabel(order);
-            const itemCount = (order.items ?? []).reduce(
-              (n, i) => n + (i.quantity ?? 0),
-              0
+            // The platform fee is a line item but a CHARGE, never a product
+            // (client, 2026-08-11) — it appears once, in the ladder below.
+            const goods = goodsLines(order.items ?? []);
+            const itemCount = goods.reduce((n, i) => n + (i.quantity ?? 0), 0);
+            const o = order as typeof order & {
+              item_subtotal?: number;
+              shipping_subtotal?: number;
+              discount_subtotal?: number;
+            };
+            // Subtotal → Discount → Delivery → Platform Fee → VAT → NHIL →
+            // GETFund — the same ladder as the receipt and the emails.
+            const { rows } = chargeBreakdown(
+              {
+                itemSubtotal: Number(o.item_subtotal ?? 0),
+                platformFee: orderPlatformFee(order.items ?? []),
+                shippingSubtotal: Number(o.shipping_subtotal ?? 0),
+                discountSubtotal: Number(o.discount_subtotal ?? 0),
+                total: Number(order.total ?? 0),
+                method:
+                  (order.metadata as Record<string, unknown> | null)
+                    ?.fulfillment_method === "pickup"
+                    ? "pickup"
+                    : "delivery",
+              },
+              levies
             );
             return (
               <li key={order.id}>
@@ -135,7 +162,7 @@ export default async function AccountOrdersPage() {
                   </div>
 
                   <ul className="flex flex-col gap-1 border-t border-line pt-3">
-                    {(order.items ?? []).map((item) => (
+                    {goods.map((item) => (
                       <li
                         key={item.id}
                         className="flex flex-wrap items-baseline justify-between gap-2 text-sm"
@@ -144,11 +171,13 @@ export default async function AccountOrdersPage() {
                           {item.quantity}× {item.product_title ?? item.title}
                         </span>
                         <span className="text-muted">
-                          {formatGhs(Number(item.total ?? 0))}
+                          {formatGhs(Number(item.subtotal ?? 0))}
                         </span>
                       </li>
                     ))}
                   </ul>
+
+                  <ChargeRows rows={rows} hideTotal />
 
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
                     <span className="text-sm text-muted">

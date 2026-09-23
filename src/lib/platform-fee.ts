@@ -34,6 +34,16 @@ export function goodsLines<T extends MetadataBearing>(lines: T[]): T[] {
   return lines.filter((l) => !isPlatformFeeLine(l));
 }
 
+/** What the fee came to on an ORDER's lines (before tax; 0 when none). */
+export function orderPlatformFee(
+  lines: (MetadataBearing & { unit_price?: number | null; quantity?: number | null })[],
+): number {
+  const total = lines
+    .filter((l) => isPlatformFeeLine(l))
+    .reduce((sum, l) => sum + Number(l.unit_price ?? 0) * Number(l.quantity ?? 0), 0);
+  return Math.round(total * 100) / 100;
+}
+
 /** What the fee came to on this cart (0 when none is configured). */
 export function platformFeeTotal(cart: HttpTypes.StoreCart | null): number {
   if (!cart) return 0;

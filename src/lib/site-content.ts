@@ -6,6 +6,7 @@ import {
 import { unstable_cache } from "next/cache";
 import { sdk } from "@/lib/medusa";
 import { CACHE_TAGS } from "@/lib/revalidate";
+import { coerceLevies, STATUTORY_LEVIES, type LevyPoints } from "@/lib/charge-breakdown";
 
 /**
  * Admin-editable site content, served by the custom backend route
@@ -64,6 +65,8 @@ interface SiteContentResponse {
   privacy?: { effective_date: string; body: string; customized: boolean };
   business_hours?: { configured: boolean; hours: BusinessHours["hours"] };
   about?: unknown;
+  /** Configured VAT/NHIL/GETFund split — absent on a backend before 2026-09-23. */
+  levies?: unknown;
 }
 
 interface SiteContentState {
@@ -73,6 +76,9 @@ interface SiteContentState {
   /** Null when the backend sent nothing usable — /about renders the built-in
    *  `DEFAULT_ABOUT` then (same canonical copy the backend defaults to). */
   about: AboutContent | null;
+  /** Null when the backend didn't send a usable split — callers fall back to
+   *  the statutory one (`STATUTORY_LEVIES`). */
+  levies: LevyPoints | null;
 }
 
 /** Last-known-good copy, served only when the backend is unreachable. The
@@ -87,6 +93,7 @@ const EMPTY: SiteContentState = {
   privacy: null,
   businessHours: null,
   about: null,
+  levies: null,
 };
 
 function mapDoc(
@@ -114,6 +121,7 @@ const cachedSiteContent = unstable_cache(
           ? { configured: true, hours: res.business_hours.hours }
           : null,
       about: coerceAbout(res.about),
+      levies: coerceLevies(res.levies),
     };
   },
   ["site-content"],
@@ -147,6 +155,13 @@ export async function getCustomLegalDoc(
  *  callers show no outside-hours notice then. */
 export async function getBusinessHours(): Promise<BusinessHours | null> {
   return (await getSiteContent()).businessHours;
+}
+
+/** The configured levy split for itemising VAT / NHIL / GETFund on the cart
+ *  and checkout — the same split the order documents use (Settings →
+ *  Platform). Falls back to the statutory 15 / 2.5 / 2.5. */
+export async function getLevies(): Promise<LevyPoints> {
+  return (await getSiteContent()).levies ?? STATUTORY_LEVIES;
 }
 
 /** The About Us page content — the backend's (admin-editable) version when

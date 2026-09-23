@@ -7,6 +7,9 @@ import { sdk } from "@/lib/medusa";
 import { formatOrderNumber } from "@/lib/order-number";
 import { getCustomer, getOrderEmailAccountStatus } from "@/lib/actions/auth";
 import { OrderProgress } from "@/components/checkout/order-progress";
+import { chargeBreakdown, type ChargeRow } from "@/lib/charge-breakdown";
+import { orderPlatformFee } from "@/lib/platform-fee";
+import { getLevies } from "@/lib/site-content";
 
 export const metadata: Metadata = {
   title: "Order Confirmed",
@@ -45,13 +48,14 @@ export default async function ConfirmationPage({
   let company: string | undefined;
   let contactPerson: string | undefined;
   let total: number | undefined;
+  let chargeRows: ChargeRow[] | null = null;
   let paymentProviderId: string | undefined;
   let deliveryOption: string | undefined;
   let pickup = false;
   try {
     const { order } = await sdk.store.order.retrieve(orderId, {
       fields:
-        "id,display_id,created_at,email,metadata,total,*payment_collections,payment_collections.payment_sessions,*shipping_methods",
+        "id,display_id,created_at,email,metadata,total,item_subtotal,shipping_subtotal,discount_subtotal,*items,*promotions,*payment_collections,payment_collections.payment_sessions,*shipping_methods",
     });
     displayId = order.display_id ?? undefined;
     createdAt = order.created_at ? String(order.created_at) : undefined;
@@ -69,6 +73,28 @@ export default async function ConfirmationPage({
       sessions.find((s) => s.status === "authorized" || s.status === "captured")
         ?.provider_id ?? sessions[0]?.provider_id ?? undefined;
     deliveryOption = order.shipping_methods?.[0]?.name ?? undefined;
+    // Subtotal → Discount → Delivery → Platform Fee → VAT → NHIL → GETFund
+    // (client, 2026-09-23) — the same ladder the emails and receipt show.
+    const o = order as typeof order & {
+      item_subtotal?: number;
+      shipping_subtotal?: number;
+      discount_subtotal?: number;
+    };
+    chargeRows = chargeBreakdown(
+      {
+        itemSubtotal: Number(o.item_subtotal ?? 0),
+        platformFee: orderPlatformFee(order.items ?? []),
+        shippingSubtotal: Number(o.shipping_subtotal ?? 0),
+        discountSubtotal: Number(o.discount_subtotal ?? 0),
+        total: Number(order.total ?? 0),
+        method: pickup ? "pickup" : "delivery",
+        discountLabel:
+          (order as { promotions?: { code?: string | null }[] }).promotions
+            ?.map((p) => p.code)
+            .find((c): c is string => !!c) ?? null,
+      },
+      await getLevies(),
+    ).rows;
   } catch (err) {
     // Guest orders may not be readable without an auth token — fall back to
     // showing the raw order id so the user at least has something to quote.
@@ -98,6 +124,7 @@ export default async function ConfirmationPage({
         company={company}
         contactPerson={contactPerson}
         total={total}
+        chargeRows={chargeRows}
         paymentProviderId={paymentProviderId}
         deliveryOption={deliveryOption}
       pickup={pickup}

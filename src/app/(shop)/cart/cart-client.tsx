@@ -36,6 +36,8 @@ import {
 import type { CrossSellProduct } from "@/lib/products";
 import type { ActivePromotion, PromoBanner } from "@/lib/promotions";
 import { promoMessage } from "@/lib/promo-copy";
+import { ChargeRows } from "@/components/charge-rows";
+import { chargeBreakdown, type LevyPoints } from "@/lib/charge-breakdown";
 
 export type { CartItem } from "./map-cart";
 
@@ -437,6 +439,7 @@ export function CartClient({
   crossSell,
   promo,
   banner,
+  levies,
 }: {
   /** The live cart's mapped items, streamed from the server render — NOT
    *  awaited there, so the page shell paints without waiting on the backend. */
@@ -446,6 +449,8 @@ export function CartClient({
   /** The admin-typed announcement — the promo box shows ITS text, same as the
    *  header bar, so the two can never claim different discounts. */
   banner: PromoBanner;
+  /** Configured VAT/NHIL/GETFund split, for the summary's levy lines. */
+  levies: LevyPoints;
 }) {
   const promoBox = promoMessage(promo, banner);
   const [items, setItems] = React.useState<CartItem[]>([]);
@@ -487,7 +492,7 @@ export function CartClient({
     () =>
       items
         .filter((x) => x.isPlatformFee)
-        .reduce((sum, x) => sum + lineTotal(x), 0),
+        .reduce((sum, x) => sum + lineSubtotal(x), 0),
     [items],
   );
 
@@ -886,8 +891,21 @@ export function CartClient({
     });
   };
 
-  // ⚠ Over `items`, not `goods` — the fee IS part of what gets charged.
+  // ⚠ Over `items`, not `goods` — the fee IS part of what gets charged
+  // (and taxed). The summary itemises it the same way checkout, the emails
+  // and the receipt do (client, 2026-09-23): Subtotal → Platform Fee → VAT →
+  // NHIL → GETFund → Total, before-tax lines, zero lines hidden. No delivery
+  // row here — delivery is chosen at checkout.
   const total = items.reduce((sum, x) => sum + lineTotal(x), 0);
+  const chargeRows = chargeBreakdown(
+    {
+      itemSubtotal: items.reduce((sum, x) => sum + lineSubtotal(x), 0),
+      platformFee,
+      shippingSubtotal: 0,
+      total,
+    },
+    levies,
+  ).rows;
 
   // Lines that exceed what's actually sellable — drives the inline warnings
   // and gates the Checkout CTA. Empty when stock is unknown or fine, per the
@@ -1030,35 +1048,14 @@ export function CartClient({
               >
                 <span className="truncate text-muted">{item.name}</span>
                 <span className="shrink-0 font-medium text-brand tabular-nums">
-                  {formatGhs(lineTotal(item))}
+                  {formatGhs(lineSubtotal(item))}
                 </span>
               </li>
             ))}
           </ul>
-          {/* The fee's one appearance: a charge line under the items, above the
-              total — where a shopper looks for VAT and delivery, not among the
-              things they chose. Hidden entirely when no fee is configured. */}
-          {platformFee > 0 && (
-            <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3 text-sm">
-              <span className="text-muted">Platform Fee</span>
-              <span className="shrink-0 font-medium text-brand tabular-nums">
-                {formatGhs(platformFee)}
-              </span>
-            </div>
-          )}
-          <div className="flex flex-col gap-1 border-t border-line pt-3">
-            <div className="flex items-center justify-between">
-              <span className="text-base font-semibold text-brand">
-                Total
-              </span>
-              <span className="text-base font-semibold text-brand tabular-nums">
-                {formatGhs(total)}
-              </span>
-            </div>
-            <p className="text-xs text-muted">
-              Includes VAT, NHIL, and all applicable fees
-            </p>
-          </div>
+          {/* The charge ladder — the fee's one appearance is here, beside the
+              levies, never among the things the shopper chose. */}
+          <ChargeRows rows={chargeRows} className="border-t border-line pt-3" />
           {shortItems.length > 0 ? (
             <div className="mt-1 flex flex-col gap-1.5">
               <button

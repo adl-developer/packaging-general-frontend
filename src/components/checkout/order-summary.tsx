@@ -6,6 +6,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ChargeRows } from "@/components/charge-rows";
+import type { ChargeRow } from "@/lib/charge-breakdown";
 import { formatGhs } from "@/lib/format";
 import { DiscountField } from "./discount-field";
 
@@ -17,24 +19,16 @@ export interface OrderLineItem {
 }
 
 interface OrderSummaryProps {
-  /** Goods only — the platform fee is a charge row, not an item. */
+  /** Goods only, BEFORE tax — the platform fee is a charge row, not an item,
+   *  and the levies are itemised below, so the lines sum to Subtotal. */
   items: OrderLineItem[];
-  /** Goods subtotal, with the platform fee already taken out. */
-  subtotal: number;
-  /** The store's platform fee (0 when none is configured — the row hides). */
-  platformFee?: number;
-  total: number;
+  /** The charge ladder (lib/charge-breakdown.ts): Subtotal → Discount →
+   *  Delivery → Platform Fee → VAT → NHIL → GETFund → Total. */
+  rows: ChargeRow[];
   deliveryAddress: string;
   /** Promotion code currently applied to the cart (cart.promotions). */
   appliedCode?: string | null;
-  /** Live discount amount from the cart (cart.discount_total). */
-  discount?: number;
-  /** Shipping cost as quoted by the chosen carrier (cart.shipping_total). */
-  shipping?: number;
-  /** Name of the chosen shipping method, e.g. "Yango Delivery". */
-  shippingMethod?: string | null;
-  /** Customer self-pickup (2026-09-22): the fee row reads "Pickup — Free"
-   *  (never "Calculating…") and the address line "Pick up from:". */
+  /** Customer self-pickup (2026-09-22): the address line "Pick up from:". */
   pickup?: boolean;
 }
 
@@ -44,14 +38,9 @@ function Divider() {
 
 export function OrderSummary({
   items,
-  subtotal,
-  platformFee = 0,
-  total,
+  rows,
   deliveryAddress,
   appliedCode,
-  discount = 0,
-  shipping = 0,
-  shippingMethod,
   pickup = false,
 }: OrderSummaryProps) {
   return (
@@ -94,53 +83,7 @@ export function OrderSummary({
 
         <Divider />
 
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted">Subtotal</span>
-            <span className="text-brand">{formatGhs(subtotal)}</span>
-          </div>
-          {discount > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted">
-                Discount{appliedCode ? ` (${appliedCode})` : ""}
-              </span>
-              <span className="font-medium text-plum">
-                −{formatGhs(discount)}
-              </span>
-            </div>
-          )}
-          {/* Sits with delivery and VAT, not with the items — it is a charge
-              on the order, not something the customer added. */}
-          {platformFee > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted">Platform Fee</span>
-              <span className="text-brand">{formatGhs(platformFee)}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted">
-              {pickup ? "Pickup" : "Delivery"}
-              {!pickup && shippingMethod ? ` (${shippingMethod})` : ""}
-            </span>
-            <span className="text-brand">
-              {shipping > 0
-                ? formatGhs(shipping)
-                : pickup
-                  ? "Free"
-                  : "Calculating…"}
-            </span>
-          </div>
-          <Divider />
-          <div className="flex items-center justify-between">
-            <span className="text-lg font-semibold">Total</span>
-            <span className="text-lg font-semibold">
-              {formatGhs(total)}
-            </span>
-          </div>
-          <p className="text-xs text-muted">
-            Includes VAT, NHIL, and all applicable fees
-          </p>
-        </div>
+        <ChargeRows rows={rows} />
 
         <div className="flex items-start gap-2 border-t border-line pt-4">
           <MapPin className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden />

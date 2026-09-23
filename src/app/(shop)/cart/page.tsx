@@ -4,6 +4,7 @@ import { mapLineItem, type CartItem } from "./map-cart";
 import { getCart } from "@/lib/actions/cart";
 import { listCrossSellProducts } from "@/lib/catalog";
 import { getActivePromotion, getPromoBanner } from "@/lib/promotions";
+import { getLevies } from "@/lib/site-content";
 
 export const metadata: Metadata = {
   title: "Shopping Cart",
@@ -28,10 +29,13 @@ export default async function CartPage() {
   // Both module-cached (5 min / 60 s) — cheap to await, and the sections they
   // fill render in the first paint.
   // `getPromoBanner` shares `getActivePromotion`'s one cached fetch.
-  const [crossSell, promo, banner] = await Promise.all([
+  // `getLevies` rides the site-content cache (1 h, dropped on a Settings →
+  // Platform save).
+  const [crossSell, promo, banner, levies] = await Promise.all([
     listCrossSellProducts(),
     getActivePromotion(),
     getPromoBanner(),
+    getLevies(),
   ]);
   return (
     <CartClient
@@ -39,6 +43,7 @@ export default async function CartPage() {
       crossSell={crossSell}
       promo={promo}
       banner={banner}
+      levies={levies}
     />
   );
 }
