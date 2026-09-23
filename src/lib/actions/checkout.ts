@@ -528,7 +528,7 @@ export type BuyNowResult =
   | { ok: false; error: string };
 
 const BUY_NOW_NOTICE =
-  "You already have items in your cart. We've added this one — review everything before paying.";
+  "You already have items in your cart. We've added this one. Review everything before paying.";
 
 /**
  * Buy Now — see docs/superpowers/specs/2026-07-31-buy-now-design.md.

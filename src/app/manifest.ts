@@ -10,7 +10,7 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Packaging General — Digital-First Packaging in West Africa",
+    name: "Packaging General | Digital-First Packaging in West Africa",
     short_name: "Packaging General",
     description:
       "Standardized packaging for SMEs and growing brands across Ghana & West Africa.",

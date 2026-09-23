@@ -78,7 +78,7 @@ const STATIC_FALLBACK: ShopCategory[] = [
     medusaName: "RSC Cartons",
     title: "RSC Cartons",
     description:
-      "Regular slotted container cartons — 11 stock sizes in single or double wall, brown or white.",
+      "Regular slotted container cartons: 11 stock sizes in single or double wall, brown or white.",
     icon: RscCartonIcon,
     href: "/products/rsc-carton",
   },
@@ -87,7 +87,7 @@ const STATIC_FALLBACK: ShopCategory[] = [
     medusaName: "Die Cut Boxes",
     title: "Die Cut Boxes",
     description:
-      "Purpose-cut boxes for produce and storage — yam, vegetable, mango, archive boxes and trays.",
+      "Purpose-cut boxes for produce and storage: yam, vegetable, mango, archive boxes and trays.",
     icon: Scissors,
     href: "/products/category/die-cut-boxes",
   },
@@ -96,7 +96,7 @@ const STATIC_FALLBACK: ShopCategory[] = [
     medusaName: "Food Packaging",
     title: "Food Packaging",
     description:
-      "Food-safe boxes — pizza boxes from 10″ to 16″ and takeaway food boxes with or without window.",
+      "Food-safe boxes: pizza boxes from 10″ to 16″ and takeaway food boxes with or without window.",
     icon: UtensilsCrossed,
     href: "/products/category/food-packaging",
   },
@@ -105,7 +105,7 @@ const STATIC_FALLBACK: ShopCategory[] = [
     medusaName: "Packaging Accessories",
     title: "Packaging Accessories",
     description:
-      "Everything that seals and protects — BOPP tape, stretch and bubble wrap, shredded paper.",
+      "Everything that seals and protects: BOPP tape, stretch and bubble wrap, shredded paper.",
     icon: Layers,
     href: "/products/category/packaging-accessories",
   },

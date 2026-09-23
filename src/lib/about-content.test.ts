@@ -47,7 +47,7 @@ describe("coerceAbout", () => {
 
   it(`requires exactly ${ABOUT_STAGE_COUNT} non-empty stages`, () => {
     const extra = goodAbout();
-    extra.journey.stages = [...extra.journey.stages, "Mars — Someday"];
+    extra.journey.stages = [...extra.journey.stages, "Mars: Someday"];
     expect(coerceAbout(extra)).toBeNull();
 
     const blank = goodAbout();

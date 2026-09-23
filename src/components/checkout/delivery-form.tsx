@@ -514,7 +514,7 @@ function geoErrorMessage(err: GeolocationPositionError): string {
     case err.POSITION_UNAVAILABLE:
       return "We couldn't find your location. Search for your address in the field above or enter coordinates manually.";
     case err.TIMEOUT:
-      return "We couldn't pin your location automatically. Search for your address in the field above — it's usually faster.";
+      return "We couldn't pin your location automatically. Search for your address in the field above instead. It's usually faster.";
     default:
       return "Couldn't access your location. Search for your address in the field above or enter coordinates manually.";
   }

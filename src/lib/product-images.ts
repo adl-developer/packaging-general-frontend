@@ -48,6 +48,6 @@ export function toProductImages(
       : urls;
   return ordered.map((src, i) => ({
     src,
-    alt: i === 0 ? name : name + " — view " + (i + 1),
+    alt: i === 0 ? name : name + ", view " + (i + 1),
   }));
 }

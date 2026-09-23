@@ -84,7 +84,7 @@ export async function sendFeedback(input: {
       ok: false,
       error:
         status === 429
-          ? "You've sent a lot of feedback just now — please try again in a few minutes."
+          ? "You've sent a lot of feedback just now. Please try again in a few minutes."
           : "We couldn't send your feedback right now. Please try again later.",
     };
   }
