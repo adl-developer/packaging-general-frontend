@@ -48,11 +48,11 @@ export const DEFAULT_ABOUT: AboutContent = {
   intro: {
     label: "What we are",
     heading: "Ghana's first structured packaging marketplace",
-    body: "Packaging General is Ghana's first structured marketplace for industrial and commercial packaging. We manufacture what we sell — so we hold real stock and full order visibility. No middlemen. No reselling someone else's inventory. No guessing whether it will arrive.",
+    body: "Packaging General is Ghana's first structured marketplace for industrial and commercial packaging. We manufacture what we sell, so we hold real stock and full order visibility. No middlemen. No reselling someone else's inventory. No guessing whether it will arrive.",
     features: [
       {
         title: "We manufacture what we sell",
-        body: "Corrugated cartons, Kraft bags, stretch wrap, woven bags, food-grade packaging — made in-house, not sourced on your behalf.",
+        body: "Corrugated cartons, Kraft bags, stretch wrap, woven bags, food-grade packaging. All made in-house, not sourced on your behalf.",
       },
       {
         title: "Real stock, real visibility",
@@ -60,7 +60,7 @@ export const DEFAULT_ABOUT: AboutContent = {
       },
       {
         title: "Structured for business",
-        body: "Fair, transparent pricing. Place an order and know it will arrive — on a timeline you can plan around.",
+        body: "Fair, transparent pricing. Place an order and know it will arrive on a timeline you can plan around.",
       },
     ],
   },
@@ -73,14 +73,14 @@ export const DEFAULT_ABOUT: AboutContent = {
     label: "The founder",
     name: "Emmanuel Osei Ntim",
     role: "Founder, Packaging General",
-    bio: "Emmanuel built Packaging General out of a simple observation: Ghana's manufacturers and retailers were losing time and money because packaging sourcing had never been given proper structure. With years of operations and supply chain work behind him, the next step was building a direct channel to buyers — one where they get certainty instead of a phone call and a maybe.",
+    bio: "Emmanuel built Packaging General out of a simple observation: Ghana's manufacturers and retailers were losing time and money because packaging sourcing had never been given proper structure. With years of operations and supply chain work behind him, the next step was building a direct channel to buyers, one where they get certainty instead of a phone call and a maybe.",
     photo_url: "",
   },
   journey: {
     label: "Where we're going",
     heading: "Earning trust in Ghana first",
     body: "From there, we intend to expand across Africa, bringing the same model to manufacturers and retailers who face the same sourcing problems at a larger scale.",
-    stages: ["Ghana — Now", "West Africa — Next", "Pan-Africa — Vision"],
+    stages: ["Ghana: Now", "West Africa: Next", "Pan-Africa: Vision"],
   },
 };
 

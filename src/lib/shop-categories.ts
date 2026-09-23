@@ -79,22 +79,22 @@ const CANONICAL: Record<
 > = {
   "rsc-cartons": {
     description:
-      "Regular slotted container cartons — 11 stock sizes in single or double wall, brown or white.",
+      "Regular slotted container cartons: 11 stock sizes in single or double wall, brown or white.",
     iconKey: "rsc-carton",
   },
   "die-cut-boxes": {
     description:
-      "Purpose-cut boxes for produce and storage — yam, vegetable, mango, archive boxes and trays.",
+      "Purpose-cut boxes for produce and storage: yam, vegetable, mango, archive boxes and trays.",
     iconKey: "scissors",
   },
   "food-packaging": {
     description:
-      "Food-safe boxes — pizza boxes from 10″ to 16″ and takeaway food boxes with or without window.",
+      "Food-safe boxes: pizza boxes from 10″ to 16″ and takeaway food boxes with or without window.",
     iconKey: "utensils",
   },
   "packaging-accessories": {
     description:
-      "Everything that seals and protects — BOPP tape, stretch and bubble wrap, shredded paper.",
+      "Everything that seals and protects: BOPP tape, stretch and bubble wrap, shredded paper.",
     iconKey: "layers",
   },
 };

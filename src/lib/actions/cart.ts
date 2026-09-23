@@ -360,7 +360,7 @@ export async function applyPromoCode(code: string): Promise<PromoResult> {
       return { ok: false, error: "Invalid discount code" };
     }
     console.error("[cart] applyPromoCode failed:", err);
-    return { ok: false, error: "Couldn't apply the code — please try again" };
+    return { ok: false, error: "Couldn't apply the code. Please try again." };
   }
 }
 
@@ -384,7 +384,7 @@ export async function removePromoCode(code: string): Promise<PromoResult> {
     return { ok: true, discountTotal: Number(updated.discount_total ?? 0) };
   } catch (err) {
     console.error("[cart] removePromoCode failed:", err);
-    return { ok: false, error: "Couldn't remove the code — please try again" };
+    return { ok: false, error: "Couldn't remove the code. Please try again." };
   }
 }
 
@@ -419,7 +419,7 @@ async function getGhanaRegionId(): Promise<string> {
     regions.find((r) => r.currency_code === "ghs") ?? regions[0];
   if (!region) {
     throw new Error(
-      "No region available — has the Medusa backend been seeded for Ghana?"
+      "No region available. Has the Medusa backend been seeded for Ghana?"
     );
   }
   regionCache = { id: region.id, at: Date.now() };
@@ -538,7 +538,7 @@ async function findSetupFeeVariant(printingValue: string): Promise<string> {
   );
   if (!variant) {
     throw new Error(
-      `Setup-fee variant for "${printingValue}" not found — has the backend been re-seeded with the enriched product model?`
+      `Setup-fee variant for "${printingValue}" not found. Has the backend been re-seeded with the enriched product model?`
     );
   }
   setupVariantCache.set(printingValue, { id: variant.id, at: Date.now() });

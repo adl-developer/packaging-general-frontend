@@ -119,7 +119,7 @@ export function BuyNowAuthDialog({
               <p className="text-sm leading-5 text-muted">
                 {panel === "verify"
                   ? "Verify your email address to continue."
-                  : "Your selection is saved — sign in or create an account and we'll take you straight to checkout."}
+                  : "Your selection is saved. Sign in or create an account and we'll take you straight to checkout."}
               </p>
             </div>
             <button
@@ -241,7 +241,7 @@ function VerifyPanel({
             A verification link has been sent to <strong>{email}</strong>. Click
             it to activate your account
             {justSent && itemSaved
-              ? " — your item is saved in your cart and you'll be taken straight to checkout."
+              ? ". Your item is saved in your cart and you'll be taken straight to checkout."
               : "."}
           </span>
         </p>

@@ -159,7 +159,7 @@ function UnverifiedPanel({
           </h1>
           <p className="text-base leading-6 text-muted">
             {justSent
-              ? "Your account has been created — one more step."
+              ? "Your account has been created. One more step."
               : "Your email address hasn't been verified yet. Verify it to activate your account and sign in."}
           </p>
         </div>

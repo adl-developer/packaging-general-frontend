@@ -72,13 +72,13 @@ export default function DesignSystemShowcase() {
 
       <Section title="Typography (Inter)">
         <div className="flex flex-col gap-1">
-          <p className="text-lg font-bold">Bold 18 — Heading</p>
+          <p className="text-lg font-bold">Bold 18: Heading</p>
           <p className="text-base font-medium">
-            Medium 16 — Subheading
+            Medium 16: Subheading
           </p>
-          <p className="text-sm">Regular 14 — Body copy and form labels.</p>
+          <p className="text-sm">Regular 14: Body copy and form labels.</p>
           <p className="text-xs text-muted">
-            Regular 12 — Muted supporting text.
+            Regular 12: Muted supporting text.
           </p>
         </div>
       </Section>

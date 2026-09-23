@@ -158,7 +158,7 @@ function PendingConfirmation({ reference }: { reference?: string }) {
 
           <div className="flex flex-col gap-3">
             <h1 className="text-3xl font-bold leading-9 text-brand">
-              Payment received — your order needs confirmation
+              Payment received: your order needs confirmation
             </h1>
             <p className="text-lg text-muted">
               We&apos;ve received your payment. Our team has already been

@@ -459,7 +459,7 @@ function printInvoice(invoice: InvoiceData) {
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Receipt ${esc(invoice.orderNumber)} — Packaging General</title>
+<title>Receipt ${esc(invoice.orderNumber)} | Packaging General</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: Inter, system-ui, -apple-system, sans-serif; color: #3d3428; margin: 0; padding: 32px; background: #fff; }
@@ -490,7 +490,7 @@ function printInvoice(invoice: InvoiceData) {
     <div style="text-align:right">
       <h1>Receipt</h1>
       <p>Order #: ${esc(invoice.orderNumber)}</p>
-      <p>Date: ${esc(invoice.invoiceDate || "—")}</p>
+      <p>Date: ${esc(invoice.invoiceDate || "-")}</p>
     </div>
   </header>
 
@@ -531,7 +531,7 @@ function printInvoice(invoice: InvoiceData) {
 
   <footer>
     <p>E-VAT receipt information will be issued separately once electronic invoicing is activated.</p>
-    <p>Thank you for your business — Packaging General, Accra, Ghana.</p>
+    <p>Thank you for your business. Packaging General, Accra, Ghana.</p>
   </footer>
 </div>
 <script>window.addEventListener("load", function () { window.print(); });</script>
@@ -590,7 +590,7 @@ function InvoiceQr({ payload }: { payload: string }) {
       viewBox={`0 0 ${qr.size} ${qr.size}`}
       className="size-full"
       shapeRendering="crispEdges"
-      aria-label="QR code — scan to open this receipt"
+      aria-label="QR code: scan to open this receipt"
       role="img"
     >
       <path d={qr.d} fill="#3d3428" />

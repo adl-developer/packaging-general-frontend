@@ -423,14 +423,14 @@ function CreateAccountModal({
             <div className="flex flex-col items-center gap-3 rounded-option border border-[#b9f8cf] bg-[#dcfce7]/40 px-4 py-6 text-center">
               <CheckCircle2 className="size-10 text-[#16a34a]" aria-hidden />
               <p className="text-base font-semibold text-brand">
-                Account created — verify your email
+                Account created: verify your email
               </p>
               <p className="text-sm text-muted">
                 We&apos;ve sent a verification link to <strong>{email}</strong>.
                 Check your email and click the link to activate your account.{" "}
                 {state.linked
                   ? `Order #${orderNumber} is linked to your account.`
-                  : `We couldn't link order #${orderNumber} automatically — you can still track it with your order number and email.`}
+                  : `We couldn't link order #${orderNumber} automatically, but you can still track it with your order number and email.`}
               </p>
             </div>
             <button
@@ -606,7 +606,7 @@ function VerificationSentBody({
             <>
               You already have an account for <strong>{email}</strong> that
               hasn&apos;t been verified. We&apos;ve sent a verification link to
-              that address — click it to activate your account. Order #
+              that address. Click it to activate your account. Order #
               {orderNumber} will be added to your account once verified.
             </>
           )}

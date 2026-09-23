@@ -18,7 +18,7 @@ describe("toProductImages", () => {
       },
       {
         src: "https://media.packaginggeneral.com/products/side.jpg",
-        alt: "Shipping Carton — view 2",
+        alt: "Shipping Carton, view 2",
       },
     ]);
   });
@@ -35,7 +35,7 @@ describe("toProductImages with a cover", () => {
     const images = toProductImages(urls, "RSC Carton", urls[2]);
     expect(images.map((i) => i.src)).toEqual([urls[2], urls[0], urls[1]]);
     expect(images[0].alt).toBe("RSC Carton");
-    expect(images[1].alt).toBe("RSC Carton — view 2");
+    expect(images[1].alt).toBe("RSC Carton, view 2");
   });
 
   it("keeps Medusa's order when the cover is missing or not among the images", () => {

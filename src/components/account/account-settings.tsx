@@ -57,7 +57,7 @@ export function AccountSettings({ email }: { email: string }) {
         </div>
         <p className="text-sm text-muted">
           Signed in as <span className="font-medium text-brand">{email}</span>.
-          Changing it updates the email you sign in with — we&apos;ll send a
+          Changing it updates the email you sign in with. We&apos;ll send a
           confirmation to both addresses.
         </p>
         {emailState.ok ? (
@@ -113,7 +113,7 @@ export function AccountSettings({ email }: { email: string }) {
         </div>
         <p className="text-sm text-muted">
           Choose a new password for signing in. For your security, any other
-          devices signed in to this account will be signed out — you&apos;ll
+          devices signed in to this account will be signed out, but you&apos;ll
           stay signed in here.
         </p>
         {passwordState.ok ? (
