@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Clock, ExternalLink, Loader2, MapPin, Phone } from "lucide-react";
 import { savePickup } from "@/lib/actions/checkout";
 import type { PickupLocation } from "@/lib/pickup";
+import { addressLine } from "@/lib/fulfillment";
 import {
   GH_PHONE_PATTERN,
   normalizeGhanaPhone,
@@ -90,8 +91,7 @@ export function PickupForm({
           <MapPin className="mt-0.5 size-4 shrink-0 text-plum" aria-hidden />
           <div className="flex flex-col gap-1">
             <p className="font-medium">
-              {location.address}
-              {location.city ? `, ${location.city}` : ""}
+              {location.display ?? addressLine(location.address, location.city)}
             </p>
             <a
               href={location.maps_url}

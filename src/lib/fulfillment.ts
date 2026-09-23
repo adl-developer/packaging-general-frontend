@@ -27,3 +27,19 @@ export function chosenMethod(cartMetadata: Meta): FulfillmentMethod | null {
   const m = cartMetadata?.fulfillment_method;
   return m === "pickup" || m === "delivery" ? m : null;
 }
+
+/**
+ * "12 Spintex Rd, Accra" — without repeating a city the address already names
+ * ("…Spintex Road, Accra, Ghana" stays as is). Same rule as the backend's
+ * `addressLine` in utils/pickup.ts.
+ */
+export function addressLine(
+  address: string,
+  city: string | null | undefined,
+): string {
+  const a = address.trim();
+  const c = (city ?? "").trim();
+  if (!c) return a;
+  const words = a.toLowerCase().split(/[^a-z0-9]+/);
+  return words.includes(c.toLowerCase()) ? a : `${a}, ${c}`;
+}

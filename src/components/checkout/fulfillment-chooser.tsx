@@ -5,6 +5,7 @@ import { ChevronDown, Store, Truck } from "lucide-react";
 import { m } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import type { PickupLocation } from "@/lib/pickup";
+import { addressLine } from "@/lib/fulfillment";
 import { cn } from "@/lib/utils";
 import {
   OrderProgress,
@@ -66,9 +67,10 @@ export function FulfillmentChooser({
             id="pickup"
             icon={Store}
             title="Pick up from our warehouse"
-            subtitle={`Free · ${[pickupLocation.address, pickupLocation.city]
-              .filter(Boolean)
-              .join(", ")}`}
+            subtitle={`Free · ${
+              pickupLocation.display ??
+              addressLine(pickupLocation.address, pickupLocation.city)
+            }`}
             open={open === "pickup"}
             onToggle={() => setOpen((o) => (o === "pickup" ? null : "pickup"))}
           >

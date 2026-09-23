@@ -15,6 +15,8 @@ export interface PickupLocation {
   instructions: string | null;
   /** Plain Google Maps link to the pin. */
   maps_url: string;
+  /** One-line address for customers (absent on an older backend). */
+  display?: string;
 }
 
 /**

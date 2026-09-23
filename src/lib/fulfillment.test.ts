@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chosenMethod, isPickupCart } from "./fulfillment";
+import { addressLine, chosenMethod, isPickupCart } from "./fulfillment";
 
 describe("isPickupCart", () => {
   it("reads the cart's recorded choice", () => {
@@ -21,5 +21,14 @@ describe("chosenMethod", () => {
     expect(chosenMethod({ fulfillment_method: "delivery" })).toBe("delivery");
     expect(chosenMethod({ fulfillment_method: "drone" })).toBeNull();
     expect(chosenMethod(null)).toBeNull();
+  });
+});
+
+describe("addressLine", () => {
+  it("never repeats the city", () => {
+    expect(addressLine("FON Packaging, Spintex Road, Accra, Ghana", "Accra")).toBe(
+      "FON Packaging, Spintex Road, Accra, Ghana",
+    );
+    expect(addressLine("12 Spintex Rd", "Accra")).toBe("12 Spintex Rd, Accra");
   });
 });
