@@ -9,26 +9,31 @@ import { cn } from "@/lib/utils";
  * `/logo-horizontal.png` is cropped tight to the artwork (505×136) so its left
  * edge lines up with the page gutter. `/logo.png` (the square monogram) is
  * still the OG / schema.org / PWA image — don't repoint those here.
+ *
+ * Sizes match packaginggeneral.com, whose uncropped PNG (566×152) renders at
+ * 32px in the header and 38px in the footer — i.e. ~28px / ~34px of artwork.
  */
 export function BrandLockup({
   priority = false,
   hideTaglineOnMobile = false,
+  size = "header",
   className,
 }: {
   priority?: boolean;
   /** Mobile header Figma hides the tagline for space. */
   hideTaglineOnMobile?: boolean;
+  size?: "header" | "footer";
   className?: string;
 }) {
   return (
-    <span className={cn("flex flex-col items-start gap-1", className)}>
+    <span className={cn("flex flex-col items-start gap-2", className)}>
       <Image
         src="/logo-horizontal.png"
         alt="Packaging General"
         width={505}
         height={136}
         priority={priority}
-        className="h-9 w-auto"
+        className={cn("w-auto", size === "footer" ? "h-[34px]" : "h-7")}
       />
       <span
         className={cn(

@@ -110,7 +110,7 @@ export function SiteFooter() {
               href="/"
               className="self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
             >
-              <BrandLockup />
+              <BrandLockup size="footer" />
             </Link>
             <p className="max-w-xs text-xs leading-relaxed text-muted">
               Standardized packaging for SMEs and growing brands across Ghana
