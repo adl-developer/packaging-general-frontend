@@ -11,7 +11,9 @@ import {
   Factory,
   Loader2,
   PackageCheck,
+  Phone,
   Search,
+  Store,
   Truck,
   XCircle,
 } from "lucide-react";
@@ -32,6 +34,7 @@ import {
   staggerItem,
 } from "@/lib/motion";
 import { InvoiceDialog, type InvoiceData } from "./invoice-dialog";
+import type { PickupLocation } from "@/lib/pickup";
 
 /**
  * Track Order — Figma frames: search (469:17227), found/timeline
@@ -53,6 +56,9 @@ interface TimelineStep {
 }
 
 interface TrackedOrder {
+  /** Customer self-pickup (2026-09-22): collected, not delivered. */
+  pickup: boolean;
+  pickupLocation: PickupLocation | null;
   number: string;
   placedOn: string;
   status: string;
@@ -149,6 +155,7 @@ function buildInvoice(order: TrackedOrder): InvoiceData {
       address: order.address,
     },
     lines: order.invoiceLines,
+    feeLabel: order.pickup ? "Pickup" : undefined,
     charges: {
       // The fee rides inside `item_total` because it is a line item; pull it
       // back out so the two rows don't double-count it and Subtotal keeps
@@ -220,6 +227,22 @@ const STEP_META: { title: string; detail: string; Icon: TimelineStep["Icon"] }[]
     },
   ];
 
+/** Pickup orders (self-pickup, 2026-09-22): same four slots, no courier. */
+const PICKUP_STEP_META: typeof STEP_META = [
+  STEP_META[0],
+  STEP_META[1],
+  {
+    title: "Ready for Pickup",
+    detail: "Your order is ready — come and collect it",
+    Icon: Store,
+  },
+  {
+    title: "Collected",
+    detail: "You've collected your order",
+    Icon: PackageCheck,
+  },
+];
+
 /** Build ordered spec entries from an options object.
  *  Returns [option-title, value] pairs in canonical order:
  *  Size, Material, Printing first (if present), then remainder alphabetically.
@@ -264,7 +287,9 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
   const mainItem = displayItems[0];
   const extraCount = displayItems.length - 1;
   const totalQty = displayItems.reduce((n, i) => n + i.quantity, 0);
-  const steps: TimelineStep[] = STEP_META.map((meta, idx) => ({
+  const pickup = o.fulfillment_method === "pickup";
+  const stepMeta = pickup ? PICKUP_STEP_META : STEP_META;
+  const steps: TimelineStep[] = stepMeta.map((meta, idx) => ({
     title: meta.title,
     detail:
       idx === o.current_step ? meta.detail : idx < o.current_step ? "Completed" : "Pending",
@@ -283,7 +308,7 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
       : "",
     status: canceled
       ? "Order Canceled"
-      : (STEP_META[o.current_step]?.title ?? "Order Received"),
+      : (stepMeta[o.current_step]?.title ?? "Order Received"),
     canceled,
     steps,
     customer: {
@@ -349,7 +374,10 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
       total: o.totals.total,
     },
     levies: o.levies ?? null,
-    carrier: o.carrier
+    pickup,
+    pickupLocation: o.pickup_location ?? null,
+    // Nothing is couriered for pickup — the "carrier" is the manual provider.
+    carrier: o.carrier && !pickup
       ? {
           name: carrierLabel(o.carrier.provider_id),
           statusLabel: o.carrier.status_label,
@@ -856,8 +884,42 @@ function OrderResult({ order }: { order: TrackedOrder }) {
             <ProductInformation products={order.products} />
           </DetailBlock>
 
-          <DetailBlock title="Delivery Information">
-            <DetailGrid rows={[["Address:", order.address]]} />
+          <DetailBlock
+            title={order.pickup ? "Pickup Information" : "Delivery Information"}
+          >
+            <DetailGrid
+              rows={[[order.pickup ? "Pick up at:" : "Address:", order.address]]}
+            />
+            {order.pickup && order.pickupLocation && (
+              <div className="mt-3 flex flex-col gap-2 rounded-option border border-accent/40 bg-accent/10 p-4 text-sm text-brand">
+                {order.pickupLocation.phone && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="size-4 shrink-0 text-plum" aria-hidden />
+                    <span>
+                      <span className="text-muted">Call before you come: </span>
+                      <a
+                        href={`tel:${order.pickupLocation.phone.replace(/[^0-9+]/g, "")}`}
+                        className="font-medium underline underline-offset-2"
+                      >
+                        {order.pickupLocation.phone}
+                      </a>
+                    </span>
+                  </div>
+                )}
+                {order.pickupLocation.instructions && (
+                  <p className="text-muted">{order.pickupLocation.instructions}</p>
+                )}
+                <a
+                  href={order.pickupLocation.maps_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-button border border-line bg-background px-3 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+                >
+                  <ExternalLink className="size-4" aria-hidden />
+                  Open in Google Maps
+                </a>
+              </div>
+            )}
             {order.carrier && (
               <div className="mt-3 flex flex-col gap-3 rounded-option border border-accent/40 bg-accent/10 p-4">
                 <div className="flex flex-wrap items-center gap-2">
@@ -911,7 +973,10 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                 </p>
               </div>
               <dl className="mt-3 flex flex-col gap-1 border-t border-[rgba(150,64,34,0.2)] pt-3 text-xs">
-                <SummaryRow label="Processing fee + Delivery" value={order.pricing.fees} />
+                <SummaryRow
+                  label={order.pickup ? "Processing fee + Pickup" : "Processing fee + Delivery"}
+                  value={order.pricing.fees}
+                />
                 <SummaryRow
                   label="Taxes (VAT + NHIL + GETFund)"
                   value={order.pricing.taxes}

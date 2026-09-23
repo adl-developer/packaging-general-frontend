@@ -68,6 +68,9 @@ export interface InvoiceData {
   };
   lines: InvoiceLine[];
   charges: InvoiceCharges;
+  /** "Pickup" for a customer-collected order (self-pickup, 2026-09-22);
+   *  defaults to "Delivery Fee". Same label as the admin + emailed receipt. */
+  feeLabel?: string;
   totalAmount: number;
   eVat: {
     sdcId: string;
@@ -280,7 +283,7 @@ export function InvoiceDialog({
                       value={invoice.charges.platformFee}
                     />
                     <Row
-                      label="Delivery Fee"
+                      label={invoice.feeLabel ?? "Delivery Fee"}
                       value={invoice.charges.deliveryFee}
                     />
                     {invoice.charges.discount > 0 && (
@@ -556,7 +559,7 @@ function printInvoice(invoice: InvoiceData) {
     <table style="margin-top:12px">
       ${row("Subtotal", invoice.charges.subtotal, { rule: true })}
       ${row("Platform Fee", invoice.charges.platformFee)}
-      ${row("Delivery Fee", invoice.charges.deliveryFee)}
+      ${row(invoice.feeLabel ?? "Delivery Fee", invoice.charges.deliveryFee)}
       ${invoice.charges.discount > 0 ? row("Discount", -invoice.charges.discount) : ""}
       ${row("Total Before Tax", invoice.charges.totalBeforeTax, { bold: true, rule: true })}
       ${row("VAT (15%)", invoice.charges.vat)}

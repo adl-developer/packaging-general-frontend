@@ -49,6 +49,12 @@ const WHATS_NEXT = [
   'Track your order progress in "Track order" or "My Orders"',
 ];
 
+/** Pickup orders: nothing ships, so the next thing they hear is "ready". */
+const PICKUP_WHATS_NEXT = [
+  "We'll text and email you when your order is ready to collect, with the address and a number to call",
+  'Track your order progress in "Track order" or "My Orders"',
+];
+
 /** Only Paystack is integrated today — it settles Ghanaian cards under one
  *  provider id, so this is a static label rather than a derived one. */
 function paymentMethodLabel(providerId?: string): string | null {
@@ -64,6 +70,9 @@ interface OrderConfirmationProps {
   total?: number;
   paymentProviderId?: string;
   deliveryOption?: string;
+  /** Customer self-pickup (2026-09-22): labels the option "Collection" and
+   *  tells the customer to wait for the ready-for-pickup message. */
+  pickup?: boolean;
   /** True when the visitor is already signed in — suppresses the
    *  "Create Your Account" dialog (they already have an account, and the
    *  order is linked to it server-side). */
@@ -81,6 +90,7 @@ export function OrderConfirmation({
   total,
   paymentProviderId,
   deliveryOption,
+  pickup = false,
   isLoggedIn,
   accountStatus = "none",
 }: OrderConfirmationProps) {
@@ -130,7 +140,11 @@ export function OrderConfirmation({
             <SummaryRow label="Payment Method:" value={paymentMethod} valueClassName="font-medium text-brand" />
           )}
           {deliveryOption && (
-            <SummaryRow label="Delivery Option:" value={deliveryOption} valueClassName="font-medium text-brand" />
+            <SummaryRow
+              label={pickup ? "Collection:" : "Delivery Option:"}
+              value={deliveryOption}
+              valueClassName="font-medium text-brand"
+            />
           )}
         </div>
 
@@ -144,7 +158,7 @@ export function OrderConfirmation({
             animate="visible"
             className="mt-3 flex flex-col gap-2"
           >
-            {WHATS_NEXT.map((item) => (
+            {(pickup ? PICKUP_WHATS_NEXT : WHATS_NEXT).map((item) => (
               <m.li
                 variants={staggerItem}
                 key={item}

@@ -33,6 +33,9 @@ interface OrderSummaryProps {
   shipping?: number;
   /** Name of the chosen shipping method, e.g. "Yango Delivery". */
   shippingMethod?: string | null;
+  /** Customer self-pickup (2026-09-22): the fee row reads "Pickup — Free"
+   *  (never "Calculating…") and the address line "Pick up from:". */
+  pickup?: boolean;
 }
 
 function Divider() {
@@ -49,6 +52,7 @@ export function OrderSummary({
   discount = 0,
   shipping = 0,
   shippingMethod,
+  pickup = false,
 }: OrderSummaryProps) {
   return (
     <Card className="flex flex-col gap-6">
@@ -115,10 +119,15 @@ export function OrderSummary({
           )}
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted">
-              Delivery{shippingMethod ? ` (${shippingMethod})` : ""}
+              {pickup ? "Pickup" : "Delivery"}
+              {!pickup && shippingMethod ? ` (${shippingMethod})` : ""}
             </span>
             <span className="text-brand">
-              {shipping > 0 ? formatGhs(shipping) : "Calculating…"}
+              {shipping > 0
+                ? formatGhs(shipping)
+                : pickup
+                  ? "Free"
+                  : "Calculating…"}
             </span>
           </div>
           <Divider />
@@ -136,7 +145,9 @@ export function OrderSummary({
         <div className="flex items-start gap-2 border-t border-line pt-4">
           <MapPin className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden />
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-brand">Delivery to:</span>
+            <span className="text-sm font-medium text-brand">
+              {pickup ? "Pick up from:" : "Delivery to:"}
+            </span>
             <span className="text-sm text-muted">{deliveryAddress}</span>
           </div>
         </div>

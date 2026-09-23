@@ -47,6 +47,7 @@ export default async function ConfirmationPage({
   let total: number | undefined;
   let paymentProviderId: string | undefined;
   let deliveryOption: string | undefined;
+  let pickup = false;
   try {
     const { order } = await sdk.store.order.retrieve(orderId, {
       fields:
@@ -58,6 +59,9 @@ export default async function ConfirmationPage({
     const meta = (order.metadata ?? {}) as Record<string, unknown>;
     if (typeof meta.company_name === "string") company = meta.company_name;
     if (typeof meta.contact_person === "string") contactPerson = meta.contact_person;
+    // Display only — the backend reads the charged option for anything that
+    // matters; the cart's recorded choice is enough to word this page.
+    pickup = meta.fulfillment_method === "pickup";
     total = order.total ?? undefined;
     const sessions =
       order.payment_collections?.flatMap((pc) => pc.payment_sessions ?? []) ?? [];
@@ -96,6 +100,7 @@ export default async function ConfirmationPage({
         total={total}
         paymentProviderId={paymentProviderId}
         deliveryOption={deliveryOption}
+      pickup={pickup}
         isLoggedIn={isLoggedIn}
         accountStatus={accountStatus}
       />
