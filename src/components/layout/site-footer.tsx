@@ -3,6 +3,7 @@ import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import { getFooterHoursLines } from "@/lib/site-content";
 import { supportWhatsappUrl } from "@/lib/whatsapp";
+import { BrandLockup } from "./brand-lockup";
 
 // Neutral opener — deliberately not page-aware. A footer button is a
 // general-purpose entry point; guessing intent from the current URL would
@@ -105,7 +106,12 @@ export function SiteFooter() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col gap-3">
-            <FooterHeading>Packaging General</FooterHeading>
+            <Link
+              href="/"
+              className="self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+            >
+              <BrandLockup />
+            </Link>
             <p className="max-w-xs text-xs leading-relaxed text-muted">
               Standardized packaging for SMEs and growing brands across Ghana
               &amp; West Africa.

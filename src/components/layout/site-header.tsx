@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import { BrandLockup } from "./brand-lockup";
 import { PromoBar } from "./promo-bar";
 import { HeaderAccount, HeaderAccountFallback } from "./header-account";
 import { HeaderCart, HeaderCartFallback } from "./header-cart";
@@ -27,25 +27,9 @@ export function SiteHeader() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <Link
             href="/"
-            className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+            className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
           >
-            <Image
-              src="/logo.png"
-              alt="Packaging General"
-              width={33}
-              height={40}
-              priority
-              className="h-10 w-auto"
-            />
-            <span className="flex flex-col">
-              <span className="text-lg font-bold leading-7 text-brand">
-                Packaging General
-              </span>
-              {/* Subtitle is desktop-only — mobile Figma hides it for space. */}
-              <span className="hidden text-xs leading-4 text-muted sm:inline">
-                Digital-First Packaging
-              </span>
-            </span>
+            <BrandLockup priority hideTaglineOnMobile />
           </Link>
 
           <nav className="flex items-center gap-2">
