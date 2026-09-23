@@ -1104,18 +1104,19 @@ export function CartClient({
           {/* Promo / discount-code prompt. The message is the SAME text the
               header promo bar shows (`promoMessage`: the admin-typed banner,
               else copy derived from the live promotion) — the two surfaces
-              cannot advertise different discounts. The code line beneath is a
-              fact of the promotion record, not a claim. Hidden when there is
-              nothing to advertise. */}
+              cannot advertise different discounts. The code line is
+              `useCode`: the code the banner message names, else the live
+              promotion's — so the box never names a different code from the
+              bar. Hidden when there is nothing to advertise. */}
           {promoBox && (
             <div className="mt-1 rounded-option border border-line bg-surface px-4 py-3">
               {/* Same three-line layout as before (label / code / message);
                   only the message text changed source. */}
-              {promo && (
+              {promoBox.useCode && (
                 <>
                   <p className="text-xs text-muted">Use code</p>
                   <p className="text-base font-bold tracking-wider text-brand">
-                    {promo.code}
+                    {promoBox.useCode}
                   </p>
                 </>
               )}
