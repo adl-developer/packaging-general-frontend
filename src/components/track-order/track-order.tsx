@@ -18,7 +18,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatGhs } from "@/lib/format";
 import { isValidEmail } from "@/lib/validation";
 import {
   lookupOrder,
@@ -35,6 +34,8 @@ import {
 } from "@/lib/motion";
 import { InvoiceDialog, type InvoiceData } from "./invoice-dialog";
 import type { PickupLocation } from "@/lib/pickup";
+import { ChargeRows } from "@/components/charge-rows";
+import { coerceRows, type ChargeRow } from "@/lib/charge-breakdown";
 
 /**
  * Track Order — Figma frames: search (469:17227), found/timeline
@@ -99,10 +100,11 @@ interface TrackedOrder {
     discount: number;
     total: number;
   };
-  /** The configured VAT/NHIL/GETFund split, from GET /store/order-lookup.
-   *  Absent on a cached/older response — `buildInvoice` falls back to the
-   *  statutory Act 1151 values, which is what this file used to hard-code. */
-  levies?: { vat: number; nhil: number; getfund: number } | null;
+  /** The charge ladder built by the backend (order lookup `breakdown.rows`):
+   *  Subtotal → Discount → Delivery → Platform Fee → VAT → NHIL → GETFund →
+   *  Total — the Pricing Summary and the receipt render it as-is, so they
+   *  match the emails and the admin to the pesewa. */
+  chargeRows: ChargeRow[];
   /** Carrier tracking info from the order's active fulfillment (Yango, etc.).
    *  Null until the fulfillment has been created. */
   carrier: {
@@ -116,35 +118,15 @@ interface TrackedOrder {
 const cardClass = "rounded-card border-2 border-[#e2e1e0] bg-surface";
 
 /**
- * Build the invoice payload from a looked-up order's REAL totals: subtotal,
- * delivery and total come straight from the order; the single tax_total is
- * split across the Ghana levy lines proportionally, with GETFund taking the
- * rounding remainder so the three lines always sum to the amount actually
- * charged. `totalBeforeTax` is derived as total − tax so any discount is
- * absorbed and the column foots to the total. E-VAT receipt fields stay blank
- * until the backend issues real GRA e-invoicing data.
- *
- * ⚠ The split is now CONFIGURABLE from the admin portal (Settings → Platform)
- * and arrives on the lookup response as `levies`. This file used to hard-code
- * 15 / 2.5 / 2.5 over a fixed 20-point denominator, which agreed with the
- * emailed invoice only by luck; the moment an operator changed the levies, the
- * two invoices for one order would have disagreed.
- *
- * The statutory Act 1151 values remain the FALLBACK, for a response that
- * predates the field. The denominator is the configured total, never a
- * hard-coded 20 — a split that no longer sums to 20 would otherwise mis-scale
- * every line.
+ * Build the receipt payload from a looked-up order. The charge rows are the
+ * backend's own ladder (`breakdown.rows`: before-tax lines, then each levy by
+ * the configured split, footing to the charged total) — this file no longer
+ * does any levy maths, so the on-screen receipt cannot disagree with the
+ * emailed one. E-VAT receipt fields stay blank until the backend issues real
+ * GRA e-invoicing data.
  */
 function buildInvoice(order: TrackedOrder): InvoiceData {
-  const round2 = (n: number) => Math.round(n * 100) / 100;
-  const taxes = order.pricing.taxes;
   const total = order.pricing.total;
-  const levies = order.levies ?? { vat: 15, nhil: 2.5, getfund: 2.5 };
-  const points = levies.vat + levies.nhil + levies.getfund || 20;
-  const vat = round2((taxes * levies.vat) / points);
-  const nhil = round2((taxes * levies.nhil) / points);
-  // Remainder, so the three lines always sum to the tax actually charged.
-  const getfund = round2(taxes - vat - nhil);
   return {
     orderNumber: order.number,
     invoiceDate: order.placedOn.replace(/^Placed on /, ""),
@@ -155,20 +137,7 @@ function buildInvoice(order: TrackedOrder): InvoiceData {
       address: order.address,
     },
     lines: order.invoiceLines,
-    feeLabel: order.pickup ? "Pickup" : undefined,
-    charges: {
-      // The fee rides inside `item_total` because it is a line item; pull it
-      // back out so the two rows don't double-count it and Subtotal keeps
-      // meaning "goods". Mirrors the backend's `invoiceBreakdown`.
-      subtotal: round2(order.pricing.itemPrice - order.pricing.platformFee),
-      platformFee: order.pricing.platformFee,
-      deliveryFee: order.pricing.fees,
-      discount: order.pricing.discount,
-      totalBeforeTax: round2(total - taxes),
-      vat,
-      nhil,
-      getfund,
-    },
+    chargeRows: order.chargeRows,
     totalAmount: total,
     eVat: {
       sdcId: "—",
@@ -373,7 +342,11 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
       discount: o.totals.discount_total,
       total: o.totals.total,
     },
-    levies: o.levies ?? null,
+    // The backend's ladder; an older backend without it gets the total alone
+    // rather than a guess built from tax-inclusive totals.
+    chargeRows: coerceRows(o.breakdown?.rows) ?? [
+      { key: "total", label: "Total", amount: o.totals.total },
+    ],
     pickup,
     pickupLocation: o.pickup_location ?? null,
     // Nothing is couriered for pickup — the "carrier" is the manual provider.
@@ -968,24 +941,11 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                   </p>
                   <p className="text-sm text-muted">{order.pricing.itemQty}</p>
                 </div>
-                <p className="text-base font-semibold text-brand">
-                  {formatGhs(order.pricing.itemPrice)}
-                </p>
               </div>
-              <dl className="mt-3 flex flex-col gap-1 border-t border-[rgba(150,64,34,0.2)] pt-3 text-xs">
-                <SummaryRow
-                  label={order.pickup ? "Processing fee + Pickup" : "Processing fee + Delivery"}
-                  value={order.pricing.fees}
-                />
-                <SummaryRow
-                  label="Taxes (VAT + NHIL + GETFund)"
-                  value={order.pricing.taxes}
-                />
-                <div className="flex items-center justify-between pt-1 font-medium text-brand">
-                  <dt>Total</dt>
-                  <dd>{formatGhs(order.pricing.total)}</dd>
-                </div>
-              </dl>
+              <ChargeRows
+                rows={order.chargeRows}
+                className="mt-3 border-t border-[rgba(150,64,34,0.2)] pt-3"
+              />
             </div>
           </DetailBlock>
         </div>
@@ -1082,11 +1042,3 @@ function DetailGrid({ rows }: { rows: [string, string][] }) {
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-center justify-between text-muted">
-      <dt>{label}</dt>
-      <dd>{formatGhs(value)}</dd>
-    </div>
-  );
-}

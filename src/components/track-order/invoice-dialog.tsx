@@ -14,6 +14,7 @@ import { m, AnimatePresence } from "motion/react";
 import { formatGhs } from "@/lib/format";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { emailInvoice } from "@/lib/actions/orders";
+import type { ChargeRow } from "@/lib/charge-breakdown";
 
 /**
  * Receipt dialog — Figma frame 452:12223 (mobile). Centered scrollable modal
@@ -44,17 +45,10 @@ export interface InvoiceLine {
   amount: number;
 }
 
-/** The charge column under the lines — mirrors the backend's
- *  `utils/invoice-breakdown.ts`; keep the two in step. */
-export interface InvoiceCharges {
-  subtotal: number;
-  platformFee: number;
-  deliveryFee: number;
-  discount: number;
-  totalBeforeTax: number;
-  vat: number;
-  nhil: number;
-  getfund: number;
+/** "GH₵ 1.00", "−GH₵ 1.00" (discount) or "Free" (pickup). */
+function chargeValue(r: ChargeRow): string {
+  if (r.free) return "Free";
+  return r.negative ? `−${formatGhs(r.amount)}` : formatGhs(r.amount);
 }
 
 export interface InvoiceData {
@@ -67,10 +61,11 @@ export interface InvoiceData {
     address: string;
   };
   lines: InvoiceLine[];
-  charges: InvoiceCharges;
-  /** "Pickup" for a customer-collected order (self-pickup, 2026-09-22);
-   *  defaults to "Delivery Fee". Same label as the admin + emailed receipt. */
-  feeLabel?: string;
+  /** The charge ladder from the order lookup (`breakdown.rows`) —
+   *  Subtotal → Discount → Delivery → Platform Fee → VAT → NHIL → GETFund —
+   *  built by the backend, so this receipt matches the emailed one and the
+   *  admin's to the pesewa. The Total row is rendered separately below. */
+  chargeRows: ChargeRow[];
   totalAmount: number;
   eVat: {
     sdcId: string;
@@ -277,34 +272,11 @@ export function InvoiceDialog({
                   </ul>
                   <hr className="border-[#c4bcb0]" />
                   <dl className="flex flex-col gap-2 text-sm">
-                    <Row label="Subtotal" value={invoice.charges.subtotal} />
-                    <Row
-                      label="Platform Fee"
-                      value={invoice.charges.platformFee}
-                    />
-                    <Row
-                      label={invoice.feeLabel ?? "Delivery Fee"}
-                      value={invoice.charges.deliveryFee}
-                    />
-                    {invoice.charges.discount > 0 && (
-                      <Row
-                        label="Discount"
-                        value={-invoice.charges.discount}
-                      />
-                    )}
-                    <hr className="border-[#c4bcb0]" />
-                    <Row
-                      label="Total Before Tax"
-                      value={invoice.charges.totalBeforeTax}
-                      bold
-                    />
-                    <hr className="border-[#c4bcb0]" />
-                    <Row label="VAT (15%)" value={invoice.charges.vat} />
-                    <Row label="NHIL (2.5%)" value={invoice.charges.nhil} />
-                    <Row
-                      label="GETFund (2.5%)"
-                      value={invoice.charges.getfund}
-                    />
+                    {invoice.chargeRows
+                      .filter((r) => r.key !== "total")
+                      .map((r) => (
+                        <Row key={r.key} label={r.label} value={chargeValue(r)} />
+                      ))}
                     <hr className="border-[#c4bcb0]" />
                     <div className="flex items-center justify-between pt-2">
                       <dt className="text-base font-semibold text-brand">
@@ -330,9 +302,6 @@ export function InvoiceDialog({
                     {formatGhs(invoice.totalAmount)}
                   </p>
                 </div>
-                <p className="mt-2 text-xs text-muted">
-                  Includes all applicable taxes and fees
-                </p>
               </section>
 
               {/* E-VAT receipt info + QR */}
@@ -435,21 +404,11 @@ export function InvoiceDialog({
   );
 }
 
-function Row({
-  label,
-  value,
-  bold,
-}: {
-  label: string;
-  value: number;
-  bold?: boolean;
-}) {
+function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
       <dt className="text-muted">{label}</dt>
-      <dd className={bold ? "font-medium text-brand" : "text-brand"}>
-        {formatGhs(value)}
-      </dd>
+      <dd className="text-brand">{value}</dd>
     </div>
   );
 }
@@ -491,10 +450,10 @@ function printInvoice(invoice: InvoiceData) {
   const money = (n: number) => esc(formatGhs(n));
   const row = (
     label: string,
-    value: number,
+    value: string,
     opts: { bold?: boolean; rule?: boolean } = {}
   ) =>
-    `<tr${opts.rule ? ' class="rule"' : ""}${opts.bold ? ' style="font-weight:600"' : ""}><td>${esc(label)}</td><td style="text-align:right">${money(value)}</td></tr>`;
+    `<tr${opts.rule ? ' class="rule"' : ""}${opts.bold ? ' style="font-weight:600"' : ""}><td>${esc(label)}</td><td style="text-align:right">${esc(value)}</td></tr>`;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -557,15 +516,11 @@ function printInvoice(invoice: InvoiceData) {
       )
       .join("")}
     <table style="margin-top:12px">
-      ${row("Subtotal", invoice.charges.subtotal, { rule: true })}
-      ${row("Platform Fee", invoice.charges.platformFee)}
-      ${row(invoice.feeLabel ?? "Delivery Fee", invoice.charges.deliveryFee)}
-      ${invoice.charges.discount > 0 ? row("Discount", -invoice.charges.discount) : ""}
-      ${row("Total Before Tax", invoice.charges.totalBeforeTax, { bold: true, rule: true })}
-      ${row("VAT (15%)", invoice.charges.vat)}
-      ${row("NHIL (2.5%)", invoice.charges.nhil)}
-      ${row("GETFund (2.5%)", invoice.charges.getfund)}
-      ${row("Total", invoice.totalAmount, { bold: true, rule: true })}
+      ${invoice.chargeRows
+        .filter((r) => r.key !== "total")
+        .map((r, i) => row(r.label, chargeValue(r), { rule: i === 0 }))
+        .join("")}
+      ${row("Total", money(invoice.totalAmount), { bold: true, rule: true })}
     </table>
   </div>
 
@@ -573,7 +528,6 @@ function printInvoice(invoice: InvoiceData) {
     <span style="font-weight:600">Total Amount</span>
     <span class="amount">${money(invoice.totalAmount)}</span>
   </div>
-  <p class="muted" style="margin-top:6px">Includes all applicable taxes and fees</p>
 
   <footer>
     <p>E-VAT receipt information will be issued separately once electronic invoicing is activated.</p>

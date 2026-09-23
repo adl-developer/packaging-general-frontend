@@ -28,6 +28,8 @@ import {
   type OrderEmailAccountStatus,
   type OrderSignupState,
 } from "@/lib/actions/auth";
+import { ChargeRows } from "@/components/charge-rows";
+import type { ChargeRow } from "@/lib/charge-breakdown";
 
 /**
  * Payment Successful confirmation page + Create-Your-Account modal (Figma
@@ -68,6 +70,10 @@ interface OrderConfirmationProps {
   company?: string;
   contactPerson?: string;
   total?: number;
+  /** The charge ladder (Subtotal → … → GETFund) shown above Order Total —
+   *  same rows as the receipt and emails. Absent when the order couldn't be
+   *  read (guest retrieve failure). */
+  chargeRows?: ChargeRow[] | null;
   paymentProviderId?: string;
   deliveryOption?: string;
   /** Customer self-pickup (2026-09-22): labels the option "Collection" and
@@ -88,6 +94,7 @@ export function OrderConfirmation({
   company,
   contactPerson,
   total,
+  chargeRows,
   paymentProviderId,
   deliveryOption,
   pickup = false,
@@ -132,6 +139,9 @@ export function OrderConfirmation({
           <SummaryRow label="Order Number:" value={orderNumber} valueClassName="font-bold text-rust" />
           {(total != null || paymentMethod || deliveryOption) && (
             <div className="h-px w-full bg-line" aria-hidden />
+          )}
+          {chargeRows && chargeRows.length > 0 && (
+            <ChargeRows rows={chargeRows} hideTotal />
           )}
           {total != null && (
             <SummaryRow label="Order Total:" value={formatGhs(total)} valueClassName="text-lg font-bold text-brand" />

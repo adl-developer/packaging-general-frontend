@@ -9,8 +9,10 @@ import type { PickupLocation } from "@/lib/pickup";
  * Customer order history. All store order endpoints require the customer JWT —
  * they only ever return the authenticated customer's own orders.
  */
+// *_subtotal + *shipping_methods + metadata feed the charge ladder on
+// Account → My Orders (lib/charge-breakdown.ts, client 2026-09-23).
 const ORDER_LIST_FIELDS =
-  "id,display_id,status,fulfillment_status,payment_status,created_at,email,currency_code,total,item_total,*items";
+  "id,display_id,status,fulfillment_status,payment_status,created_at,email,currency_code,total,item_total,item_subtotal,shipping_subtotal,discount_subtotal,metadata,*items,*shipping_methods";
 
 const ORDER_DETAIL_FIELDS =
   // *items.product added for Reorder (2026-07-31): mirrors CART_FIELDS'
@@ -92,6 +94,10 @@ export interface OrderLookupResult {
    *  `utils/levy-config.ts`. Optional: a response predating the field falls
    *  back to the statutory Act 1151 values. */
   levies?: { vat: number; nhil: number; getfund: number } | null;
+  /** The backend-built charge ladder (2026-09-23): Subtotal → Discount →
+   *  Delivery → Platform Fee → VAT → NHIL → GETFund → Total. Absent on an
+   *  older backend. Untrusted shape — read through `coerceRows`. */
+  breakdown?: { rows?: unknown } | null;
   /** Carrier tracking block — present once a real fulfillment has been
    *  created with a provider (e.g. Yango). Null for orders still in
    *  pre-fulfillment (e.g. just paid, awaiting production). */

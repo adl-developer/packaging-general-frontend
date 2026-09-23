@@ -16,6 +16,8 @@ import { getCart } from "@/lib/actions/cart";
 import { goodsLines, platformFeeTotal } from "@/lib/platform-fee";
 import { addressLine, isPickupCart } from "@/lib/fulfillment";
 import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-progress";
+import { chargeBreakdown } from "@/lib/charge-breakdown";
+import { getLevies } from "@/lib/site-content";
 
 export const metadata: Metadata = {
   title: "Payment",
@@ -54,20 +56,14 @@ export default async function PaymentPage({
   // item list and out of Subtotal, and rendered as its own row beside delivery
   // and VAT. Doing one without the other double-counts it. See
   // `lib/platform-fee.ts`.
+  // Items are shown BEFORE tax (line subtotal) — the levies are itemised
+  // in the charge rows below, so the lines add up to Subtotal.
   const items: OrderLineItem[] = goodsLines(cart.items ?? []).map((line) => ({
     id: line.id,
     name: line.product_title ?? line.title ?? "Item",
     units: line.quantity,
-    price: line.total ?? line.subtotal ?? 0,
+    price: Number(line.subtotal ?? line.unit_price * line.quantity),
   }));
-  const platformFee = platformFeeTotal(cart);
-  const subtotal =
-    Math.round(((cart.item_total ?? cart.subtotal ?? 0) - platformFee) * 100) /
-    100;
-  const total = cart.total ?? 0;
-  const discount = Number(cart.discount_total ?? 0);
-  const shipping = Number(cart.shipping_total ?? cart.shipping_subtotal ?? 0);
-  const shippingMethod = cart.shipping_methods?.[0]?.name ?? null;
   const appliedCode =
     (cart.promotions ?? []).map((p) => p.code).find((c) => !!c) ?? null;
   const pickupAddr = cart.shipping_address;
@@ -76,6 +72,25 @@ export default async function PaymentPage({
   const pickup = isPickupCart(
     cart.metadata as Record<string, unknown> | null,
     cart.shipping_address?.metadata as Record<string, unknown> | null,
+  );
+  // Subtotal → Discount → Delivery → Platform Fee → VAT → NHIL → GETFund →
+  // Total (client, 2026-09-23) — same ladder as the receipt and emails.
+  const { rows } = chargeBreakdown(
+    {
+      itemSubtotal: Number(cart.item_subtotal ?? 0),
+      platformFee: platformFeeTotal(cart),
+      shippingSubtotal: Number(cart.shipping_subtotal ?? 0),
+      // Not on the SDK's StoreCart type, but Medusa computes and returns it
+      // when requested (CART_FIELDS).
+      discountSubtotal: Number(
+        (cart as { discount_subtotal?: number }).discount_subtotal ?? 0,
+      ),
+      total: Number(cart.total ?? 0),
+      method: pickup ? "pickup" : "delivery",
+      deliveryLabel: cart.shipping_methods?.[0]?.name ?? null,
+      discountLabel: appliedCode,
+    },
+    await getLevies(),
   );
   // Pickup: the address is the pickup point — one clean line, no "…Accra,
   // Ghana, Accra, GH" repeat.
@@ -94,12 +109,7 @@ export default async function PaymentPage({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <OrderSummary
             items={items}
-            subtotal={subtotal}
-            platformFee={platformFee}
-            total={total}
-            discount={discount}
-            shipping={shipping}
-            shippingMethod={shippingMethod}
+            rows={rows}
             appliedCode={appliedCode}
             deliveryAddress={deliveryAddress}
             pickup={pickup}
@@ -111,7 +121,7 @@ export default async function PaymentPage({
               <CardDescription>Choose how you&apos;d like to pay</CardDescription>
             </CardHeader>
             <CardContent className="pt-0">
-              <PaymentMethod total={total} initialError={error} />
+              <PaymentMethod total={Number(cart.total ?? 0)} initialError={error} />
             </CardContent>
           </Card>
         </div>
