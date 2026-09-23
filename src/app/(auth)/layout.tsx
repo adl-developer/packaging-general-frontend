@@ -1,6 +1,6 @@
 import Link from "next/link";
-import Image from "next/image";
 import { X } from "lucide-react";
+import { BrandLockup } from "@/components/layout/brand-lockup";
 
 // Minimal auth chrome (Figma "Sign In" frame 458:14565): white page, header
 // with brand lockup + close (X → home). No nav/promo/footer.
@@ -13,24 +13,9 @@ export default function AuthLayout({
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <Link
             href="/"
-            className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+            className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
           >
-            <Image
-              src="/logo.png"
-              alt="Packaging General"
-              width={33}
-              height={40}
-              priority
-              className="h-10 w-auto"
-            />
-            <span className="flex flex-col">
-              <span className="text-lg font-bold leading-7 text-brand">
-                Packaging General
-              </span>
-              <span className="text-xs leading-4 text-muted">
-                Digital-First Packaging
-              </span>
-            </span>
+            <BrandLockup priority />
           </Link>
           <Link
             href="/"
