@@ -88,7 +88,6 @@ export default async function ConfirmationPage({
         discountSubtotal: Number(o.discount_subtotal ?? 0),
         total: Number(order.total ?? 0),
         method: pickup ? "pickup" : "delivery",
-        deliveryLabel: deliveryOption ?? null,
         discountLabel:
           (order as { promotions?: { code?: string | null }[] }).promotions
             ?.map((p) => p.code)

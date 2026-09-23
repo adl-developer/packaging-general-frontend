@@ -133,7 +133,6 @@ export default async function AccountOrdersPage() {
                     ?.fulfillment_method === "pickup"
                     ? "pickup"
                     : "delivery",
-                deliveryLabel: order.shipping_methods?.[0]?.name ?? null,
               },
               levies
             );

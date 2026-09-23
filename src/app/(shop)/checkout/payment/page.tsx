@@ -87,7 +87,6 @@ export default async function PaymentPage({
       ),
       total: Number(cart.total ?? 0),
       method: pickup ? "pickup" : "delivery",
-      deliveryLabel: cart.shipping_methods?.[0]?.name ?? null,
       discountLabel: appliedCode,
     },
     await getLevies(),

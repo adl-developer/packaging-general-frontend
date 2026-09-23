@@ -83,8 +83,6 @@ export interface ChargeBreakdownInput {
   /** Medusa `total`. */
   total: number;
   method?: "delivery" | "pickup";
-  /** e.g. "Yango Delivery". */
-  deliveryLabel?: string | null;
   /** e.g. the promo code. */
   discountLabel?: string | null;
 }
@@ -156,11 +154,9 @@ export function chargeBreakdown(
   if (input.method === "pickup") {
     rows.push({ key: "delivery", label: "Pickup", amount: deliveryFee, free: deliveryFee === 0 });
   } else if (deliveryFee > 0) {
-    rows.push({
-      key: "delivery",
-      label: input.deliveryLabel ? `Delivery (${input.deliveryLabel})` : "Delivery",
-      amount: deliveryFee,
-    });
+    // Just "Delivery" — the courier/method name isn't a charge detail
+    // (client, 2026-09-23).
+    rows.push({ key: "delivery", label: "Delivery", amount: deliveryFee });
   }
   if (platformFee > 0) {
     rows.push({ key: "platform_fee", label: "Platform Fee", amount: platformFee });

@@ -14,7 +14,6 @@ const probe = {
   shippingSubtotal: 57.71,
   discountSubtotal: 30,
   total: 409.452,
-  deliveryLabel: "Yango Delivery",
   discountLabel: "PGEASTER10",
 };
 
@@ -23,7 +22,7 @@ describe("chargeBreakdown (twin of the backend's)", () => {
     expect(chargeBreakdown(probe).rows.map((r) => [r.label, r.amount])).toEqual([
       ["Subtotal", 300],
       ["Discount (PGEASTER10)", 30],
-      ["Delivery (Yango Delivery)", 57.71],
+      ["Delivery", 57.71],
       ["Platform Fee", 13.5],
       ["VAT (15%)", 51.18],
       ["NHIL (2.5%)", 8.53],
@@ -45,11 +44,10 @@ describe("chargeBreakdown (twin of the backend's)", () => {
       itemSubtotal: 242.25,
       shippingSubtotal: 57.71,
       total: 299.96,
-      deliveryLabel: "Yango Delivery",
     });
     expect(b.rows.map((r) => r.label)).toEqual([
       "Subtotal",
-      "Delivery (Yango Delivery)",
+      "Delivery",
       "Total",
     ]);
   });
