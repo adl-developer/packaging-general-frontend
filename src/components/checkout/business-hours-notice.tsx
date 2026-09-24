@@ -2,7 +2,8 @@ import { Clock } from "lucide-react";
 import { formatTime12h, getOutsideHoursInfo } from "@/lib/site-content";
 
 /**
- * "You're ordering outside our working hours" — shown at the top of checkout
+ * "You're ordering outside our working hours" — shown under the steps bar on
+ * the contact step (never above it: the bar is always first on order pages)
  * when the store's configured business hours (Settings → Business Hours in
  * the admin portal) say the store is currently closed, evaluated in Ghana
  * time (Africa/Accra).
@@ -23,7 +24,7 @@ export async function BusinessHoursNotice() {
     : `We are closed on ${dayLabel}s.`;
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
       <div
         role="status"
         className="mx-auto flex max-w-2xl items-start gap-3 rounded-card border border-[rgba(165,154,135,0.4)] bg-surface px-4 py-3"
@@ -33,7 +34,8 @@ export async function BusinessHoursNotice() {
           <span className="font-semibold">
             You&apos;re ordering outside our working hours.
           </span>{" "}
-          {todayLine} You can still place your order now. We&apos;ll start
+          {todayLine}{" "}
+          You can still place your order now. We&apos;ll start
           processing it when we&apos;re next open, so confirmation and delivery
           may take a little longer than usual.
         </p>

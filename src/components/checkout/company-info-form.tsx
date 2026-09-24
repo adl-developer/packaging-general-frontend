@@ -34,7 +34,16 @@ export interface CompanyInfoInitial {
   email: string;
 }
 
-export function CompanyInfoForm({ initial }: { initial?: CompanyInfoInitial }) {
+export function CompanyInfoForm({
+  initial,
+  notice,
+}: {
+  initial?: CompanyInfoInitial;
+  /** Page-level notice (the outside-hours one). Rendered BELOW the steps
+   *  bar — the bar is always the first thing on an order page (user,
+   *  2026-09-24) — and above the form. */
+  notice?: React.ReactNode;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -108,6 +117,7 @@ export function CompanyInfoForm({ initial }: { initial?: CompanyInfoInitial }) {
         step={2}
         back={<ProgressBackLink href="/cart">Back to Cart</ProgressBackLink>}
       />
+      {notice}
       <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <m.form
           ref={formRef}
