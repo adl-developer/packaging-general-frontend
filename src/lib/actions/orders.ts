@@ -108,6 +108,10 @@ export interface OrderLookupResult {
     status_label: string | null;
     scheduled_for: string | null;
   } | null;
+  /** The Yango courier once they have PICKED UP the order, while it is on
+   *  its way (2026-09-24). Absent on an older backend. Untrusted shape —
+   *  read through `coerceCourier` (`lib/courier.ts`). */
+  courier?: unknown;
 }
 
 export type OrderLookupOutcome =

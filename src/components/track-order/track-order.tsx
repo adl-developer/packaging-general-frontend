@@ -36,6 +36,12 @@ import { InvoiceDialog, type InvoiceData } from "./invoice-dialog";
 import type { PickupLocation } from "@/lib/pickup";
 import { ChargeRows } from "@/components/charge-rows";
 import { coerceRows, type ChargeRow } from "@/lib/charge-breakdown";
+import {
+  coerceCourier,
+  courierDialHref,
+  courierPhoneLabel,
+  type Courier,
+} from "@/lib/courier";
 
 /**
  * Track Order — Figma frames: search (469:17227), found/timeline
@@ -113,6 +119,8 @@ interface TrackedOrder {
     trackingUrl: string | null;
     scheduledFor: string | null;
   } | null;
+  /** Who is bringing it: only after the Yango courier picked it up. */
+  courier: Courier | null;
 }
 
 const cardClass = "rounded-card border-2 border-[#e2e1e0] bg-surface";
@@ -361,6 +369,7 @@ function mapToTracked(o: OrderLookupResult): TrackedOrder {
           scheduledFor: o.carrier.scheduled_for,
         }
       : null,
+    courier: pickup ? null : coerceCourier(o.courier),
   };
 }
 
@@ -894,6 +903,56 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                   <ExternalLink className="size-4" aria-hidden />
                   Open in Google Maps
                 </a>
+              </div>
+            )}
+            {order.courier && (
+              <div
+                data-testid="courier-box"
+                className="mt-3 flex flex-col gap-3 rounded-option border border-accent/40 bg-accent/10 p-4"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <Truck className="size-5 text-plum" aria-hidden />
+                  <span className="text-sm font-semibold text-brand">
+                    Your courier
+                  </span>
+                  <span className="ml-auto rounded-full border border-plum/30 bg-surface px-2.5 py-0.5 text-xs font-medium text-plum">
+                    On the way
+                  </span>
+                </div>
+                {(order.courier.name || order.courier.vehicle) && (
+                  <div className="flex flex-col gap-0.5 text-sm">
+                    {order.courier.name && (
+                      <span className="font-medium text-brand">
+                        {order.courier.name}
+                      </span>
+                    )}
+                    {order.courier.vehicle && (
+                      <span className="text-muted">{order.courier.vehicle}</span>
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {order.courier.phone && (
+                    <a
+                      href={courierDialHref(order.courier.phone, order.courier.ext)}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-button border border-line bg-background px-3 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+                    >
+                      <Phone className="size-4" aria-hidden />
+                      Call {courierPhoneLabel(order.courier.phone, order.courier.ext)}
+                    </a>
+                  )}
+                  {order.courier.trackingUrl && (
+                    <a
+                      href={order.courier.trackingUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-button border border-line bg-background px-3 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+                    >
+                      <ExternalLink className="size-4" aria-hidden />
+                      Open live tracking
+                    </a>
+                  )}
+                </div>
               </div>
             )}
             {order.carrier && (
