@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { storefrontHeaders, storefrontMetadata } from "@/lib/storefront-origin";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
@@ -180,6 +181,9 @@ async function registerCustomer(input: {
         last_name: lastName,
         company_name: company,
         phone,
+        // The storefront they signed up on: the verification email (sent
+        // on customer.created) and later account emails link back here.
+        metadata: await storefrontMetadata(),
       },
       {},
       authHeaders(token)
@@ -449,6 +453,7 @@ export async function requestVerificationEmail(
     await sdk.client.fetch("/store/email-verification/request", {
       method: "POST",
       body: { email },
+      headers: await storefrontHeaders(),
     });
     return { sent: true, error: null };
   } catch (err) {
@@ -506,6 +511,7 @@ export async function confirmEmailVerification(
     }>("/store/email-verification/confirm", {
       method: "POST",
       body: { email: email.trim().toLowerCase(), token },
+      headers: await storefrontHeaders(),
     });
     if (loginToken) {
       await setAuthToken(loginToken);
@@ -609,6 +615,8 @@ export async function requestPasswordReset(
   try {
     await createAuthClient().auth.resetPassword("customer", "emailpass", {
       identifier: email,
+      // The reset link goes back to this storefront (backend-validated).
+      metadata: await storefrontMetadata(),
     });
     return { ok: true, error: null };
   } catch (err) {
@@ -690,7 +698,7 @@ export async function resetPassword(
     try {
       await sdk.client.fetch("/store/account/password-changed-notice", {
         method: "POST",
-        headers: authHeaders(authToken),
+        headers: { ...authHeaders(authToken), ...(await storefrontHeaders()) },
       });
     } catch (err) {
       console.error("[auth] password-changed notice failed:", err);
@@ -760,7 +768,7 @@ export async function changeAccountEmail(
     await sdk.client.fetch("/store/account/email", {
       method: "POST",
       body: { new_email: newEmail, password },
-      headers: authHeaders(token),
+      headers: { ...authHeaders(token), ...(await storefrontHeaders()) },
     });
   } catch (err) {
     console.error("[auth] change email failed:", err);
@@ -822,7 +830,7 @@ export async function changeAccountPassword(
     }>("/store/account/password", {
       method: "POST",
       body: { current_password: currentPassword, new_password: newPassword },
-      headers: authHeaders(token),
+      headers: { ...authHeaders(token), ...(await storefrontHeaders()) },
     });
     freshToken = result?.token ?? null;
   } catch (err) {
@@ -876,6 +884,8 @@ export async function sendAccountResetLink(): Promise<AccountSettingsState> {
   try {
     await createAuthClient().auth.resetPassword("customer", "emailpass", {
       identifier: email,
+      // The reset link goes back to this storefront (backend-validated).
+      metadata: await storefrontMetadata(),
     });
     return { ok: true, error: null };
   } catch (err) {
@@ -910,7 +920,7 @@ export async function deleteAccount(
     await sdk.client.fetch("/store/account", {
       method: "DELETE",
       body: { password },
-      headers: authHeaders(token),
+      headers: { ...authHeaders(token), ...(await storefrontHeaders()) },
     });
   } catch (err) {
     console.error("[auth] account deletion failed:", err);
