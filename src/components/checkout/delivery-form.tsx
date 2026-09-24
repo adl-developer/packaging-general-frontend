@@ -13,7 +13,9 @@ import {
   PHONE_ERROR,
   GH_PHONE_PATTERN,
 } from "@/lib/validation";
+import { isOutsideAreaRefusal, isOutsideDeliveryArea } from "@/lib/delivery-area";
 import { DeliveryLocation, type MapCoordSource } from "./delivery-map";
+import { OutsideAreaNotice } from "./outside-area-notice";
 import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-progress";
 
 /**
@@ -52,6 +54,8 @@ interface Coords {
 export function DeliveryForm({
   initial,
   embedded = false,
+  accraOnly = false,
+  pickupAvailable = false,
 }: {
   initial?: DeliveryInitial;
   /** Customer self-pickup (2026-09-22): rendered INSIDE the "Deliver to me"
@@ -60,6 +64,11 @@ export function DeliveryForm({
    *  the page exactly as it was before pickup existed, and is still what
    *  shows when pickup is not offered. */
   embedded?: boolean;
+  /** Home delivery limited to Greater Accra (Settings → Platform, 2026-09-24).
+   *  Drives the instant out-of-area notice; the backend enforces the rule. */
+  accraOnly?: boolean;
+  /** Pickup is offered on this page — the notice mentions it as the way out. */
+  pickupAvailable?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
@@ -75,6 +84,18 @@ export function DeliveryForm({
   const [geoState, setGeoState] = React.useState<"idle" | "loading" | "error">("idle");
   const [geoError, setGeoError] = React.useState<string | null>(null);
   const [manualOpen, setManualOpen] = React.useState(false);
+  // The pin the BACKEND refused as out of area (its copy of the switch may be
+  // newer than ours). Tied to that exact pin, so moving it clears the notice.
+  const [refusedPin, setRefusedPin] = React.useState<Coords | null>(null);
+  // The pin the page loaded with (prefill). Every pin change makes a NEW
+  // object, so identity tells "customer set this pin" from "prefilled".
+  const [initialCoords] = React.useState(coords);
+  const outsideArea =
+    isOutsideDeliveryArea(accraOnly, coords) ||
+    (refusedPin != null &&
+      coords != null &&
+      refusedPin.lat === coords.lat &&
+      refusedPin.lng === coords.lng);
 
   // Warm the payment step so the post-save navigation is instant.
   React.useEffect(() => {
@@ -264,9 +285,14 @@ export function DeliveryForm({
       );
       return;
     }
+    if (outsideArea) return; // the notice already says why
     startTransition(async () => {
       const result = await saveDeliveryAddress(payload);
       if (!result.ok) {
+        if (isOutsideAreaRefusal(result.error) && coords) {
+          setRefusedPin(coords);
+          return;
+        }
         setError(result.error);
         return;
       }
@@ -309,6 +335,7 @@ export function DeliveryForm({
               <span className="text-muted">
                 We schedule pickup with Yango Delivery the next business morning;
                 you can track the courier from your order page.
+                {accraOnly && " We currently deliver within Greater Accra only."}
               </span>
             </p>
           </div>
@@ -443,6 +470,18 @@ export function DeliveryForm({
               </div>
             )}
 
+            {outsideArea && (
+              <OutsideAreaNotice
+                readAddress={() => addressRef.current?.value ?? ""}
+                coords={coords}
+                pickupAvailable={pickupAvailable}
+                // Scroll to it when the customer's own action raised it (a pin
+                // they set, or Continue refused by the backend) — not for a
+                // prefilled pin on page load.
+                scrollOnShow={coords !== initialCoords || refusedPin != null}
+              />
+            )}
+
             <Field id="instructions" label="Delivery Instructions / Landmarks *">
               <textarea
                 id="instructions"
@@ -464,7 +503,7 @@ export function DeliveryForm({
 
           <button
             type="submit"
-            disabled={isPending || !canContinue}
+            disabled={isPending || !canContinue || outsideArea}
             className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-button bg-brand text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isPending && <Loader2 className="size-4 animate-spin" aria-hidden />}

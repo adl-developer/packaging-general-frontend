@@ -29,6 +29,7 @@ import {
   PHONE_ERROR,
 } from "@/lib/validation";
 import { chosenMethod, isPickupCart } from "@/lib/fulfillment";
+import { goodsLines } from "@/lib/platform-fee";
 
 /**
  * Checkout server actions — wire forms + payment to Medusa, then to Paystack.
@@ -103,6 +104,32 @@ async function getSavedAddress(): Promise<HttpTypes.StoreCustomerAddress | null>
   } catch (err) {
     console.error("[checkout] listAddress failed:", err);
     return null;
+  }
+}
+
+/**
+ * "2 × Vegetable Carton (500 g)" lines for the cart's goods — the platform fee
+ * line excluded (a charge, never a product). Only the out-of-area notice asks
+ * for it, and only once it is showing, so the checkout prefill read stays slim
+ * (no items). Read-only: no charge syncs. Empty on any failure.
+ */
+export async function getCartItemSummary(): Promise<string[]> {
+  const id = await readCartId();
+  if (!id) return [];
+  try {
+    const { cart } = await sdk.store.cart.retrieve(id, {
+      fields: "id,items.product_title,items.variant_title,items.quantity,items.metadata",
+    });
+    return goodsLines(cart.items ?? []).map((item) => {
+      const variant =
+        item.variant_title && item.variant_title !== "Default variant"
+          ? ` (${item.variant_title})`
+          : "";
+      return `${item.quantity} × ${item.product_title ?? "Item"}${variant}`;
+    });
+  } catch (err) {
+    console.error("[checkout] item summary read failed:", err);
+    return [];
   }
 }
 
