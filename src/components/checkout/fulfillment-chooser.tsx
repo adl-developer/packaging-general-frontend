@@ -32,12 +32,15 @@ export function FulfillmentChooser({
   deliveryInitial,
   pickupInitial,
   initialMethod,
+  accraOnly,
 }: {
   pickupLocation: PickupLocation;
   hoursLines: string[] | null;
   deliveryInitial: DeliveryInitial;
   pickupInitial: PickupInitial;
   initialMethod: Method | null;
+  /** Home delivery Greater Accra only — passed to the delivery card. */
+  accraOnly: boolean;
 }) {
   const [open, setOpen] = React.useState<Method | null>(initialMethod);
 
@@ -91,7 +94,12 @@ export function FulfillmentChooser({
               setOpen((o) => (o === "delivery" ? null : "delivery"))
             }
           >
-            <DeliveryForm initial={deliveryInitial} embedded />
+            <DeliveryForm
+              initial={deliveryInitial}
+              embedded
+              accraOnly={accraOnly}
+              pickupAvailable
+            />
           </OptionCard>
         </m.div>
       </div>

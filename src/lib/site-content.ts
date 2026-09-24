@@ -67,6 +67,8 @@ interface SiteContentResponse {
   about?: unknown;
   /** Configured VAT/NHIL/GETFund split — absent on a backend before 2026-09-23. */
   levies?: unknown;
+  /** Greater Accra only switch — absent on a backend before 2026-09-24. */
+  delivery_area?: { accra_only?: unknown };
 }
 
 interface SiteContentState {
@@ -79,6 +81,8 @@ interface SiteContentState {
   /** Null when the backend didn't send a usable split — callers fall back to
    *  the statutory one (`STATUTORY_LEVIES`). */
   levies: LevyPoints | null;
+  /** Null when the backend didn't say — callers use the backend's default (ON). */
+  accraOnly: boolean | null;
 }
 
 /** Last-known-good copy, served only when the backend is unreachable. The
@@ -94,6 +98,7 @@ const EMPTY: SiteContentState = {
   businessHours: null,
   about: null,
   levies: null,
+  accraOnly: null,
 };
 
 function mapDoc(
@@ -122,6 +127,10 @@ const cachedSiteContent = unstable_cache(
           : null,
       about: coerceAbout(res.about),
       levies: coerceLevies(res.levies),
+      accraOnly:
+        typeof res.delivery_area?.accra_only === "boolean"
+          ? res.delivery_area.accra_only
+          : null,
     };
   },
   ["site-content"],
@@ -162,6 +171,13 @@ export async function getBusinessHours(): Promise<BusinessHours | null> {
  *  Platform). Falls back to the statutory 15 / 2.5 / 2.5. */
 export async function getLevies(): Promise<LevyPoints> {
   return (await getSiteContent()).levies ?? STATUTORY_LEVIES;
+}
+
+/** Is home delivery limited to Greater Accra (Settings → Platform)? Only
+ *  drives the delivery form's instant alert; the backend enforces the rule.
+ *  Unknown (older backend, unreachable) → true, the backend's own default. */
+export async function getDeliveryAreaAccraOnly(): Promise<boolean> {
+  return (await getSiteContent()).accraOnly ?? true;
 }
 
 /** The About Us page content — the backend's (admin-editable) version when

@@ -3,7 +3,7 @@ import { DeliveryForm } from "@/components/checkout/delivery-form";
 import { FulfillmentChooser } from "@/components/checkout/fulfillment-chooser";
 import { getCheckoutPrefill } from "@/lib/actions/checkout";
 import { getPickupLocation } from "@/lib/pickup";
-import { getFooterHoursLines } from "@/lib/site-content";
+import { getDeliveryAreaAccraOnly, getFooterHoursLines } from "@/lib/site-content";
 
 export const metadata: Metadata = {
   title: "Delivery",
@@ -15,10 +15,12 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function DeliveryPage() {
-  const [prefill, pickupLocation, hoursLines] = await Promise.all([
+  const [prefill, pickupLocation, hoursLines, accraOnly] = await Promise.all([
     getCheckoutPrefill(),
     getPickupLocation(),
     getFooterHoursLines().catch(() => null),
+    // Same cached site-content read as the hours above — no extra request.
+    getDeliveryAreaAccraOnly(),
   ]);
 
   const deliveryInitial = {
@@ -34,7 +36,7 @@ export default async function DeliveryPage() {
   // Pickup not offered (no pickup point / phone / option, or the backend
   // predates it) → exactly the delivery-only page that existed before.
   if (!pickupLocation) {
-    return <DeliveryForm initial={deliveryInitial} />;
+    return <DeliveryForm initial={deliveryInitial} accraOnly={accraOnly} />;
   }
 
   return (
@@ -48,6 +50,7 @@ export default async function DeliveryPage() {
         email: prefill.email,
       }}
       initialMethod={prefill.fulfillmentMethod}
+      accraOnly={accraOnly}
     />
   );
 }
