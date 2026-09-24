@@ -5,6 +5,11 @@
 Next.js **16** (App Router) · React 19 · **Tailwind v4** · `motion` · Medusa JS SDK · TypeScript. Deploys to Vercel.
 See the root `../CLAUDE.md` for project-wide rules (stack, git, Ghana VAT, env gotchas).
 
+**Domains (since 2026-09-24):** production = **`packaginggeneral.com`** (redirects to
+`www.packaginggeneral.com`; `main` → `vercel deploy --prod`), staging =
+**`app.packaginggeneral.com`** (`staging` branch → Vercel Preview, noindex). Git pushes do
+not build — deploy with the Vercel CLI from fresh clones of `main` / `staging`.
+
 > ⚠ Per `AGENTS.md` above: this is a newer Next.js than your training data. Check `node_modules/next/dist/docs/` before relying on framework APIs.
 
 ## Source layout
@@ -117,8 +122,9 @@ backend's `utils/storefront-revalidate.ts` verbatim.
 - `POST /api/revalidate` (`x-revalidate-secret` = `REVALIDATE_SECRET`, body `{tags}` or
   `{all:true}`) expires tags immediately. The backend calls it from a subscriber on
   product/variant/category events and from the admin settings routes. Both live
-  storefronts (prod alias + staging domain) have separate caches — the backend's
-  `FRONTEND_URL` list covers both.
+  storefronts (production `www.packaginggeneral.com` + staging `app.packaginggeneral.com`)
+  have separate caches — the backend's `FRONTEND_URL` list must cover both (its FIRST
+  entry is also the base of every customer email/SMS link, so production goes first).
 - ⚠ Stock (`lib/stock.ts`) and carts are NEVER cached. Not in scope for the Data Cache.
 - Cache Components (`cacheComponents: true`, `"use cache"`, static shells at the edge) was
   deliberately NOT enabled — it is a whole-app migration (navigation semantics change,
