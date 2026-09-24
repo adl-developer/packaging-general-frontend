@@ -160,6 +160,9 @@ describe("sendAccountResetLink", () => {
     expect(state).toEqual({ ok: true, error: null });
     expect(authClient.auth.resetPassword).toHaveBeenCalledWith("customer", "emailpass", {
       identifier: "ama@example.com",
+      // No request headers under test → no storefront recorded; the backend
+      // then links the reset to the primary storefront.
+      metadata: {},
     });
   });
 

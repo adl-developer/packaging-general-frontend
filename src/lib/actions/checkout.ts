@@ -30,6 +30,7 @@ import {
 } from "@/lib/validation";
 import { chosenMethod, isPickupCart } from "@/lib/fulfillment";
 import { goodsLines } from "@/lib/platform-fee";
+import { storefrontMetadata } from "@/lib/storefront-origin";
 
 /**
  * Checkout server actions — wire forms + payment to Medusa, then to Paystack.
@@ -262,6 +263,10 @@ export async function saveContactInfo(input: {
         company_name: input.companyName,
         contact_person: input.contactPerson,
         contact_phone: phone,
+        // Which storefront (production / staging) this order is placed on —
+        // Medusa copies cart metadata to the order, and every email/SMS link
+        // for the order goes back to this site (backend-validated).
+        ...(await storefrontMetadata()),
       },
     });
   } catch (err) {
