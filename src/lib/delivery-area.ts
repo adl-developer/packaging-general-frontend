@@ -12,10 +12,18 @@ import { GREATER_ACCRA_RING } from "@/lib/greater-accra-boundary";
 
 export const BORDER_TOLERANCE_M = 200;
 
-/** ⚠ Verbatim copy of the backend's message. The SDK surfaces only a 409's
- *  message (not its `code`), so `isOutsideAreaRefusal` matches on this. */
+/** ⚠ Verbatim copy of the backend's message (client wording, 2026-09-24).
+ *  The SDK surfaces only a 409's message (not its `code`), so
+ *  `isOutsideAreaRefusal` matches on this. */
 export const OUTSIDE_DELIVERY_AREA_MESSAGE =
-  "We currently deliver only within Greater Accra. To order for delivery elsewhere in Ghana, please contact us.";
+  "Our delivery service area is restricted to Greater Accra Region at this time. For exceptions to be considered, kindly contact us.";
+
+/** Earlier wording a backend deployed before the copy change still sends —
+ *  still recognised so a storefront/backend deploy in either order keeps the
+ *  refusal showing as the notice. Safe to drop once both are deployed. */
+const PREVIOUS_OUTSIDE_MESSAGES = [
+  "We currently deliver only within Greater Accra. To order for delivery elsewhere in Ghana, please contact us.",
+];
 
 export const SUPPORT_EMAIL = "info@packaginggeneral.com";
 
@@ -73,7 +81,11 @@ export function isOutsideDeliveryArea(
 
 /** Did the backend refuse the delivery save for being out of area? */
 export function isOutsideAreaRefusal(message: string | null | undefined): boolean {
-  return message === OUTSIDE_DELIVERY_AREA_MESSAGE;
+  if (!message) return false;
+  return (
+    message === OUTSIDE_DELIVERY_AREA_MESSAGE ||
+    PREVIOUS_OUTSIDE_MESSAGES.includes(message)
+  );
 }
 
 /** The WhatsApp message a customer outside the area sends support: where

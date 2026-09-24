@@ -54,7 +54,16 @@ describe("isOutsideDeliveryArea", () => {
 
 describe("isOutsideAreaRefusal", () => {
   it("recognises the backend's refusal message verbatim", () => {
+    expect(OUTSIDE_DELIVERY_AREA_MESSAGE).toBe(
+      "Our delivery service area is restricted to Greater Accra Region at this time. For exceptions to be considered, kindly contact us.",
+    );
     expect(isOutsideAreaRefusal(OUTSIDE_DELIVERY_AREA_MESSAGE)).toBe(true);
+    // A backend deployed before the copy change still sends the old wording.
+    expect(
+      isOutsideAreaRefusal(
+        "We currently deliver only within Greater Accra. To order for delivery elsewhere in Ghana, please contact us.",
+      ),
+    ).toBe(true);
     expect(isOutsideAreaRefusal("No delivery options are available right now.")).toBe(false);
     expect(isOutsideAreaRefusal(undefined)).toBe(false);
   });
