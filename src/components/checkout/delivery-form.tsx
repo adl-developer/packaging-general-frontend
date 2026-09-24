@@ -87,6 +87,9 @@ export function DeliveryForm({
   // The pin the BACKEND refused as out of area (its copy of the switch may be
   // newer than ours). Tied to that exact pin, so moving it clears the notice.
   const [refusedPin, setRefusedPin] = React.useState<Coords | null>(null);
+  // The pin the page loaded with (prefill). Every pin change makes a NEW
+  // object, so identity tells "customer set this pin" from "prefilled".
+  const [initialCoords] = React.useState(coords);
   const outsideArea =
     isOutsideDeliveryArea(accraOnly, coords) ||
     (refusedPin != null &&
@@ -472,6 +475,10 @@ export function DeliveryForm({
                 readAddress={() => addressRef.current?.value ?? ""}
                 coords={coords}
                 pickupAvailable={pickupAvailable}
+                // Scroll to it when the customer's own action raised it (a pin
+                // they set, or Continue refused by the backend) — not for a
+                // prefilled pin on page load.
+                scrollOnShow={coords !== initialCoords || refusedPin != null}
               />
             )}
 

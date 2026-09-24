@@ -24,7 +24,12 @@ export function OutsideAreaNotice({
   readAddress,
   coords,
   pickupAvailable,
+  scrollOnShow,
 }: {
+  /** Bring the notice into view when it appears (the pin was just set below
+   *  the fold, or the map is being used and the notice lands off-screen).
+   *  False for a pin prefilled on page load, so the page doesn't jump. */
+  scrollOnShow: boolean;
   /** The Delivery Address field's CURRENT text. A getter, not a value: Google
    *  Places and reverse-geocoding write the input directly (no React state),
    *  so the link re-reads it at click time. */
@@ -33,6 +38,21 @@ export function OutsideAreaNotice({
   /** Pickup is open to everyone; say so when the chooser offers it. */
   pickupAvailable: boolean;
 }) {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  // Once, on appearance only: moving the pin around while it stays outside
+  // must not keep yanking the page.
+  const scrollOnMount = React.useRef(scrollOnShow);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!scrollOnMount.current || !el) return;
+    const rect = el.getBoundingClientRect();
+    // The sticky header + promo bar cover roughly the top 160 px.
+    const hidden = rect.top < 160 || rect.bottom > window.innerHeight;
+    if (!hidden) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+  }, []);
+
   const [items, setItems] = React.useState<string[]>([]);
   React.useEffect(() => {
     let live = true;
@@ -54,6 +74,7 @@ export function OutsideAreaNotice({
 
   return (
     <div
+      ref={ref}
       role="alert"
       className="flex flex-col gap-3 rounded-option border border-[rgba(251,44,54,0.4)] bg-[rgba(231,0,11,0.06)] px-4 py-3 text-sm text-brand"
     >
