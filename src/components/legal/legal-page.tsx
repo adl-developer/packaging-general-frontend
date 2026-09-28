@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { SUPPORT_PHONE, SUPPORT_PHONE_DISPLAY } from "@/lib/whatsapp";
 
 /**
  * Shared layout primitives for the legal pages (/terms, /privacy).
@@ -118,8 +119,8 @@ export function LegalContactCard({ intro }: { intro: string }) {
         </a>
         <br />
         Phone / WhatsApp:{" "}
-        <a href="tel:02560999720" className="underline hover:text-rust">
-          0256 099 9720
+        <a href={`tel:${SUPPORT_PHONE}`} className="underline hover:text-rust">
+          {SUPPORT_PHONE_DISPLAY}
         </a>
         <br />
         Packaging General · EON Investments &amp; Industries · Accra, Ghana

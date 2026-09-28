@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { buildWhatsappUrl, outOfStockEnquiry } from "./whatsapp";
+import {
+  SUPPORT_PHONE,
+  SUPPORT_PHONE_DISPLAY,
+  buildWhatsappUrl,
+  outOfStockEnquiry,
+  supportWhatsappUrl,
+} from "./whatsapp";
+
+describe("support line", () => {
+  it("is the official Packaging General number", () => {
+    expect(SUPPORT_PHONE).toBe("+233591207616");
+    expect(SUPPORT_PHONE_DISPLAY.replace(/\s/g, "")).toBe(SUPPORT_PHONE);
+  });
+  it("opens WhatsApp chat on the support number", () => {
+    expect(supportWhatsappUrl("hi")).toBe("https://wa.me/233591207616?text=hi");
+  });
+});
 
 describe("buildWhatsappUrl", () => {
   it("returns null when no number is configured", () => {
