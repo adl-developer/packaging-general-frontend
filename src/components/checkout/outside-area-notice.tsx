@@ -8,7 +8,7 @@ import {
   SUPPORT_EMAIL,
   outsideAreaEnquiry,
 } from "@/lib/delivery-area";
-import { buildWhatsappUrl } from "@/lib/whatsapp";
+import { SUPPORT_PHONE, SUPPORT_PHONE_DISPLAY, buildWhatsappUrl } from "@/lib/whatsapp";
 
 /**
  * Shown on the delivery step when the pin is outside Greater Accra (client,
@@ -66,11 +66,9 @@ export function OutsideAreaNotice({
     };
   }, []);
 
-  const supportNumber = process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP ?? "";
   const urlFor = (address: string) =>
-    buildWhatsappUrl(supportNumber, outsideAreaEnquiry({ address, coords, items }));
+    buildWhatsappUrl(SUPPORT_PHONE, outsideAreaEnquiry({ address, coords, items }));
   const whatsappUrl = urlFor(readAddress());
-  const phone = formatGhanaPhone(supportNumber);
 
   return (
     <div
@@ -109,15 +107,13 @@ export function OutsideAreaNotice({
       )}
 
       <div className="flex flex-col gap-1.5 text-xs text-muted sm:flex-row sm:flex-wrap sm:gap-x-5">
-        {phone && (
-          <a
-            href={`tel:${phone.replace(/\s/g, "")}`}
-            className="inline-flex items-center gap-1.5 hover:text-brand"
-          >
-            <Phone className="size-3.5" aria-hidden />
-            {phone}
-          </a>
-        )}
+        <a
+          href={`tel:${SUPPORT_PHONE}`}
+          className="inline-flex items-center gap-1.5 hover:text-brand"
+        >
+          <Phone className="size-3.5" aria-hidden />
+          {SUPPORT_PHONE_DISPLAY}
+        </a>
         <a
           href={`mailto:${SUPPORT_EMAIL}`}
           className="inline-flex items-center gap-1.5 hover:text-brand"
@@ -128,13 +124,4 @@ export function OutsideAreaNotice({
       </div>
     </div>
   );
-}
-
-/** "0241234567" / "233241234567" → "+233 24 123 4567"; "" when unset. */
-function formatGhanaPhone(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  if (!digits) return "";
-  const intl = digits.startsWith("0") ? `233${digits.slice(1)}` : digits;
-  const m = /^233(\d{2})(\d{3})(\d{4})$/.exec(intl);
-  return m ? `+233 ${m[1]} ${m[2]} ${m[3]}` : `+${intl}`;
 }

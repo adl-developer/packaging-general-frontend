@@ -91,8 +91,8 @@ async function FooterHours() {
 /** Global site footer (Figma: 4-column + business hours + copyright).
  *  Synchronous shell — the one await lives in <FooterHours>. */
 export function SiteFooter() {
-  // supportWhatsappUrl returns null when NEXT_PUBLIC_SUPPORT_WHATSAPP is
-  // unset/blank. The heading + sub-line + button are ONE CTA unit: the
+  // supportWhatsappUrl returns null only if SUPPORT_PHONE is ever blanked
+  // (lib/whatsapp.ts). The heading + sub-line + button are ONE CTA unit: the
   // sub-line ("Chat with our support team") is a verbal promise the button
   // fulfils, so rendering it with no button beneath would read worse than
   // showing nothing at all — hide all three together, never just the

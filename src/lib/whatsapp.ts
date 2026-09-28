@@ -1,5 +1,14 @@
 /**
- * Build a wa.me link, or null when no support number is configured.
+ * Packaging General's official support line (client, 2026-09-28): the number
+ * customers call AND the WhatsApp chat line. Every "reach us" number on the
+ * site reads from here so they cannot drift apart. It replaced the
+ * NEXT_PUBLIC_SUPPORT_WHATSAPP env var, which only ever held a placeholder.
+ */
+export const SUPPORT_PHONE = "+233591207616";
+export const SUPPORT_PHONE_DISPLAY = "+233 59 120 7616";
+
+/**
+ * Build a wa.me link, or null when no number is given.
  *
  * Returning null (rather than a partial URL) is deliberate: every caller must
  * hide its CTA instead of rendering `wa.me/undefined`, which would look like a
@@ -14,7 +23,7 @@ export function buildWhatsappUrl(raw: string | undefined, message: string): stri
 }
 
 export function supportWhatsappUrl(message: string): string | null {
-  return buildWhatsappUrl(process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP, message);
+  return buildWhatsappUrl(SUPPORT_PHONE, message);
 }
 
 export function outOfStockEnquiry(o: { product: string; specs: string[]; quantity: number }): string {
