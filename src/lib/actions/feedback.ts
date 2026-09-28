@@ -5,6 +5,11 @@ import { sdk } from "@/lib/medusa";
 import { getCustomer } from "@/lib/actions/auth";
 import { getCart } from "@/lib/actions/cart";
 import type { FeedbackContext } from "@/lib/feedback-context";
+import {
+  contactFromCustomer,
+  normalizeFeedbackContact,
+  type FeedbackContact as FeedbackContactInput,
+} from "@/lib/feedback-contact";
 
 /**
  * The floating feedback button's submit path.
@@ -24,16 +29,27 @@ export type FeedbackResult = { ok: true } | { ok: false; error: string };
 const TITLE_MAX = 120;
 const MESSAGE_MAX = 5000;
 
+/** Name / phone / email of the signed-in customer, to prefill the form's
+ *  optional contact fields. Empty strings when signed out. */
+export async function getFeedbackPrefill(): Promise<Required<FeedbackContactInput>> {
+  const customer = await getCustomer().catch(() => null);
+  return contactFromCustomer(customer);
+}
+
 export async function sendFeedback(input: {
   title: string;
   message: string;
   context: FeedbackContext;
+  /** Optional Name / Phone / Email the reporter typed (2026-09-28). */
+  contact?: FeedbackContactInput;
 }): Promise<FeedbackResult> {
   const title = (input.title ?? "").trim().slice(0, TITLE_MAX);
   const message = (input.message ?? "").trim().slice(0, MESSAGE_MAX);
   if (!title || !message) {
     return { ok: false, error: "Please add a title and a message." };
   }
+  const checked = normalizeFeedbackContact(input.contact);
+  if (!checked.ok) return { ok: false, error: checked.error };
 
   const [customer, cart, h] = await Promise.all([
     getCustomer().catch(() => null),
@@ -71,6 +87,7 @@ export async function sendFeedback(input: {
         title,
         message,
         context,
+        contact: checked.contact,
         reporter: customer
           ? { email: customer.email ?? undefined, customerId: customer.id }
           : undefined,

@@ -2,13 +2,14 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { CheckCircle2, MessageSquareText, X } from "lucide-react";
+import { CheckCircle2, X } from "lucide-react";
 import { m, AnimatePresence } from "motion/react";
 import * as Sentry from "@sentry/nextjs";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { Input, Label, FieldError } from "@/components/ui/input";
-import { sendFeedback } from "@/lib/actions/feedback";
+import { getFeedbackPrefill, sendFeedback } from "@/lib/actions/feedback";
+import { CONTACT_LIMITS, normalizeFeedbackContact } from "@/lib/feedback-contact";
 import {
   captureBrowserContext,
   installErrorRecorder,
@@ -18,9 +19,11 @@ import {
 /**
  * Floating feedback button (user request, 2026-09-22).
  *
- * A round button fixed bottom-LEFT — the cart toast owns bottom-right on
+ * A "Send Feedback" text pill (2026-09-28: was a round icon-only button; the
+ * user wanted it obvious what it is) fixed bottom-LEFT — the cart toast owns bottom-right on
  * desktop and bottom-centre on mobile, so this corner is the one that never
- * collides with it. Click → small card with Title, Message, Submit. On
+ * collides with it. Click → small card with Title, Message, optional Name / Phone /
+ * Email (2026-09-28, prefilled for a signed-in customer), Submit. On
  * success a "Feedback sent" state shows for `SENT_MS`, then the card dismisses
  * back to the round button. Escape and clicking the backdrop close it.
  *
@@ -39,7 +42,9 @@ export function FeedbackWidget() {
   const [phase, setPhase] = React.useState<Phase>("closed");
   const [title, setTitle] = React.useState("");
   const [message, setMessage] = React.useState("");
+  const [contact, setContact] = React.useState({ name: "", phone: "", email: "" });
   const [error, setError] = React.useState<string | null>(null);
+  const prefilled = React.useRef(false);
   const titleRef = React.useRef<HTMLInputElement>(null);
   const sentTimer = React.useRef<number | null>(null);
 
@@ -65,7 +70,27 @@ export function FeedbackWidget() {
   const open = () => {
     setError(null);
     setPhase("open");
+    // First open only: fill the contact fields from the signed-in account.
+    // Never overwrites something the reporter already typed.
+    if (!prefilled.current) {
+      prefilled.current = true;
+      getFeedbackPrefill()
+        .then((p) =>
+          setContact((c) => ({
+            name: c.name || p.name,
+            phone: c.phone || p.phone,
+            email: c.email || p.email,
+          })),
+        )
+        .catch(() => {
+          prefilled.current = false;
+        });
+    }
   };
+
+  const setField =
+    (key: keyof typeof contact) => (e: React.ChangeEvent<HTMLInputElement>) =>
+      setContact((c) => ({ ...c, [key]: e.target.value }));
 
   const close = () => {
     setPhase("closed");
@@ -90,6 +115,11 @@ export function FeedbackWidget() {
       setError("Please add a title and a message.");
       return;
     }
+    const checked = normalizeFeedbackContact(contact);
+    if (!checked.ok) {
+      setError(checked.error);
+      return;
+    }
     setError(null);
     setPhase("sending");
 
@@ -99,13 +129,19 @@ export function FeedbackWidget() {
       buildCommit: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? null,
     });
 
-    const result = await sendFeedback({ title: t, message: msg, context });
+    const result = await sendFeedback({
+      title: t,
+      message: msg,
+      context,
+      contact: checked.contact,
+    });
     if (!result.ok) {
       setError(result.error);
       setPhase("open");
       return;
     }
 
+    // Contact details stay: a second report shouldn't mean retyping them.
     setTitle("");
     setMessage("");
     setPhase("sent");
@@ -116,22 +152,20 @@ export function FeedbackWidget() {
 
   return (
     <>
-      {/* Round trigger — hidden while the card is up so the two never stack. */}
+      {/* Text pill trigger — hidden while the card is up so the two never stack. */}
       <AnimatePresence>
         {!showCard && (
           <m.button
             key="fab"
             type="button"
             onClick={open}
-            aria-label="Send feedback"
-            title="Send feedback"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
-            className="fixed bottom-6 left-6 z-40 flex size-14 items-center justify-center rounded-full bg-brand text-brand-foreground shadow-lg transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2"
+            className="fixed bottom-6 left-6 z-40 flex h-11 items-center justify-center rounded-full bg-brand px-5 text-sm font-semibold text-brand-foreground shadow-lg transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2"
           >
-            <MessageSquareText className="size-6" aria-hidden />
+            Send Feedback
           </m.button>
         )}
       </AnimatePresence>
@@ -160,7 +194,7 @@ export function FeedbackWidget() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 24, scale: 0.98 }}
               transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
-              className="relative m-4 w-[calc(100%-2rem)] max-w-sm rounded-card border border-line bg-surface p-5 shadow-xl sm:m-6"
+              className="relative m-4 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-sm overflow-y-auto rounded-card border border-line bg-surface p-5 shadow-xl sm:m-6"
             >
               {phase === "sent" ? (
                 <div
@@ -233,6 +267,53 @@ export function FeedbackWidget() {
                       className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none disabled:opacity-50"
                     />
                   </div>
+
+                  <fieldset className="flex flex-col gap-3" disabled={phase === "sending"}>
+                    <legend className="mb-3 text-xs font-semibold text-brand">
+                      Your details{" "}
+                      <span className="font-normal text-muted">
+                        (optional, so we can follow up)
+                      </span>
+                    </legend>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="feedback-name">Name</Label>
+                      <Input
+                        id="feedback-name"
+                        name="name"
+                        autoComplete="name"
+                        value={contact.name}
+                        maxLength={CONTACT_LIMITS.name}
+                        onChange={setField("name")}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="feedback-phone">Phone number</Label>
+                      <Input
+                        id="feedback-phone"
+                        name="phone"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        placeholder="024 123 4567"
+                        value={contact.phone}
+                        maxLength={CONTACT_LIMITS.phone}
+                        onChange={setField("phone")}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="feedback-email">Email address</Label>
+                      <Input
+                        id="feedback-email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@company.com"
+                        value={contact.email}
+                        maxLength={CONTACT_LIMITS.email}
+                        onChange={setField("email")}
+                      />
+                    </div>
+                  </fieldset>
 
                   {error && <FieldError>{error}</FieldError>}
 
