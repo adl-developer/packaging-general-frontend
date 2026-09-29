@@ -17,6 +17,7 @@ import { isOutsideAreaRefusal, isOutsideDeliveryArea } from "@/lib/delivery-area
 import { DeliveryLocation, type MapCoordSource } from "./delivery-map";
 import { OutsideAreaNotice } from "./outside-area-notice";
 import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-progress";
+import { PoweredByYango } from "@/components/delivery/powered-by-yango";
 
 /**
  * Checkout — Delivery step (Figma frame 424:2869). Persists the shipping +
@@ -56,6 +57,7 @@ export function DeliveryForm({
   embedded = false,
   accraOnly = false,
   pickupAvailable = false,
+  yangoLiveQuotes = false,
 }: {
   initial?: DeliveryInitial;
   /** Customer self-pickup (2026-09-22): rendered INSIDE the "Deliver to me"
@@ -69,6 +71,9 @@ export function DeliveryForm({
   accraOnly?: boolean;
   /** Pickup is offered on this page — the notice mentions it as the way out. */
   pickupAvailable?: boolean;
+  /** Settings → Platform → Delivery quotes → "Live quotes" is on: the only
+   *  time "Powered by Yango Delivery" shows (user rule, 2026-09-29). */
+  yangoLiveQuotes?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
@@ -330,16 +335,19 @@ export function DeliveryForm({
             role="status"
           >
             <CalendarClock className="mt-0.5 size-4 shrink-0 text-plum" aria-hidden />
-            <p className="leading-snug">
-              <span className="font-medium">
-                Your order will arrive within 2–3 business days.
-              </span>{" "}
-              <span className="text-muted">
-                Once your order is ready for delivery, you’ll be able to track
-                your courier directly from your order page.
-                {accraOnly && " Delivery is currently available within Greater Accra only."}
-              </span>
-            </p>
+            <div className="flex flex-col items-start gap-2.5">
+              <p className="leading-snug">
+                <span className="font-medium">
+                  Your order will arrive within 2–3 business days.
+                </span>{" "}
+                <span className="text-muted">
+                  Once your order is ready for delivery, you’ll be able to track
+                  your courier directly from your order page.
+                  {accraOnly && " Delivery is currently available within Greater Accra only."}
+                </span>
+              </p>
+              {yangoLiveQuotes && <PoweredByYango />}
+            </div>
           </div>
 
           <fieldset className="flex flex-col gap-4">

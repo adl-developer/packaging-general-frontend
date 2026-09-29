@@ -33,6 +33,7 @@ export function FulfillmentChooser({
   pickupInitial,
   initialMethod,
   accraOnly,
+  yangoLiveQuotes = false,
 }: {
   pickupLocation: PickupLocation;
   hoursLines: string[] | null;
@@ -41,6 +42,9 @@ export function FulfillmentChooser({
   initialMethod: Method | null;
   /** Home delivery Greater Accra only — passed to the delivery card. */
   accraOnly: boolean;
+  /** Settings → Platform → Delivery quotes → "Live quotes" is on: the only
+   *  time "Powered by Yango Delivery" shows (user rule, 2026-09-29). */
+  yangoLiveQuotes?: boolean;
 }) {
   const [open, setOpen] = React.useState<Method | null>(initialMethod);
 
@@ -98,6 +102,7 @@ export function FulfillmentChooser({
               initial={deliveryInitial}
               embedded
               accraOnly={accraOnly}
+              yangoLiveQuotes={yangoLiveQuotes}
               pickupAvailable
             />
           </OptionCard>

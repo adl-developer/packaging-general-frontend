@@ -30,6 +30,7 @@ import {
 } from "@/lib/actions/auth";
 import { ChargeRows } from "@/components/charge-rows";
 import type { ChargeRow } from "@/lib/charge-breakdown";
+import { PoweredByYango } from "@/components/delivery/powered-by-yango";
 
 /**
  * Payment Successful confirmation page + Create-Your-Account modal (Figma
@@ -79,6 +80,9 @@ interface OrderConfirmationProps {
   /** Customer self-pickup (2026-09-22): labels the option "Collection" and
    *  tells the customer to wait for the ready-for-pickup message. */
   pickup?: boolean;
+  /** Settings → Platform → Delivery quotes → "Live quotes" is on: the only
+   *  time "Powered by Yango Delivery" shows (user rule, 2026-09-29). */
+  yangoLiveQuotes?: boolean;
   /** True when the visitor is already signed in — suppresses the
    *  "Create Your Account" dialog (they already have an account, and the
    *  order is linked to it server-side). */
@@ -98,6 +102,7 @@ export function OrderConfirmation({
   paymentProviderId,
   deliveryOption,
   pickup = false,
+  yangoLiveQuotes = false,
   isLoggedIn,
   accountStatus = "none",
 }: OrderConfirmationProps) {
@@ -155,6 +160,9 @@ export function OrderConfirmation({
               value={deliveryOption}
               valueClassName="font-medium text-brand"
             />
+          )}
+          {yangoLiveQuotes && deliveryOption && !pickup && (
+            <PoweredByYango className="self-end" />
           )}
         </div>
 

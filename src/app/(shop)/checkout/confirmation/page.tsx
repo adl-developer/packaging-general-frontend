@@ -10,6 +10,7 @@ import { OrderProgress } from "@/components/checkout/order-progress";
 import { chargeBreakdown, type ChargeRow } from "@/lib/charge-breakdown";
 import { orderPlatformFee } from "@/lib/platform-fee";
 import { getLevies } from "@/lib/site-content";
+import { getYangoLiveQuotes } from "@/lib/site-content";
 
 export const metadata: Metadata = {
   title: "Order Confirmed",
@@ -105,7 +106,11 @@ export default async function ConfirmationPage({
 
   // Signed-in customers already have an account (and the order is linked to it),
   // so they must not see the post-checkout "Create Your Account" dialog.
-  const isLoggedIn = !!(await getCustomer());
+  const [customer, yangoLiveQuotes] = await Promise.all([
+    getCustomer(),
+    getYangoLiveQuotes(),
+  ]);
+  const isLoggedIn = !!customer;
 
   // Which account dialog the guest sees: create-account (no account for this
   // email), verify-email (unverified account exists), or sign-in (verified
@@ -127,7 +132,8 @@ export default async function ConfirmationPage({
         chargeRows={chargeRows}
         paymentProviderId={paymentProviderId}
         deliveryOption={deliveryOption}
-      pickup={pickup}
+        pickup={pickup}
+        yangoLiveQuotes={yangoLiveQuotes}
         isLoggedIn={isLoggedIn}
         accountStatus={accountStatus}
       />

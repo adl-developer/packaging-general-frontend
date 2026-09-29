@@ -365,13 +365,17 @@ export function ProductCustomizer({
   // The action bar is `fixed`, so it covers the last ~70px of the page — which
   // would otherwise permanently hide the tail of the site footer. Reserve its
   // real measured height (it grows when the error line shows, and is shorter on
-  // mobile) as body padding while this page is mounted.
+  // mobile) as body padding while this page is mounted. The same height is
+  // published as `--pinned-bar-h` so the floating "Send Feedback" pill
+  // (feedback-widget.tsx) rides above the bar instead of covering Keep Shopping.
   const actionBarRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
     const bar = actionBarRef.current;
     if (!bar) return;
+    const root = document.documentElement;
     const apply = () => {
       document.body.style.paddingBottom = `${bar.offsetHeight}px`;
+      root.style.setProperty("--pinned-bar-h", `${bar.offsetHeight}px`);
     };
     apply();
     const ro = new ResizeObserver(apply);
@@ -379,6 +383,7 @@ export function ProductCustomizer({
     return () => {
       ro.disconnect();
       document.body.style.paddingBottom = "";
+      root.style.removeProperty("--pinned-bar-h");
     };
   }, []);
 

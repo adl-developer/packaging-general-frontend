@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getCustomer } from "@/lib/actions/auth";
 import { TrackOrder } from "@/components/track-order/track-order";
+import { getYangoLiveQuotes } from "@/lib/site-content";
 
 export const metadata: Metadata = {
   title: "Track Order",
@@ -28,7 +29,10 @@ export default async function TrackOrderPage({
   // opens the invoice dialog as soon as the lookup resolves.
   const { t, order, email, invoice } = await searchParams;
   // Public page — never let an auth hiccup break it; fall back to logged-out.
-  const customer = await getCustomer().catch(() => null);
+  const [customer, yangoLiveQuotes] = await Promise.all([
+    getCustomer().catch(() => null),
+    getYangoLiveQuotes(),
+  ]);
   return (
     <TrackOrder
       initialToken={t}
@@ -36,6 +40,7 @@ export default async function TrackOrderPage({
       initialEmail={email}
       openInvoice={invoice === "1"}
       loggedInEmail={customer?.email}
+      yangoLiveQuotes={yangoLiveQuotes}
     />
   );
 }
