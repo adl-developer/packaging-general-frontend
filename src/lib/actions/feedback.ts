@@ -37,16 +37,18 @@ export async function getFeedbackPrefill(): Promise<Required<FeedbackContactInpu
 }
 
 export async function sendFeedback(input: {
-  title: string;
+  title?: string;
   message: string;
   context: FeedbackContext;
   /** Optional Name / Phone / Email the reporter typed (2026-09-28). */
   contact?: FeedbackContactInput;
 }): Promise<FeedbackResult> {
-  const title = (input.title ?? "").trim().slice(0, TITLE_MAX);
+  // Title optional since 2026-09-29 (user): only the message is required.
+  // The backend falls back to the message's first line for the subject.
+  const title = (input.title ?? "").trim().slice(0, TITLE_MAX) || undefined;
   const message = (input.message ?? "").trim().slice(0, MESSAGE_MAX);
-  if (!title || !message) {
-    return { ok: false, error: "Please add a title and a message." };
+  if (!message) {
+    return { ok: false, error: "Please add a message." };
   }
   const checked = normalizeFeedbackContact(input.contact);
   if (!checked.ok) return { ok: false, error: checked.error };
