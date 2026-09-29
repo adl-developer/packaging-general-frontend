@@ -151,7 +151,10 @@ export function FeedbackWidget() {
 
   return (
     <>
-      {/* Text pill trigger — hidden while the card is up so the two never stack. */}
+      {/* Text pill trigger — hidden while the card is up so the two never stack.
+          `--pinned-bar-h` is set by a page's bottom-pinned action bar (the
+          product page's, product-customizer.tsx) so the pill sits above it
+          rather than over its Keep Shopping button; 0 everywhere else. */}
       <AnimatePresence>
         {!showCard && (
           <m.button
@@ -162,7 +165,7 @@ export function FeedbackWidget() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
-            className="fixed bottom-6 left-6 z-40 flex h-11 items-center justify-center rounded-full bg-brand px-5 text-sm font-semibold text-brand-foreground shadow-lg transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2"
+            className="fixed bottom-[calc(1.5rem+var(--pinned-bar-h,0px))] left-6 z-40 flex h-11 items-center justify-center rounded-full bg-brand px-5 text-sm font-semibold text-brand-foreground shadow-lg transition-[background-color,bottom] duration-200 hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2"
           >
             Send Feedback
           </m.button>
