@@ -15,7 +15,9 @@ import {
   SECTION_LABELS,
   type StorefrontSection,
 } from "@/lib/attributes";
-import type { StockState } from "@/lib/stock-rules";
+import { shortfall, type StockState } from "@/lib/stock-rules";
+import { notEnoughStockMessage, type RestockItem } from "@/lib/restock";
+import { RestockRequestDialog } from "./restock-request-dialog";
 import { tierFor, tieredUnitPrice } from "@/lib/moq-tiers";
 import { supportWhatsappUrl, outOfStockEnquiry } from "@/lib/whatsapp";
 import { formatGhs } from "@/lib/format";
@@ -315,30 +317,45 @@ export function ProductCustomizer({
     id: string,
   ) => options.find((o) => o.id === id)?.label ?? id;
 
+  const displaySpecs: string[] = attributeMode
+    ? product.attributes
+        .map((a) => {
+          const v = a.values.find((vv) => vv.id === attrSelection[a.name]);
+          return v ? `${a.name}: ${v.label}` : null;
+        })
+        .filter((s): s is string => !!s)
+    : [
+        size ? `${labels.size}: ${labelFor(product.sizes, size)}` : null,
+        material
+          ? `${labels.material}: ${labelFor(product.materials, material)}`
+          : null,
+        printing ? `Printing: ${labelFor(product.printing, printing)}` : null,
+      ].filter((s): s is string => !!s);
+
   const enquiryUrl = comboOutOfStock
     ? supportWhatsappUrl(
-        outOfStockEnquiry({
-          product: product.name,
-          specs: attributeMode
-            ? product.attributes
-                .map((a) => {
-                  const v = a.values.find((vv) => vv.id === attrSelection[a.name]);
-                  return v ? `${a.name}: ${v.label}` : null;
-                })
-                .filter((s): s is string => !!s)
-            : [
-                size ? `${labels.size}: ${labelFor(product.sizes, size)}` : null,
-                material
-                  ? `${labels.material}: ${labelFor(product.materials, material)}`
-                  : null,
-                printing
-                  ? `Printing: ${labelFor(product.printing, printing)}`
-                  : null,
-              ].filter((s): s is string => !!s),
-          quantity,
-        }),
+        outOfStockEnquiry({ product: product.name, specs: displaySpecs, quantity }),
       )
     : null;
+
+  // In stock, but not enough for the quantity asked (2026-09-29): warn here,
+  // before Add to Cart, and offer Request restock. Unknown/untracked stock
+  // (`available === null`) never counts as short (fail open). The customer
+  // is never told the stock number (user decision).
+  const comboShort =
+    !!comboStock &&
+    comboStock.purchasable &&
+    quantity > 0 &&
+    shortfall(quantity, comboStock) !== null;
+  const restockTarget: RestockItem | null = combo
+    ? {
+        variantId: combo.variantId,
+        quantity: Math.max(quantity, 1),
+        productTitle: product.name,
+        variantLabel: displaySpecs.join(", ") || null,
+      }
+    : null;
+  const [restockItem, setRestockItem] = React.useState<RestockItem | null>(null);
 
   const images = React.useMemo(
     () => toProductImages(product.images, product.name, product.thumbnail),
@@ -387,6 +404,10 @@ export function ProductCustomizer({
     }
     if (comboOutOfStock) {
       setError("This option is currently out of stock.");
+      return false;
+    }
+    if (comboShort) {
+      setError(notEnoughStockMessage({ productTitle: product.name, quantity }));
       return false;
     }
     setError(null);
@@ -455,6 +476,8 @@ export function ProductCustomizer({
       quantity,
       setupPrintingValue: setupSelectionId,
       notes,
+      productTitle: product.name,
+      variantLabel: displaySpecs.join(", ") || null,
     });
     router.push("/cart");
   };
@@ -899,16 +922,46 @@ export function ProductCustomizer({
                         Reach out and we&apos;ll let you know when it&apos;s
                         back or help with lead time.
                       </span>
-                      {enquiryUrl && (
-                        <a
-                          href={enquiryUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-1 inline-flex w-fit items-center gap-2 rounded-button border border-line bg-background px-4 py-2 text-sm font-medium text-brand transition-colors hover:bg-line/30"
-                        >
-                          Ask about this on WhatsApp
-                        </a>
-                      )}
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {restockTarget && (
+                          <button
+                            type="button"
+                            onClick={() => setRestockItem(restockTarget)}
+                            className="inline-flex w-fit items-center gap-2 rounded-button bg-brand px-4 py-2 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
+                          >
+                            Request restock
+                          </button>
+                        )}
+                        {enquiryUrl && (
+                          <a
+                            href={enquiryUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex w-fit items-center gap-2 rounded-button border border-line bg-background px-4 py-2 text-sm font-medium text-brand transition-colors hover:bg-line/30"
+                          >
+                            Ask about this on WhatsApp
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {comboShort && restockTarget && (
+                    <div className="flex flex-col gap-2 rounded-option border border-[rgba(231,0,11,0.3)] bg-[rgba(231,0,11,0.06)] px-3.5 py-3 text-sm">
+                      <span className="font-semibold text-destructive">
+                        Not enough stock
+                      </span>
+                      <span className="text-muted">
+                        {notEnoughStockMessage({ productTitle: product.name, quantity })}{" "}
+                        Request a restock and our team will get back to you, or
+                        choose a smaller quantity.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRestockItem(restockTarget)}
+                        className="mt-1 inline-flex w-fit items-center gap-2 rounded-button bg-brand px-4 py-2 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
+                      >
+                        Request restock
+                      </button>
                     </div>
                   )}
                   <div className="mt-2 flex flex-col gap-2">
@@ -966,7 +1019,7 @@ export function ProductCustomizer({
             <button
               type="button"
               onClick={() => addToCart()}
-              disabled={selectionIncomplete || comboOutOfStock}
+              disabled={selectionIncomplete || comboOutOfStock || comboShort}
               className={cn(
                 "order-1 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button border px-6 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2 sm:w-auto",
                 justAdded
@@ -986,7 +1039,7 @@ export function ProductCustomizer({
             <button
               type="button"
               onClick={onBuyNowClick}
-              disabled={selectionIncomplete || comboOutOfStock}
+              disabled={selectionIncomplete || comboOutOfStock || comboShort}
               className="order-2 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3 sm:w-auto"
             >
               {pendingKind === "buy" && (
@@ -997,6 +1050,11 @@ export function ProductCustomizer({
           </div>
         </div>
       </div>
+
+      <RestockRequestDialog
+        item={restockItem}
+        onClose={() => setRestockItem(null)}
+      />
 
       {authOpen && combo && (
         <BuyNowAuthDialog

@@ -1,7 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { addConfiguredLineItem, getCartLineCount } from "@/lib/actions/cart";
+import {
+  addConfiguredLineItemOrShortfall,
+  getCartLineCount,
+} from "@/lib/actions/cart";
 import {
   onAddCommitRequested,
   settleOptimisticAdd,
@@ -24,12 +27,32 @@ export function CartAddAgent() {
     () =>
       onAddCommitRequested(async (req) => {
         try {
-          const cart = await addConfiguredLineItem({
+          const outcome = await addConfiguredLineItemOrShortfall({
             variantId: req.variantId,
             quantity: req.quantity,
             setupPrintingValue: req.setupPrintingValue,
             notes: req.notes,
           });
+          if (!outcome.ok) {
+            // Not enough stock: the cart page explains it and offers
+            // Request restock (2026-09-29).
+            settleOptimisticAdd({
+              ok: false,
+              stock: {
+                variantId: req.variantId,
+                quantity: req.quantity,
+                productTitle: req.productTitle ?? "this item",
+                variantLabel: req.variantLabel ?? null,
+              },
+            });
+            try {
+              notifyCartCount(await getCartLineCount());
+            } catch {
+              // Best-effort badge reconcile; the next navigation re-syncs it.
+            }
+            return;
+          }
+          const cart = outcome.cart;
           // Reconcile the badge to server truth (lines merge when the same
           // variant is added twice). cart:set — no second toast.
           notifyCartCount(cart?.items?.length ?? 0);
