@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { getCustomer } from "@/lib/actions/auth";
+import { getCustomer, getSignInMethods } from "@/lib/actions/auth";
 import { AccountSettings } from "@/components/account/account-settings";
 import { Reveal } from "@/components/motion/reveal";
 
@@ -19,6 +19,10 @@ export default async function AccountSettingsPage() {
   if (!customer) {
     redirect("/sign-in");
   }
+  // Unknown (lookup failed) → treat as having a password: the old forms,
+  // whose backend errors explain themselves.
+  const methods = await getSignInMethods();
+  const hasPassword = methods?.password ?? true;
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
@@ -42,7 +46,7 @@ export default async function AccountSettingsPage() {
       </Reveal>
 
       <Reveal>
-        <AccountSettings email={customer.email} />
+        <AccountSettings email={customer.email} hasPassword={hasPassword} />
       </Reveal>
     </div>
   );

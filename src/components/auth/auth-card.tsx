@@ -39,9 +39,12 @@ const initialAuthState: AuthState = { error: null };
 export function AuthCard({
   defaultTab = "signin",
   notice,
+  initialError,
 }: {
   defaultTab?: Tab;
   notice?: string;
+  /** An error to show before any submit (e.g. a failed Google sign-in). */
+  initialError?: string;
 }) {
   const [tab, setTab] = React.useState<Tab>(defaultTab);
   const [state, formAction, pending] = useActionState(
@@ -93,7 +96,7 @@ export function AuthCard({
           <form action={formAction} className="flex flex-col gap-4">
             <AuthFormBody
               tab={tab}
-              error={state.error}
+              error={state.error ?? initialError ?? null}
               pending={pending}
               submitLabel={tab === "signin" ? "Sign In" : "Create Account"}
             />

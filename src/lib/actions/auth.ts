@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk, createAuthClient, authHeaders } from "@/lib/medusa";
 import { AUTH_COOKIE, getAuthToken } from "@/lib/auth-token";
+import { setAuthToken, transferGuestCart } from "@/lib/auth-session";
 import { getCartLineCount } from "./cart";
 import {
   isValidEmail,
@@ -29,17 +30,6 @@ import {
  *   login → returns the real auth JWT (persisted in the cookie)
  */
 const CART_COOKIE = "pg_cart_id";
-// Must match the backend's jwtExpiresIn ("24h" in medusa-config.ts) — a cookie
-// that outlives the JWT just produces silent 401s until it's cleared.
-const AUTH_TTL_SECONDS = 60 * 60 * 24; // 24 hours
-
-const AUTH_COOKIE_OPTS = {
-  httpOnly: true as const,
-  sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production",
-  maxAge: AUTH_TTL_SECONDS,
-  path: "/",
-};
 
 export type AuthState = {
   error: string | null;
@@ -67,11 +57,6 @@ export type SignUpOutcome = { status: "ok" } | { status: "error"; error: string 
 // every signup-conflict path so the response can't be differentiated.
 const SIGNUP_FAILED =
   "We couldn't create an account with these details. If you already have an account, try signing in or resetting your password.";
-
-async function setAuthToken(token: string) {
-  const store = await cookies();
-  store.set(AUTH_COOKIE, token, AUTH_COOKIE_OPTS);
-}
 
 async function clearAuthToken() {
   try {
@@ -105,19 +90,6 @@ export async function getCustomer(): Promise<HttpTypes.StoreCustomer | null> {
       await clearAuthToken();
     }
     return null;
-  }
-}
-
-/** Best-effort: attach the guest cart to the now-authenticated customer. */
-async function transferGuestCart(token: string) {
-  try {
-    const store = await cookies();
-    const cartId = store.get(CART_COOKIE)?.value;
-    if (!cartId) return;
-    await sdk.store.cart.transferCart(cartId, {}, authHeaders(token));
-  } catch (err) {
-    // Non-fatal — the customer is still logged in; cart linkage can retry later.
-    console.error("[auth] cart transfer failed:", err);
   }
 }
 
@@ -852,6 +824,71 @@ export async function changeAccountPassword(
   }
 
   await setAuthToken(freshToken);
+  return { ok: true, error: null };
+}
+
+/** Which sign-in methods the signed-in account has (2026-09-29). Null when
+ *  unknown — the settings page then shows the password forms as before. */
+export async function getSignInMethods(): Promise<{
+  password: boolean;
+  google: boolean;
+} | null> {
+  const token = await getAuthToken();
+  if (!token) return null;
+  try {
+    return await sdk.client.fetch<{ password: boolean; google: boolean }>(
+      "/store/account/sign-in-methods",
+      { headers: authHeaders(token) }
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * "Set a password" for a Google-only account (2026-09-29): adds an email +
+ * password login so both sign-in methods work. The backend insists on a
+ * recent sign-in, so an old session gets told to sign in with Google again.
+ */
+export async function setAccountPassword(
+  _prev: AccountSettingsState,
+  formData: FormData
+): Promise<AccountSettingsState> {
+  const password = String(formData.get("password") || "");
+  const confirm = String(formData.get("confirm") || "");
+  if (password.length < 8) {
+    return { ok: false, error: "Password must be at least 8 characters." };
+  }
+  if (password !== confirm) {
+    return { ok: false, error: "Passwords don't match." };
+  }
+
+  const token = await getAuthToken();
+  if (!token) redirect("/sign-in");
+
+  try {
+    await sdk.client.fetch("/store/account/set-password", {
+      method: "POST",
+      body: { password },
+      headers: { ...authHeaders(token), ...(await storefrontHeaders()) },
+    });
+  } catch (err) {
+    console.error("[auth] set password failed:", err);
+    const status = (err as { status?: number })?.status;
+    if (status === 403) {
+      return {
+        ok: false,
+        error:
+          "For your security, please sign out and sign in with Google again, then set your password.",
+      };
+    }
+    return {
+      ok: false,
+      error: settingsError(err, "We couldn't set your password. Please try again."),
+    };
+  }
+
+  revalidatePath("/account/settings");
   return { ok: true, error: null };
 }
 
