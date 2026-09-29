@@ -57,6 +57,7 @@ export function DeliveryForm({
   embedded = false,
   accraOnly = false,
   pickupAvailable = false,
+  yangoLiveQuotes = false,
 }: {
   initial?: DeliveryInitial;
   /** Customer self-pickup (2026-09-22): rendered INSIDE the "Deliver to me"
@@ -70,6 +71,9 @@ export function DeliveryForm({
   accraOnly?: boolean;
   /** Pickup is offered on this page — the notice mentions it as the way out. */
   pickupAvailable?: boolean;
+  /** Settings → Platform → Delivery quotes → "Live quotes" is on: the only
+   *  time "Powered by Yango Delivery" shows (user rule, 2026-09-29). */
+  yangoLiveQuotes?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
@@ -342,7 +346,7 @@ export function DeliveryForm({
                   {accraOnly && " Delivery is currently available within Greater Accra only."}
                 </span>
               </p>
-              <PoweredByYango />
+              {yangoLiveQuotes && <PoweredByYango />}
             </div>
           </div>
 

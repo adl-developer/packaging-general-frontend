@@ -80,6 +80,9 @@ interface OrderConfirmationProps {
   /** Customer self-pickup (2026-09-22): labels the option "Collection" and
    *  tells the customer to wait for the ready-for-pickup message. */
   pickup?: boolean;
+  /** Settings → Platform → Delivery quotes → "Live quotes" is on: the only
+   *  time "Powered by Yango Delivery" shows (user rule, 2026-09-29). */
+  yangoLiveQuotes?: boolean;
   /** True when the visitor is already signed in — suppresses the
    *  "Create Your Account" dialog (they already have an account, and the
    *  order is linked to it server-side). */
@@ -99,6 +102,7 @@ export function OrderConfirmation({
   paymentProviderId,
   deliveryOption,
   pickup = false,
+  yangoLiveQuotes = false,
   isLoggedIn,
   accountStatus = "none",
 }: OrderConfirmationProps) {
@@ -157,7 +161,9 @@ export function OrderConfirmation({
               valueClassName="font-medium text-brand"
             />
           )}
-          {deliveryOption && !pickup && <PoweredByYango className="self-end" />}
+          {yangoLiveQuotes && deliveryOption && !pickup && (
+            <PoweredByYango className="self-end" />
+          )}
         </div>
 
         <div className="w-full max-w-[448px] rounded-option border border-line bg-line/30 p-[25px] text-left">

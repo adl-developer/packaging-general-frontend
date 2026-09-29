@@ -388,6 +388,7 @@ export function TrackOrder({
   initialEmail,
   openInvoice,
   loggedInEmail,
+  yangoLiveQuotes = false,
 }: {
   /** Opaque tracking token from emailed/SMS links (?t=…) — looked up
    *  immediately; no email/order number needed in the URL. */
@@ -400,6 +401,9 @@ export function TrackOrder({
   /** When set (signed-in customer), the email is applied automatically and the
    *  email field is hidden — the user only enters an order number. */
   loggedInEmail?: string;
+  /** Settings → Platform → Delivery quotes → "Live quotes" is on: the only
+   *  time "Powered by Yango Delivery" shows (user rule, 2026-09-29). */
+  yangoLiveQuotes?: boolean;
 }) {
   const isLoggedIn = Boolean(loggedInEmail);
   const [query, setQuery] = React.useState(initialQuery ?? "");
@@ -708,7 +712,7 @@ export function TrackOrder({
             transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
             className="flex flex-col gap-8"
           >
-            <OrderResult order={result} />
+            <OrderResult order={result} yangoLiveQuotes={yangoLiveQuotes} />
           </m.div>
         )}
       </AnimatePresence>
@@ -760,7 +764,13 @@ function NotFoundAlert({ query }: { query: string }) {
   );
 }
 
-function OrderResult({ order }: { order: TrackedOrder }) {
+function OrderResult({
+  order,
+  yangoLiveQuotes,
+}: {
+  order: TrackedOrder;
+  yangoLiveQuotes: boolean;
+}) {
   return (
     <>
       {/* Status timeline */}
@@ -993,7 +1003,9 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                 )}
               </div>
             )}
-            {!order.pickup && <PoweredByYango className="mt-3" />}
+            {yangoLiveQuotes && !order.pickup && (
+              <PoweredByYango className="mt-3" />
+            )}
           </DetailBlock>
 
           <DetailBlock title="Pricing Summary">

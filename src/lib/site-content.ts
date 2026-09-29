@@ -69,6 +69,8 @@ interface SiteContentResponse {
   levies?: unknown;
   /** Greater Accra only switch — absent on a backend before 2026-09-24. */
   delivery_area?: { accra_only?: unknown };
+  /** Delivery quotes "Live quotes" switch — absent on a backend before 2026-09-29. */
+  yango_delivery?: { live_quotes?: unknown };
 }
 
 interface SiteContentState {
@@ -83,6 +85,9 @@ interface SiteContentState {
   levies: LevyPoints | null;
   /** Null when the backend didn't say — callers use the backend's default (ON). */
   accraOnly: boolean | null;
+  /** Delivery quotes "Live quotes" switch. False when the backend didn't say:
+   *  the badge makes a claim, so unknown never shows it. */
+  yangoLiveQuotes: boolean;
 }
 
 /** Last-known-good copy, served only when the backend is unreachable. The
@@ -99,6 +104,7 @@ const EMPTY: SiteContentState = {
   about: null,
   levies: null,
   accraOnly: null,
+  yangoLiveQuotes: false,
 };
 
 function mapDoc(
@@ -131,6 +137,7 @@ const cachedSiteContent = unstable_cache(
         typeof res.delivery_area?.accra_only === "boolean"
           ? res.delivery_area.accra_only
           : null,
+      yangoLiveQuotes: res.yango_delivery?.live_quotes === true,
     };
   },
   ["site-content"],
@@ -178,6 +185,13 @@ export async function getLevies(): Promise<LevyPoints> {
  *  Unknown (older backend, unreachable) → true, the backend's own default. */
 export async function getDeliveryAreaAccraOnly(): Promise<boolean> {
   return (await getSiteContent()).accraOnly ?? true;
+}
+
+/** Is Settings → Platform → Delivery quotes → "Live quotes" on? The
+ *  "Powered by Yango Delivery" badge shows only then (user rule, 2026-09-29);
+ *  unknown → no badge. */
+export async function getYangoLiveQuotes(): Promise<boolean> {
+  return (await getSiteContent()).yangoLiveQuotes;
 }
 
 /** The About Us page content — the backend's (admin-editable) version when
