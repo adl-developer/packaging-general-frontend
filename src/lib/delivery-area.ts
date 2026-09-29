@@ -25,7 +25,7 @@ const PREVIOUS_OUTSIDE_MESSAGES = [
   "We currently deliver only within Greater Accra. To order for delivery elsewhere in Ghana, please contact us.",
 ];
 
-export const SUPPORT_EMAIL = "info@packaginggeneral.com";
+export { SUPPORT_EMAIL } from "./whatsapp";
 
 const EARTH_RADIUS_M = 6_371_000;
 const RAD = Math.PI / 180;
