@@ -1,7 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { useFormStatus } from "react-dom";
 import Link from "next/link";
+import { startGoogleSignIn } from "@/lib/actions/google-auth";
+import { GOOGLE_SIGN_IN_ENABLED } from "@/lib/google-sign-in";
 import { AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
 import { LazyMotion, domMax, m } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -80,26 +83,47 @@ export function AuthTabs({
   );
 }
 
-/** Social providers + "Or continue with email" divider.
- *  ⚠ The Google button is not wired to anything — it never has been. Kept for
- *  visual parity with /sign-in; wire it or hide it before launch. */
+/** Social providers + "Or continue with email" divider (2026-09-29: Google is
+ *  live). Renders nothing until the build has NEXT_PUBLIC_GOOGLE_SIGN_IN=true
+ *  — see lib/google-sign-in.ts. Its own <form>, so it must stay OUTSIDE the
+ *  caller's email form (forms can't nest). */
 export function AuthSocialRow({
   dividerBackground,
+  next,
 }: {
   /** Background of the panel the row sits on — the divider label masks the
    *  rule with it, so it must match or the label shows as a pill. */
   dividerBackground?: string;
+  /** Path to land on after signing in; defaults to the orders page. */
+  next?: string;
 }) {
+  if (!GOOGLE_SIGN_IN_ENABLED) return null;
   return (
     <>
-      <div className="flex flex-col gap-3">
-        <button type="button" className={socialButton}>
-          <GoogleIcon />
-          Continue with Google
-        </button>
-      </div>
+      <form action={startGoogleSignIn} className="flex flex-col gap-3">
+        {next && <input type="hidden" name="next" value={next} />}
+        <GoogleButton />
+      </form>
       <Divider label="Or continue with email" background={dividerBackground} />
     </>
+  );
+}
+
+function GoogleButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className={cn(socialButton, "disabled:opacity-60")}
+    >
+      {pending ? (
+        <Loader2 className="size-4 animate-spin" aria-hidden />
+      ) : (
+        <GoogleIcon />
+      )}
+      Continue with Google
+    </button>
   );
 }
 

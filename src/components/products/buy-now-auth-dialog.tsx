@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import { AnimatePresence, m } from "motion/react";
 import { AlertCircle, CheckCircle2, Loader2, MailCheck, X } from "lucide-react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
@@ -50,6 +51,7 @@ export function BuyNowAuthDialog({
   onContinue: (route: ContinueRoute, notice?: string) => void;
 }) {
   const [tab, setTab] = React.useState<AuthTab>("signup");
+  const pathname = usePathname();
   const [state, formAction, pending] = React.useActionState(
     buyNowAuth,
     INITIAL_BUY_NOW_AUTH_STATE,
@@ -154,7 +156,9 @@ export function BuyNowAuthDialog({
                 onTabChange={setTab}
                 layoutId="buyNowAuthTabPill"
               />
-              <AuthSocialRow dividerBackground="bg-background" />
+              {/* Google leaves the page, so the chosen item can't ride along;
+                  bring them back to this product to finish. */}
+              <AuthSocialRow dividerBackground="bg-background" next={pathname} />
               <form action={formAction} className="flex flex-col gap-4">
                 <AuthFormBody
                   tab={tab}
