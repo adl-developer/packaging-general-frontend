@@ -26,3 +26,19 @@ export function isDeadVariantError(err: unknown): boolean {
   if (typeof message !== "string") return false;
   return /variants?\b.*\bdo(?:es)? not exist/i.test(message);
 }
+
+/**
+ * True when Medusa refused the add because there isn't enough stock
+ * (2026-09-29). Its wording (core-flows confirm-inventory step):
+ *   "Some variant does not have the required inventory"
+ *
+ * Like a dead variant, this is about the LINE, not the cart: the cart must
+ * NOT be cleared (it was, and silently emptied the shopper's other items).
+ */
+export function isInsufficientInventoryError(err: unknown): boolean {
+  const message = (err as { message?: unknown })?.message;
+  if (typeof message !== "string") return false;
+  return /(does not have the required inventory|insufficient inventory|not enough (?:stock|inventory))/i.test(
+    message,
+  );
+}

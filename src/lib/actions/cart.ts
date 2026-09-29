@@ -4,7 +4,10 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk } from "@/lib/medusa";
-import { isDeadVariantError } from "@/lib/cart-errors";
+import {
+  isDeadVariantError,
+  isInsufficientInventoryError,
+} from "@/lib/cart-errors";
 import { goodsLines, syncPlatformFee } from "@/lib/platform-fee";
 
 /**
@@ -464,6 +467,8 @@ async function ensureCartId(): Promise<string> {
  */
 async function clearStaleCartOn4xx(err: unknown): Promise<void> {
   if (isDeadVariantError(err)) return;
+  // Not enough stock is about the line too (2026-09-29) — keep the cart.
+  if (isInsufficientInventoryError(err)) return;
   const status = (err as { status?: number })?.status;
   if (typeof status === "number" && status >= 400 && status < 500) {
     await clearCartId();
@@ -604,6 +609,29 @@ export async function addConfiguredLineItem(input: {
   revalidatePath("/cart");
   revalidatePath("/checkout");
   return await withPlatformFee(updated, CART_MUTATION_FIELDS);
+}
+
+/**
+ * `addConfiguredLineItem` for the optimistic Add to Cart (CartAddAgent), with
+ * "not enough stock" RETURNED instead of thrown (2026-09-29). A thrown
+ * server-action error reaches the client with its message stripped in
+ * production, so the cart page could never tell a stock problem from any
+ * other failure — and needs to, to offer Request restock.
+ */
+export async function addConfiguredLineItemOrShortfall(
+  input: Parameters<typeof addConfiguredLineItem>[0],
+): Promise<
+  | { ok: true; cart: HttpTypes.StoreCart | null }
+  | { ok: false; reason: "insufficient_stock" }
+> {
+  try {
+    return { ok: true, cart: await addConfiguredLineItem(input) };
+  } catch (err) {
+    if (isInsufficientInventoryError(err)) {
+      return { ok: false, reason: "insufficient_stock" };
+    }
+    throw err;
+  }
 }
 
 /** Set a line item's quantity. Quantity ≤ 0 removes the line. */

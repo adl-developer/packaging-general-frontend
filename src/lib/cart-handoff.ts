@@ -24,7 +24,18 @@ import type { CartItem } from "@/app/(shop)/cart/map-cart";
  * after idle) on the normal fetch path.
  */
 
-export type AddSettleResult = { ok: true; items: CartItem[] } | { ok: false };
+/** What the cart page needs to explain a stock refusal and offer Request
+ *  restock (2026-09-29). Absent on any other failure. */
+export type AddStockShortfall = {
+  variantId: string;
+  quantity: number;
+  productTitle: string;
+  variantLabel?: string | null;
+};
+
+export type AddSettleResult =
+  | { ok: true; items: CartItem[] }
+  | { ok: false; stock?: AddStockShortfall };
 
 type PendingAdd = {
   optimisticItems: CartItem[];
@@ -99,6 +110,9 @@ export interface AddCommitRequest {
   quantity: number;
   setupPrintingValue?: string | null;
   notes?: string;
+  /** For the cart page's "not enough stock" banner + Request restock. */
+  productTitle?: string;
+  variantLabel?: string | null;
 }
 
 let pendingRequest: AddCommitRequest | null = null;

@@ -21,10 +21,13 @@ import { takeReorderNotice } from "@/lib/reorder-notice";
 import {
   addLineItem,
   emptyCart as emptyCartAction,
+  getCart,
   removeLineItem,
   updateLineItemQuantity,
 } from "@/lib/actions/cart";
 import { shortfall, type StockState } from "@/lib/stock-rules";
+import { notEnoughStockMessage } from "@/lib/restock";
+import { RestockRequestDialog } from "@/components/products/restock-request-dialog";
 import { mapLineItem, TAX_RATE, type CartItem } from "./map-cart";
 import { CartSkeleton } from "./cart-skeleton";
 import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-progress";
@@ -32,6 +35,7 @@ import {
   isOptimisticLine,
   onAddSettled,
   takeOptimisticAdd,
+  type AddStockShortfall,
 } from "@/lib/cart-handoff";
 import type { CrossSellProduct } from "@/lib/products";
 import type { ActivePromotion, PromoBanner } from "@/lib/promotions";
@@ -194,15 +198,48 @@ function ConfirmDialog({
   );
 }
 
-/** Shown when a background add commit failed and its lines were rolled back. */
-function AddFailedBanner() {
+/** Shown when a background add commit failed and its lines were rolled back.
+ *  A stock refusal (2026-09-29) says so, without revealing how many are in
+ *  stock, and offers Request restock; any other failure keeps the generic
+ *  "try again" copy. */
+function AddFailedBanner({ stock }: { stock: AddStockShortfall | null }) {
+  const [restockOpen, setRestockOpen] = React.useState(false);
+  if (!stock) {
+    return (
+      <div
+        role="alert"
+        className="rounded-card border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive"
+      >
+        We couldn&apos;t add your item to the cart. Please go back to the product
+        and try again.
+      </div>
+    );
+  }
   return (
     <div
       role="alert"
-      className="rounded-card border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive"
+      className="flex flex-col gap-3 rounded-card border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
     >
-      We couldn&apos;t add your item to the cart. Please go back to the product
-      and try again.
+      <div className="flex flex-col gap-1">
+        <span className="font-medium text-destructive">
+          {notEnoughStockMessage(stock)}
+        </span>
+        <span className="text-muted">
+          Request a restock and our team will get back to you, or choose a
+          smaller quantity.
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={() => setRestockOpen(true)}
+        className="inline-flex h-10 shrink-0 items-center justify-center rounded-button bg-brand px-4 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+      >
+        Request restock
+      </button>
+      <RestockRequestDialog
+        item={restockOpen ? stock : null}
+        onClose={() => setRestockOpen(false)}
+      />
     </div>
   );
 }
@@ -462,6 +499,9 @@ export function CartClient({
   // An optimistic add's commit failed → its lines were rolled back; tell the
   // shopper instead of silently losing the item.
   const [addFailed, setAddFailed] = React.useState(false);
+  // Set when the failure was "not enough stock" (2026-09-29).
+  const [stockShortfall, setStockShortfall] =
+    React.useState<AddStockShortfall | null>(null);
   // A reorder capped or skipped a line — the message computed server-side by
   // reorderOrder, handed over via reorder-notice.ts. Null on every other
   // arrival at /cart (direct visit, normal add-to-cart, empty order). Lazy
@@ -679,6 +719,7 @@ export function CartClient({
       // base. Hydration isn't final until adoptServerFetch resolves, so
       // adoptedRef latches there, not here.
       setAddFailed(true);
+      setStockShortfall(pending.result.ok ? null : pending.result.stock ?? null);
       adoptServerFetch();
     } else {
       // Mode 1 — instant paint, base merge behind it. Already hydrated via
@@ -717,12 +758,40 @@ export function CartClient({
           );
           setHydrated(true);
           setAddFailed(false);
+          setStockShortfall(null);
         } else {
           // Roll the optimistic lines back; the base fetch (if still pending)
           // may continue and fill in the real cart.
           setItems((xs) => xs.filter((x) => !isOptimisticLine(x.id)));
           setHydrated(true);
           setAddFailed(true);
+          setStockShortfall(result.stock ?? null);
+          // The base snapshot was rendered at navigation time, racing this
+          // add, so it can predate lines already in the cart; with the
+          // optimistic lines gone the page read "Your cart is empty" over a
+          // full cart (seen 2026-09-29). Re-read the cart and adopt it the
+          // way a successful commit is adopted (a refresh wouldn't do: the
+          // mount effect deliberately ignores new snapshots once adopted).
+          getCart({ sync: false })
+            .then((cart) => {
+              if (!cart) return;
+              const truth = (cart.items ?? []).map(mapLineItem);
+              for (const it of truth) {
+                if (!qtyDirty.current.has(it.id)) {
+                  qtyTarget.current.set(it.id, it.quantity);
+                }
+                qtyConfirmed.current.set(it.id, it.quantity);
+              }
+              setItems(
+                truth.map((it) => {
+                  const dirty = qtyDirty.current.get(it.id);
+                  return dirty != null ? { ...it, quantity: dirty } : it;
+                }),
+              );
+            })
+            .catch(() => {
+              // Keep what's shown; a reload re-syncs.
+            });
         }
       }),
     []
@@ -930,7 +999,7 @@ export function CartClient({
         />
         {(addFailed || reorderNotice) && (
           <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 pt-8 sm:px-6 lg:px-8">
-            {addFailed && <AddFailedBanner />}
+            {addFailed && <AddFailedBanner stock={stockShortfall} />}
             {reorderNotice && <ReorderNoticeBanner message={reorderNotice} />}
           </div>
         )}
@@ -983,7 +1052,7 @@ export function CartClient({
           </div>
         </div>
 
-        {addFailed && <AddFailedBanner />}
+        {addFailed && <AddFailedBanner stock={stockShortfall} />}
         {reorderNotice && <ReorderNoticeBanner message={reorderNotice} />}
 
         <div className="flex flex-col gap-4">
