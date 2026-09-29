@@ -35,6 +35,7 @@ import {
 import { InvoiceDialog, type InvoiceData } from "./invoice-dialog";
 import type { PickupLocation } from "@/lib/pickup";
 import { ChargeRows } from "@/components/charge-rows";
+import { PoweredByYango } from "@/components/delivery/powered-by-yango";
 import { coerceRows, type ChargeRow } from "@/lib/charge-breakdown";
 import {
   coerceCourier,
@@ -992,6 +993,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                 )}
               </div>
             )}
+            {!order.pickup && <PoweredByYango className="mt-3" />}
           </DetailBlock>
 
           <DetailBlock title="Pricing Summary">

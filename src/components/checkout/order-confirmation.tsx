@@ -30,6 +30,7 @@ import {
 } from "@/lib/actions/auth";
 import { ChargeRows } from "@/components/charge-rows";
 import type { ChargeRow } from "@/lib/charge-breakdown";
+import { PoweredByYango } from "@/components/delivery/powered-by-yango";
 
 /**
  * Payment Successful confirmation page + Create-Your-Account modal (Figma
@@ -156,6 +157,7 @@ export function OrderConfirmation({
               valueClassName="font-medium text-brand"
             />
           )}
+          {deliveryOption && !pickup && <PoweredByYango className="self-end" />}
         </div>
 
         <div className="w-full max-w-[448px] rounded-option border border-line bg-line/30 p-[25px] text-left">
