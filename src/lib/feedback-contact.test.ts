@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { contactFromCustomer, normalizeFeedbackContact } from "./feedback-contact";
+import {
+  contactFromCustomer,
+  mergeContactPrefill,
+  normalizeFeedbackContact,
+} from "./feedback-contact";
 
 describe("normalizeFeedbackContact", () => {
   it("all blank → ok with no contact (anonymous report)", () => {
@@ -42,5 +46,33 @@ describe("contactFromCustomer", () => {
 
   it("signed out → all empty", () => {
     expect(contactFromCustomer(null)).toEqual({ name: "", phone: "", email: "" });
+  });
+});
+
+describe("mergeContactPrefill", () => {
+  const empty = { name: "", phone: "", email: "" };
+  const ama = { name: "Ama Mensah", phone: "0241234567", email: "ama@shop.gh" };
+
+  it("fills an untouched form from the account", () => {
+    expect(mergeContactPrefill(empty, empty, ama)).toEqual(ama);
+  });
+
+  it("keeps what the reporter typed before the prefill arrived", () => {
+    expect(mergeContactPrefill({ ...empty, name: "Kofi" }, empty, ama)).toEqual({ ...ama, name: "Kofi" });
+  });
+
+  it("keeps an edit or a deliberate clear on the next open", () => {
+    expect(mergeContactPrefill({ ...ama, phone: "", email: "work@co.gh" }, ama, ama)).toEqual({
+      ...ama,
+      phone: "",
+      email: "work@co.gh",
+    });
+  });
+
+  it("signing out clears only the fields the old account filled", () => {
+    expect(mergeContactPrefill({ ...ama, email: "work@co.gh" }, ama, empty)).toEqual({
+      ...empty,
+      email: "work@co.gh",
+    });
   });
 });

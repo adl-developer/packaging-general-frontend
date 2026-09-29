@@ -43,6 +43,25 @@ export function normalizeFeedbackContact(
   return { ok: true, contact: Object.keys(contact).length ? contact : undefined };
 }
 
+/**
+ * Apply a fresh account prefill without trampling the reporter's edits.
+ * A field still holding the previous prefill (i.e. untouched) takes the new
+ * value; anything the reporter typed or cleared is kept. So signing in after
+ * the first open fills the form, and signing out clears only the fields the
+ * old account filled in.
+ */
+export function mergeContactPrefill(
+  current: Required<FeedbackContact>,
+  previous: Required<FeedbackContact>,
+  next: Required<FeedbackContact>,
+): Required<FeedbackContact> {
+  return {
+    name: current.name === previous.name ? next.name : current.name,
+    phone: current.phone === previous.phone ? next.phone : current.phone,
+    email: current.email === previous.email ? next.email : current.email,
+  };
+}
+
 /** Prefill for a signed-in customer; the reporter can still edit or clear it. */
 export function contactFromCustomer(
   customer: {

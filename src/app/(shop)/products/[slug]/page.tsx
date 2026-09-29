@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getProductBySlug } from "@/lib/catalog";
 import { getStockForProduct } from "@/lib/stock";
 import { getCustomer } from "@/lib/actions/auth";
+import { getLevies } from "@/lib/site-content";
 import {
   LiveProductCustomizer,
   type StockByVariant,
@@ -29,7 +30,10 @@ export default async function ProductDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  // `getLevies` rides the site-content cache (1 h, dropped on a Settings →
+  // Platform save), read alongside the cached product: it prices the tax
+  // line under the customizer's estimated total.
+  const [product, levies] = await Promise.all([getProductBySlug(slug), getLevies()]);
   if (!product) notFound();
 
   // The two per-request backend reads start here and are deliberately NOT
@@ -63,6 +67,7 @@ export default async function ProductDetailPage({
   return (
     <LiveProductCustomizer
       product={product}
+      levies={levies}
       stock={stock}
       isSignedIn={isSignedIn}
     />

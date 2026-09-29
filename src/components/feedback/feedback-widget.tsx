@@ -9,7 +9,11 @@ import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { Input, Label, FieldError } from "@/components/ui/input";
 import { getFeedbackPrefill, sendFeedback } from "@/lib/actions/feedback";
-import { CONTACT_LIMITS, normalizeFeedbackContact } from "@/lib/feedback-contact";
+import {
+  CONTACT_LIMITS,
+  mergeContactPrefill,
+  normalizeFeedbackContact,
+} from "@/lib/feedback-contact";
 import {
   captureBrowserContext,
   installErrorRecorder,
@@ -22,8 +26,9 @@ import {
  * A "Send Feedback" text pill (2026-09-28: was a round icon-only button; the
  * user wanted it obvious what it is) fixed bottom-LEFT — the cart toast owns bottom-right on
  * desktop and bottom-centre on mobile, so this corner is the one that never
- * collides with it. Click → small card with Title, Message, optional Name / Phone /
- * Email (2026-09-28, prefilled for a signed-in customer), Submit. On
+ * collides with it. Click → small card with optional Title, required Message
+ * (2026-09-29: only the message is required), optional Name / Phone / Email
+ * (2026-09-28, prefilled for a signed-in customer on every open), Submit. On
  * success a "Feedback sent" state shows for `SENT_MS`, then the card dismisses
  * back to the round button. Escape and clicking the backdrop close it.
  *
@@ -44,7 +49,7 @@ export function FeedbackWidget() {
   const [message, setMessage] = React.useState("");
   const [contact, setContact] = React.useState({ name: "", phone: "", email: "" });
   const [error, setError] = React.useState<string | null>(null);
-  const prefilled = React.useRef(false);
+  const lastPrefill = React.useRef({ name: "", phone: "", email: "" });
   const titleRef = React.useRef<HTMLInputElement>(null);
   const sentTimer = React.useRef<number | null>(null);
 
@@ -70,22 +75,16 @@ export function FeedbackWidget() {
   const open = () => {
     setError(null);
     setPhase("open");
-    // First open only: fill the contact fields from the signed-in account.
-    // Never overwrites something the reporter already typed.
-    if (!prefilled.current) {
-      prefilled.current = true;
-      getFeedbackPrefill()
-        .then((p) =>
-          setContact((c) => ({
-            name: c.name || p.name,
-            phone: c.phone || p.phone,
-            email: c.email || p.email,
-          })),
-        )
-        .catch(() => {
-          prefilled.current = false;
-        });
-    }
+    // Every open: fill the contact fields from the signed-in account, so a
+    // sign-in (or sign-out) since the last open is picked up. Only fields the
+    // reporter hasn't touched change (`mergeContactPrefill`).
+    getFeedbackPrefill()
+      .then((p) => {
+        const previous = lastPrefill.current;
+        lastPrefill.current = p;
+        setContact((c) => mergeContactPrefill(c, previous, p));
+      })
+      .catch(() => {});
   };
 
   const setField =
@@ -111,8 +110,8 @@ export function FeedbackWidget() {
     if (phase !== "open") return;
     const t = title.trim();
     const msg = message.trim();
-    if (!t || !msg) {
-      setError("Please add a title and a message.");
+    if (!msg) {
+      setError("Please add a message.");
       return;
     }
     const checked = normalizeFeedbackContact(contact);
@@ -238,7 +237,10 @@ export function FeedbackWidget() {
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="feedback-subject">Title</Label>
+                    <Label htmlFor="feedback-subject">
+                      Title{" "}
+                      <span className="font-normal text-muted">(optional)</span>
+                    </Label>
                     <Input
                       ref={titleRef}
                       id="feedback-subject"
@@ -248,7 +250,6 @@ export function FeedbackWidget() {
                       onChange={(e) => setTitle(e.target.value)}
                       placeholder="What's this about?"
                       disabled={phase === "sending"}
-                      required
                     />
                   </div>
 

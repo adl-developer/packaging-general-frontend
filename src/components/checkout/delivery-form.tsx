@@ -331,11 +331,13 @@ export function DeliveryForm({
           >
             <CalendarClock className="mt-0.5 size-4 shrink-0 text-plum" aria-hidden />
             <p className="leading-snug">
-              <span className="font-medium">Arrives in 2–3 business days.</span>{" "}
+              <span className="font-medium">
+                Your order will arrive within 2–3 business days.
+              </span>{" "}
               <span className="text-muted">
-                We schedule pickup with Yango Delivery the next business morning;
-                you can track the courier from your order page.
-                {accraOnly && " We currently deliver within Greater Accra only."}
+                Once your order is ready for delivery, you’ll be able to track
+                your courier directly from your order page.
+                {accraOnly && " Delivery is currently available within Greater Accra only."}
               </span>
             </p>
           </div>

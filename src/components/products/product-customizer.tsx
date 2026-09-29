@@ -24,6 +24,7 @@ import { buyNow } from "@/lib/actions/checkout";
 import { beginOptimisticAdd, requestAddCommit } from "@/lib/cart-handoff";
 import { setReorderNotice } from "@/lib/reorder-notice";
 import { TAX_RATE, type CartItem } from "@/app/(shop)/cart/map-cart";
+import { formatRate, STATUTORY_LEVIES, type LevyPoints } from "@/lib/charge-breakdown";
 import { m } from "motion/react";
 import { SPRING_TAP } from "@/lib/motion";
 import { notifyCartAdd } from "@/lib/cart-events";
@@ -64,10 +65,14 @@ const SECTION_ORDER = Object.keys(SECTION_LABELS) as StorefrontSection[];
  */
 export function ProductCustomizer({
   product,
+  levies = STATUTORY_LEVIES,
   stock,
   isSignedIn,
 }: {
   product: Product;
+  /** Configured VAT / NHIL / GETFund split (Settings → Platform), shown as
+   *  ONE combined tax line under the estimated total (user, 2026-09-29). */
+  levies?: LevyPoints;
   /** Live stock keyed by VARIANT id — a plain object because this crosses the
    *  server/client boundary from the page (Maps don't serialise that way).
    *  A missing key means unknown, which is treated as in stock (fail open). */
@@ -281,6 +286,11 @@ export function ProductCustomizer({
     ? (attrSetupValue?.setupFee ?? 0)
     : (selectedPrinting?.setupFee ?? 0);
   const estimatedTotal = unitPrice * quantity + setupFee;
+  // VAT + NHIL + GETFund as one line (user, 2026-09-29), e.g. 20% of a
+  // GH₵ 100 total → GH₵ 20. A preview: Medusa computes the charged tax per
+  // line at checkout.
+  const taxPoints = levies.vat + levies.nhil + levies.getfund;
+  const estimatedTax = Math.round(estimatedTotal * taxPoints) / 100;
 
   // Out-of-stock is a SEPARATE, parallel concept from the sparse-combo
   // availability system above (availableMaterials / facetAvailable /
@@ -865,8 +875,17 @@ export function ProductCustomizer({
                         <span>Estimated total</span>
                         <span>{formatGhs(estimatedTotal)}</span>
                       </span>
+                      {taxPoints > 0 && (
+                        <span className="flex justify-between text-muted">
+                          <span>
+                            Taxes (VAT, NHIL, GETFund{" "}
+                            {formatRate(taxPoints)}%)
+                          </span>
+                          <span>{formatGhs(estimatedTax)}</span>
+                        </span>
+                      )}
                       <span className="text-xs text-muted">
-                        Excludes tax and delivery. Final totals at checkout.
+                        Excludes delivery. Final totals at checkout.
                       </span>
                     </div>
                   )}

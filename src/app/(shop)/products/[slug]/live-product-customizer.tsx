@@ -3,6 +3,7 @@
 import * as React from "react";
 import { ProductCustomizer } from "@/components/products/product-customizer";
 import type { Product } from "@/lib/products";
+import type { LevyPoints } from "@/lib/charge-breakdown";
 import type { StockState } from "@/lib/stock-rules";
 
 /** Live stock keyed by VARIANT id — the shape of the customizer's `stock`. */
@@ -43,10 +44,12 @@ export type StockByVariant = Record<string, StockState>;
  */
 export function LiveProductCustomizer({
   product,
+  levies,
   stock,
   isSignedIn,
 }: {
   product: Product;
+  levies: LevyPoints;
   stock: Promise<StockByVariant>;
   isSignedIn: Promise<boolean>;
 }) {
@@ -56,6 +59,7 @@ export function LiveProductCustomizer({
     <>
       <ProductCustomizer
         product={product}
+        levies={levies}
         stock={liveStock}
         isSignedIn={signedIn}
       />
