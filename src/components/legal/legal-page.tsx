@@ -1,5 +1,9 @@
 import { cn } from "@/lib/utils";
-import { SUPPORT_PHONE, SUPPORT_PHONE_DISPLAY } from "@/lib/whatsapp";
+import {
+  SUPPORT_EMAIL,
+  SUPPORT_PHONE,
+  SUPPORT_PHONE_DISPLAY,
+} from "@/lib/whatsapp";
 
 /**
  * Shared layout primitives for the legal pages (/terms, /privacy).
@@ -111,11 +115,8 @@ export function LegalContactCard({ intro }: { intro: string }) {
       <p className="mt-3 text-[15px] leading-7">{intro}</p>
       <p className="mt-3 text-[15px] leading-7">
         Email:{" "}
-        <a
-          href="mailto:info@packaginggeneral.com"
-          className="underline hover:text-rust"
-        >
-          info@packaginggeneral.com
+        <a href={`mailto:${SUPPORT_EMAIL}`} className="underline hover:text-rust">
+          {SUPPORT_EMAIL}
         </a>
         <br />
         Phone / WhatsApp:{" "}

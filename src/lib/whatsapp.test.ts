@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  SUPPORT_EMAIL,
   SUPPORT_PHONE,
   SUPPORT_PHONE_DISPLAY,
   buildWhatsappUrl,
@@ -8,6 +9,9 @@ import {
 } from "./whatsapp";
 
 describe("support line", () => {
+  it("uses hello@ as the public contact email", () => {
+    expect(SUPPORT_EMAIL).toBe("hello@packaginggeneral.com");
+  });
   it("is the official Packaging General number", () => {
     expect(SUPPORT_PHONE).toBe("+233591207616");
     expect(SUPPORT_PHONE_DISPLAY.replace(/\s/g, "")).toBe(SUPPORT_PHONE);

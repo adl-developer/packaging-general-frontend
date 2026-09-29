@@ -7,6 +7,9 @@
 export const SUPPORT_PHONE = "+233591207616";
 export const SUPPORT_PHONE_DISPLAY = "+233 59 120 7616";
 
+/** The public "contact PG" email (client, 2026-09-29; was info@). */
+export const SUPPORT_EMAIL = "hello@packaginggeneral.com";
+
 /**
  * Build a wa.me link, or null when no number is given.
  *
