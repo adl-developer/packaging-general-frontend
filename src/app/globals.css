@@ -71,8 +71,9 @@
   /* Hero filmstrip: constant-velocity infinite scroll. The track renders two
      identical halves and slides exactly one half-width (-50%), so the loop
      resets on an identical frame and reads as seamless/infinite. `linear`
-     timing keeps the speed constant (no pulsing at the loop boundary). */
-  --animate-marquee: marquee 50s linear infinite;
+     timing keeps the speed constant (no pulsing at the loop boundary).
+     Duration scales with the half-width (hero.tsx): 5376px / 67s ≈ 80px/s. */
+  --animate-marquee: marquee 67s linear infinite;
   @keyframes marquee {
     from {
       transform: translateX(0);

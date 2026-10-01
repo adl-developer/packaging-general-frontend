@@ -37,18 +37,25 @@ export function WhyUs() {
         </p>
       </Reveal>
 
-      {/* Full-width photo band with a 60% black overlay holding the features.
-          User preference: keep the photo bg on mobile too (same as desktop). */}
-      <div className="relative isolate w-full overflow-hidden bg-dark">
+      {/* Full-width photo band with a 75% black overlay holding the features
+          (raised from 60% on 2026-10-01 so the copy reads clearly over the
+          light kraft boxes).
+          User preference: keep the photo bg on mobile too (same as desktop).
+          The image is the pizza-box photo centred on a wide canvas whose sides
+          continue its green backdrop. The canvas is 2.76:1, so on desktop the
+          band shows the hands + boxes (object-position keeps them in view) and on
+          mobile the tall band shows the whole person. The bg colour is that
+          green, in case the image is slow to load. */}
+      <div className="relative isolate w-full overflow-hidden bg-[#00804a]">
         <Image
-          src="/home/worker-assembling.jpg"
+          src="/home/why-us-pizza-boxes.jpg"
           alt=""
           fill
           sizes="100vw"
-          className="-z-10 object-cover"
+          className="-z-10 object-cover object-[50%_80%]"
           aria-hidden
         />
-        <div className="absolute inset-0 -z-10 bg-black/60" aria-hidden />
+        <div className="absolute inset-0 -z-10 bg-black/75" aria-hidden />
         <Stagger className="mx-auto grid max-w-5xl grid-cols-1 gap-8 px-4 py-10 sm:grid-cols-3">
           {features.map(({ icon: Icon, title, description }) => (
             <StaggerItem

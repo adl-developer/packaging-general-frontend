@@ -5,19 +5,24 @@ import { Reveal } from "@/components/motion/reveal";
 
 // Full-bleed filmstrip (Figma: 320×256 each, white mat border 16px top/bottom,
 // 8px left/right), scrolling infinitely. Each cell is 336px wide (320 + 8px
-// border per side). One "half" repeats the 3 photos 4× (12 cells ≈ 4032px) so
+// border per side). One "half" repeats the 8 photos 2× (16 cells ≈ 5376px) so
 // it spans even ultra-wide viewports without gaps; the track renders the half
 // twice and animate-marquee slides it by exactly one half-width for a seamless
-// loop. See --animate-marquee / @keyframes marquee in globals.css.
+// loop. See --animate-marquee / @keyframes marquee in globals.css (its
+// duration is tied to this half-width).
+// The sources are portrait and the cells landscape, so `position` picks which
+// band of each photo the cell keeps (object-position).
 const photos = [
-  { src: "/home/worker-assembling.jpg", alt: "Worker assembling packaging boxes" },
-  { src: "/home/workers-facility.jpg", alt: "Workers in a packaging facility" },
-  {
-    src: "/home/warehouse-qc.jpg",
-    alt: "Warehouse worker quality-checking packages",
-  },
+  { src: "/home/strip-food-box-cup.jpg", position: "50% 50%" },
+  { src: "/home/strip-apparel-box.jpg", position: "50% 50%" },
+  { src: "/home/strip-boxes-carry.jpg", position: "50% 20%" },
+  { src: "/home/strip-open-box.jpg", position: "50% 50%" },
+  { src: "/home/strip-food-bowls.jpg", position: "50% 50%" },
+  { src: "/home/strip-bowl-in-hand.jpg", position: "50% 50%" },
+  { src: "/home/strip-takeaway-box.jpg", position: "50% 50%" },
+  { src: "/home/strip-paper-bag.jpg", position: "50% 40%" },
 ];
-const marqueeHalf = [...photos, ...photos, ...photos, ...photos];
+const marqueeHalf = [...photos, ...photos];
 const galleryImages = [...marqueeHalf, ...marqueeHalf];
 
 export function Hero() {
@@ -68,6 +73,7 @@ export function Hero() {
                 fill
                 sizes="320px"
                 className="object-cover"
+                style={{ objectPosition: img.position }}
               />
             </div>
           ))}
