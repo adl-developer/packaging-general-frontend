@@ -90,6 +90,17 @@ export async function listProducts(): Promise<ProductSummary[]> {
   }
 }
 
+/** The live catalog or null — never the sample products. For readers that
+ *  must not publish placeholder URLs (the sitemap). */
+export async function listLiveProducts(): Promise<ProductSummary[] | null> {
+  try {
+    return await cachedProductList();
+  } catch (err) {
+    console.error("[listLiveProducts] Medusa unreachable:", err);
+    return null;
+  }
+}
+
 const cachedProductBySlug = unstable_cache(
   async (slug: string): Promise<Product | null> => {
     const region_id = await cachedRegionId();

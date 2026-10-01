@@ -4,6 +4,7 @@ import { MotionProvider } from "@/components/motion/motion-provider";
 import { Analytics } from "@vercel/analytics/next";
 import { PwaClient } from "@/components/pwa/pwa-client";
 import { FeedbackWidget } from "@/components/feedback/feedback-widget";
+import { SITE_URL } from "@/lib/site-url";
 import "./globals.css";
 
 const inter = Inter({
@@ -12,9 +13,8 @@ const inter = Inter({
   display: "swap",
 });
 
-// Base URL drives canonical + Open Graph absolute URLs. Override per environment.
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://packaginggeneral.com";
+// Base URL drives canonical + Open Graph absolute URLs (see lib/site-url.ts).
+const siteUrl = SITE_URL;
 
 // SEO foundation — per-page metadata extends/overrides this template.
 export const metadata: Metadata = {

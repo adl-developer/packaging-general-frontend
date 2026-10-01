@@ -169,6 +169,17 @@ export async function getShopCategories(): Promise<ShopCategory[]> {
   }
 }
 
+/** The live category cards or null — never the static fallback. For readers
+ *  that must not publish placeholder URLs (the sitemap). */
+export async function listLiveCategoryCards(): Promise<ShopCategoryData[] | null> {
+  try {
+    return await cachedCategoryCards();
+  } catch (err) {
+    console.error("[listLiveCategoryCards] Medusa unreachable:", err);
+    return null;
+  }
+}
+
 /** Category-page lookup by slug (Medusa handle). Async now — the category
  *  page and its metadata both resolve live data. */
 export async function getShopCategoryBySlug(

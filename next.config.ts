@@ -14,6 +14,19 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Keep every non-production deploy (the staging branch domain, previews,
+  // local dev) out of search engines: a full copy of the store would compete
+  // with production as duplicate content. VERCEL_ENV is read at build time, so
+  // production carries no rule and pays nothing per request (no proxy).
+  async headers() {
+    if (process.env.VERCEL_ENV === "production") return [];
+    return [
+      {
+        source: "/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {

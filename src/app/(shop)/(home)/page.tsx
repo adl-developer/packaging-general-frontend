@@ -4,9 +4,7 @@ import { WhyUs } from "@/components/home/why-us";
 import { HowItWorks } from "@/components/home/how-it-works";
 import { CtaSection } from "@/components/home/cta-section";
 import { Certifications } from "@/components/home/certifications";
-
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://packaginggeneral.com";
+import { SITE_URL as siteUrl } from "@/lib/site-url";
 
 // Organization + WebSite structured data for richer search results.
 const jsonLd = {
