@@ -20,6 +20,7 @@ import { notifyCartAdd, notifyCartCount } from "@/lib/cart-events";
 import { takeReorderNotice } from "@/lib/reorder-notice";
 import {
   addLineItem,
+  checkCartChanges,
   emptyCart as emptyCartAction,
   getCart,
   removeLineItem,
@@ -29,6 +30,8 @@ import { shortfall, type StockState } from "@/lib/stock-rules";
 import { notEnoughStockMessage } from "@/lib/restock";
 import { RestockRequestDialog } from "@/components/products/restock-request-dialog";
 import { mapLineItem, TAX_RATE, type CartItem } from "./map-cart";
+import { mergeRefreshedItems } from "./merge-refreshed";
+import { CART_CHANGED_MESSAGE } from "@/lib/cart-changed";
 import { CartSkeleton } from "./cart-skeleton";
 import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-progress";
 import {
@@ -634,6 +637,27 @@ export function CartClient({
   const draining = React.useRef(false);
   const drainTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // "One or more products in your cart has changed." (client, 2026-10-02).
+  // Once the cart has painted, ask the backend whether a product's price or
+  // weight moved since it was added; if so it has already brought the cart up
+  // to date, and its refreshed lines are folded in (never the quantity of a
+  // line the customer is still stepping). Checked once per visit, after
+  // paint, so the page itself loads as fast as before.
+  const [cartChanged, setCartChanged] = React.useState(false);
+  const changeCheckedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!hydrated || changeCheckedRef.current) return;
+    changeCheckedRef.current = true;
+    checkCartChanges().then((result) => {
+      if (!result.changed) return;
+      setCartChanged(true);
+      const refreshed = result.items.map(mapLineItem);
+      setItems((xs) =>
+        mergeRefreshedItems(xs, refreshed, new Set(qtyDirty.current.keys())),
+      );
+    });
+  }, [hydrated]);
+
   // First cart snapshot + optimistic-add handling. Adopt-once (a later RSC
   // re-render swaps itemsPromise but must not clobber local state). Modes:
   //  1. Arrived from Add to Cart, commit in flight → paint the staged
@@ -1025,7 +1049,7 @@ export function CartClient({
       />
       <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-4">
-          <div className="flex items-end justify-between gap-4">
+          <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="flex flex-col gap-1">
               <h1 className="text-3xl font-semibold leading-9 text-brand">
                 Shopping Cart
@@ -1034,6 +1058,16 @@ export function CartClient({
                 {goods.length} item{goods.length === 1 ? "" : "s"} in your cart
               </p>
             </div>
+            {/* Between the title and Empty Cart on wider screens; its own
+                full-width row under them on phones. */}
+            {cartChanged && (
+              <p
+                role="status"
+                className="order-last w-full rounded-card border border-[rgba(180,83,9,0.35)] bg-[rgba(254,243,199,0.5)] px-4 py-2.5 text-sm font-medium text-[#92400e] sm:order-none sm:w-auto"
+              >
+                {CART_CHANGED_MESSAGE}
+              </p>
+            )}
             <button
               type="button"
               onClick={() => setConfirmEmpty(true)}
