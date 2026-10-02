@@ -190,6 +190,14 @@ export async function getCheckoutPrefill(): Promise<CheckoutPrefill> {
   const savedName = saved
     ? [saved.first_name, saved.last_name].filter(Boolean).join(" ")
     : "";
+  // The address text and its map pin must come from the SAME address. Until
+  // 2026-10-02 the text fell back to the saved account address while the pin
+  // was read from the cart only, so a signed-in customer on a fresh cart saw
+  // their address prefilled with no pin and Continue refused it. Never mix:
+  // a cart address without a pin stays pinless rather than borrowing the
+  // saved address's pin for different text.
+  const addrSource = cartAddr?.address_1 ? cartAddr : saved;
+  const addrMeta = (addrSource?.metadata ?? null) as Record<string, unknown> | null;
 
   return {
     companyName: metaString(meta, "company_name") || customer?.company_name || "",
@@ -205,12 +213,12 @@ export async function getCheckoutPrefill(): Promise<CheckoutPrefill> {
       metaString(meta, "contact_phone") ||
       customer?.phone ||
       "",
-    address: cartAddr?.address_1 || saved?.address_1 || "",
+    address: addrSource?.address_1 || "",
     instructions:
       metaString(cartAddr?.metadata as Record<string, unknown> | null, "instructions") ||
       metaString(saved?.metadata as Record<string, unknown> | null, "instructions"),
-    lat: metaNumber(cartAddr?.metadata as Record<string, unknown> | null, "lat"),
-    lng: metaNumber(cartAddr?.metadata as Record<string, unknown> | null, "lng"),
+    lat: metaNumber(addrMeta, "lat"),
+    lng: metaNumber(addrMeta, "lng"),
     fulfillmentMethod,
     pickupName:
       (pickupAddr
