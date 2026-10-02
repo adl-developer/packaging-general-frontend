@@ -291,4 +291,68 @@ describe("getCheckoutPrefill", () => {
     );
     expect(sdk.client.fetch).not.toHaveBeenCalled();
   });
+
+  // 2026-10-02 bug: a signed-in customer on a fresh cart got the saved
+  // address TEXT but no pin, so Continue failed with "Please pick your
+  // delivery address…". The pin must come from the same address as the text.
+  const savedAddress = {
+    id: "addr_1",
+    is_default_shipping: true,
+    first_name: "Ama",
+    last_name: "Mensah",
+    phone: "+233244123456",
+    address_1: "Palace Mall, Accra, Ghana",
+    metadata: { lat: 5.625356, lng: -0.153542, instructions: "Door" },
+  };
+
+  it("prefills the saved address WITH its pin on a fresh cart", async () => {
+    jar.set(AUTH_COOKIE, "tok");
+    sdk.store.customer.listAddress.mockResolvedValue({ addresses: [savedAddress] });
+
+    const prefill = await getCheckoutPrefill();
+
+    expect(prefill.address).toBe("Palace Mall, Accra, Ghana");
+    expect(prefill.lat).toBe(5.625356);
+    expect(prefill.lng).toBe(-0.153542);
+    expect(prefill.instructions).toBe("Door");
+  });
+
+  it("prefers the cart's own address and pin over the saved one", async () => {
+    jar.set(AUTH_COOKIE, "tok");
+    sdk.store.customer.listAddress.mockResolvedValue({ addresses: [savedAddress] });
+    sdk.store.cart.retrieve.mockResolvedValue({
+      cart: {
+        ...liveCart,
+        shipping_address: {
+          first_name: "Ama",
+          last_name: "Mensah",
+          address_1: "1 Probe Street, Osu",
+          metadata: { lat: 5.5502, lng: -0.1821, instructions: "Gate" },
+        },
+      },
+    });
+
+    const prefill = await getCheckoutPrefill();
+
+    expect(prefill.address).toBe("1 Probe Street, Osu");
+    expect(prefill.lat).toBe(5.5502);
+    expect(prefill.lng).toBe(-0.1821);
+  });
+
+  it("never pairs the cart's address text with the saved address's pin", async () => {
+    jar.set(AUTH_COOKIE, "tok");
+    sdk.store.customer.listAddress.mockResolvedValue({ addresses: [savedAddress] });
+    sdk.store.cart.retrieve.mockResolvedValue({
+      cart: {
+        ...liveCart,
+        shipping_address: { address_1: "1 Probe Street, Osu", metadata: {} },
+      },
+    });
+
+    const prefill = await getCheckoutPrefill();
+
+    expect(prefill.address).toBe("1 Probe Street, Osu");
+    expect(prefill.lat).toBeNull();
+    expect(prefill.lng).toBeNull();
+  });
 });
