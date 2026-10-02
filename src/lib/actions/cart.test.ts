@@ -34,7 +34,7 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { getCart, getCartForPrefill } from "./cart";
+import { getCart, getCartForPrefill, getCartWithChanges } from "./cart";
 
 const liveCart = {
   id: "cart_1",
@@ -95,6 +95,32 @@ describe("getCartForPrefill", () => {
 
     expect(await getCartForPrefill()).toBeNull();
     expect(sdk.store.cart.retrieve).not.toHaveBeenCalled();
+  });
+});
+
+// 2026-10-02: the payment step's sync reports products that changed price or
+// weight since they were added (Medusa keeps a line's add-time price).
+describe("getCartWithChanges", () => {
+  it("passes on the backend's items_changed flag with the synced cart", async () => {
+    sdk.client.fetch.mockResolvedValue({
+      cart: { ...liveCart, total: 140 },
+      sync: { changed: true, items_changed: true },
+    });
+    const { cart, itemsChanged } = await getCartWithChanges();
+    expect(cart?.total).toBe(140);
+    expect(itemsChanged).toBe(true);
+  });
+
+  it("reads as unchanged when an older backend sends no flag", async () => {
+    sdk.client.fetch.mockResolvedValue({ cart: liveCart, sync: { changed: false } });
+    expect((await getCartWithChanges()).itemsChanged).toBe(false);
+  });
+
+  it("reads as unchanged when the sync fails and the cart is served unsynced", async () => {
+    sdk.client.fetch.mockRejectedValue(Object.assign(new Error("boom"), { status: 500 }));
+    const { cart, itemsChanged } = await getCartWithChanges();
+    expect(cart?.id).toBe("cart_1");
+    expect(itemsChanged).toBe(false);
   });
 });
 

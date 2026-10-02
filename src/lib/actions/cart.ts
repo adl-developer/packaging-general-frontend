@@ -135,13 +135,19 @@ function isNotFound(err: unknown): boolean {
 async function syncedCart(
   cartId: string,
   fields: string,
-): Promise<HttpTypes.StoreCart> {
-  const { cart } = await sdk.client.fetch<{ cart: HttpTypes.StoreCart }>(
-    `/store/carts/${cartId}/sync`,
-    { method: "POST", query: { fields } },
-  );
-  return cart;
+): Promise<LoadedCart<HttpTypes.StoreCart>> {
+  const { cart, sync } = await sdk.client.fetch<{
+    cart: HttpTypes.StoreCart;
+    sync?: { items_changed?: boolean };
+  }>(`/store/carts/${cartId}/sync`, { method: "POST", query: { fields } });
+  // `items_changed` (2026-10-02): the backend found a product whose price or
+  // weight changed since it was added and brought the line up to date before
+  // the charges. Absent on an older backend → false.
+  return { cart, itemsChanged: sync?.items_changed === true };
 }
+
+/** A cart read plus whether the payment-step check just updated its lines. */
+type LoadedCart<C> = { cart: C; itemsChanged: boolean };
 
 /**
  * Re-derive the server-computed charges — MOQ tier prices, then the platform
@@ -203,15 +209,33 @@ async function withPlatformFee(
 export async function getCart(
   options: { sync?: boolean } = {},
 ): Promise<HttpTypes.StoreCart | null> {
+  return (await loadCart(options)).cart;
+}
+
+/**
+ * `getCart()` (synced) plus `itemsChanged`: true when the payment-step check
+ * found a product whose price or weight changed since it was added and
+ * brought the cart up to date (2026-10-02). For the payment page (notice) and
+ * `initiatePaystack` (stop before charging a total the customer never saw).
+ */
+export async function getCartWithChanges(): Promise<
+  LoadedCart<HttpTypes.StoreCart | null>
+> {
+  return loadCart({ sync: true });
+}
+
+async function loadCart(
+  options: { sync?: boolean },
+): Promise<LoadedCart<HttpTypes.StoreCart | null>> {
   const sync = options.sync ?? true;
   const id = await readCartId();
-  if (!id) return null;
+  if (!id) return { cart: null, itemsChanged: false };
   try {
-    const cart = await readCart(id, sync);
+    const { cart, itemsChanged } = await readCart(id, sync);
     // Cart was checked out — don't keep handing it back. Next add starts fresh.
     if (cart.completed_at) {
       await clearCartId();
-      return null;
+      return { cart: null, itemsChanged: false };
     }
     // Self-heal stale line items. A cart can outlive its products — e.g. a
     // re-seed (seed-ghana.ts deletes/recreates products on a model bump) removes
@@ -231,13 +255,14 @@ export async function getCart(
           console.error("[cart] failed to prune stale line item:", err);
         }
       }
-      return await readCart(id, sync);
+      const reread = await readCart(id, sync);
+      return { cart: reread.cart, itemsChanged: itemsChanged || reread.itemsChanged };
     }
-    return cart;
+    return { cart, itemsChanged };
   } catch (err) {
     console.error("[cart] retrieve failed; clearing cookie:", err);
     await clearCartId();
-    return null;
+    return { cart: null, itemsChanged: false };
   }
 }
 
@@ -255,21 +280,21 @@ export async function getCart(
 async function readCart(
   id: string,
   sync: boolean,
-): Promise<HttpTypes.StoreCart> {
+): Promise<LoadedCart<HttpTypes.StoreCart>> {
   if (!sync) {
     const { cart } = await sdk.store.cart.retrieve(id, { fields: CART_FIELDS });
-    return cart;
+    return { cart, itemsChanged: false };
   }
   try {
     return await syncedCart(id, CART_FIELDS);
   } catch (err) {
     if (isNotFound(err)) {
       const { cart } = await sdk.store.cart.retrieve(id, { fields: CART_FIELDS });
-      return await withPlatformFee(cart, CART_FIELDS);
+      return { cart: await withPlatformFee(cart, CART_FIELDS), itemsChanged: false };
     }
     console.error("[cart] charge sync failed; serving the cart unsynced:", err);
     const { cart } = await sdk.store.cart.retrieve(id, { fields: CART_FIELDS });
-    return cart;
+    return { cart, itemsChanged: false };
   }
 }
 
@@ -700,6 +725,33 @@ export async function removeLineItem(
 
 /** Empty the cart by deleting every line item. Keeps the cart id so the guest
  *  can continue shopping in the same session. */
+/**
+ * Has a product in the cart changed price or weight since it was added?
+ * (client, 2026-10-02.) The backend (`POST /store/carts/:id/changes`) brings
+ * the cart up to date when it has, because Medusa otherwise keeps a line's
+ * add-time price; the cart page then shows "One or more products in your cart
+ * has changed." and the refreshed lines returned here. Never throws: an older
+ * backend (404) or any failure reads as "nothing changed".
+ */
+export async function checkCartChanges(): Promise<
+  { changed: false } | { changed: true; items: HttpTypes.StoreCartLineItem[] }
+> {
+  const id = await readCartId();
+  if (!id) return { changed: false };
+  try {
+    const result = await sdk.client.fetch<{ changed?: boolean }>(
+      `/store/carts/${id}/changes`,
+      { method: "POST" },
+    );
+    if (!result?.changed) return { changed: false };
+    const cart = await getCart({ sync: false });
+    return { changed: true, items: cart?.items ?? [] };
+  } catch (err) {
+    if (!isNotFound(err)) console.error("[cart] change check failed:", err);
+    return { changed: false };
+  }
+}
+
 export async function emptyCart(): Promise<HttpTypes.StoreCart | null> {
   const cart = await getCart();
   if (!cart) return null;

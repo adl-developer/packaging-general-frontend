@@ -6,11 +6,12 @@ import { after } from "next/server";
 import type { HttpTypes } from "@medusajs/types";
 import { sdk, authHeaders } from "@/lib/medusa";
 import {
-  getCart,
+  getCartWithChanges,
   getCartForPrefill,
   getCartLineCount,
   addConfiguredLineItem,
 } from "./cart";
+import { CART_CHANGED_MESSAGE } from "@/lib/cart-changed";
 import { getCustomer, signInCustomer, signUpCustomer } from "./auth";
 import { getAuthToken } from "@/lib/auth-token";
 import { getStockMap } from "@/lib/stock";
@@ -782,10 +783,22 @@ function productIdsFor(cart: HttpTypes.StoreCart): string[] {
 /** Initialize a Paystack payment session for the current cart and return the
  *  authorization URL the browser should be redirected to. */
 export async function initiatePaystack(): Promise<
-  { ok: true; authorizationUrl: string } | { ok: false; error: string }
+  | { ok: true; authorizationUrl: string }
+  /** `refresh`: the cart's figures changed; re-render the page before retrying. */
+  | { ok: false; error: string; refresh?: boolean }
 > {
-  const cart = await getCart();
+  const { cart, itemsChanged } = await getCartWithChanges();
   if (!cart) return { ok: false, error: "Your cart has expired. Please add an item again." };
+  // A product's price or weight changed after this page was rendered, and the
+  // sync above just brought the cart up to date (2026-10-02). Don't start a
+  // charge for a total the customer hasn't seen: show the new one first.
+  if (itemsChanged) {
+    return {
+      ok: false,
+      error: `${CART_CHANGED_MESSAGE} Please review your new total, then press Pay again.`,
+      refresh: true,
+    };
+  }
   if (!cart.email) {
     return { ok: false, error: "Please add your contact details before paying." };
   }

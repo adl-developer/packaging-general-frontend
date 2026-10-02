@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Smartphone, CreditCard, ChevronDown, Loader2 } from "lucide-react";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,7 @@ export function PaymentMethod({
   const [method, setMethod] = React.useState<Method>("mobile_money");
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(initialError ?? null);
+  const router = useRouter();
 
   function onPay() {
     setError(null);
@@ -73,6 +75,10 @@ export function PaymentMethod({
       const result = await initiatePaystack();
       if (!result.ok) {
         setError(result.error);
+        // The cart's figures were just brought up to date (a product changed
+        // price or weight): re-render the summary so the new total is the one
+        // on screen before they press Pay again. This state survives it.
+        if (result.refresh) router.refresh();
         return;
       }
       window.location.href = result.authorizationUrl;

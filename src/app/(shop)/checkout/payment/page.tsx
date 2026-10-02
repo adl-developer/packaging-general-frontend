@@ -12,7 +12,8 @@ import {
   type OrderLineItem,
 } from "@/components/checkout/order-summary";
 import { PaymentMethod } from "@/components/checkout/payment-method";
-import { getCart } from "@/lib/actions/cart";
+import { getCart, getCartWithChanges } from "@/lib/actions/cart";
+import { CART_CHANGED_MESSAGE } from "@/lib/cart-changed";
 import { goodsLines, platformFeeTotal } from "@/lib/platform-fee";
 import { addressLine, isPickupCart } from "@/lib/fulfillment";
 import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-progress";
@@ -43,7 +44,10 @@ export default async function PaymentPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const cart = await getCart();
+  // `itemsChanged`: a product's price or weight changed since it was added and
+  // this read brought the cart up to date (2026-10-02) → say so above the
+  // summary, whose figures are already the new ones.
+  const { cart, itemsChanged } = await getCartWithChanges();
   if (!cart || !cart.items?.length) redirect("/cart");
   if (!cart.shipping_address?.address_1 || !cart.shipping_methods?.length) {
     redirect("/checkout/delivery");
@@ -105,6 +109,14 @@ export default async function PaymentPage({
         back={<ProgressBackLink href="/checkout/delivery">Back to Delivery</ProgressBackLink>}
       />
       <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {itemsChanged && (
+          <p
+            role="status"
+            className="mb-6 rounded-card border border-[rgba(180,83,9,0.35)] bg-[rgba(254,243,199,0.5)] px-4 py-2.5 text-sm font-medium text-[#92400e]"
+          >
+            {CART_CHANGED_MESSAGE}
+          </p>
+        )}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <OrderSummary
             items={items}
