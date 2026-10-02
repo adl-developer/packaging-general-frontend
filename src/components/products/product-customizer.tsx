@@ -293,6 +293,9 @@ export function ProductCustomizer({
   // line at checkout.
   const taxPoints = levies.vat + levies.nhil + levies.getfund;
   const estimatedTax = Math.round(estimatedTotal * taxPoints) / 100;
+  // Subtotal → taxes → total incl. taxes, only the last in bold (user,
+  // 2026-10-01).
+  const totalWithTax = Math.round((estimatedTotal + estimatedTax) * 100) / 100;
 
   // Out-of-stock is a SEPARATE, parallel concept from the sparse-combo
   // availability system above (availableMaterials / facetAvailable /
@@ -899,19 +902,27 @@ export function ProductCustomizer({
                           <span>{formatGhs(setupFee)}</span>
                         </span>
                       )}
-                      <span className="flex justify-between font-semibold text-brand">
-                        <span>Estimated total</span>
-                        <span>{formatGhs(estimatedTotal)}</span>
-                      </span>
                       {taxPoints > 0 && (
-                        <span className="flex justify-between text-muted">
-                          <span>
-                            Taxes (VAT, NHIL, GETFund{" "}
-                            {formatRate(taxPoints)}%)
+                        <>
+                          <span className="flex justify-between text-muted">
+                            <span>Subtotal (excl. taxes)</span>
+                            <span>{formatGhs(estimatedTotal)}</span>
                           </span>
-                          <span>{formatGhs(estimatedTax)}</span>
-                        </span>
+                          <span className="flex justify-between text-muted">
+                            <span>
+                              Taxes (VAT, NHIL, GETFund{" "}
+                              {formatRate(taxPoints)}%)
+                            </span>
+                            <span>{formatGhs(estimatedTax)}</span>
+                          </span>
+                        </>
                       )}
+                      {/* With all levies at 0 there is nothing to add, so the
+                          subtotal and tax rows drop and this is the plain total. */}
+                      <span className="flex justify-between font-semibold text-brand">
+                        <span>{taxPoints > 0 ? "Total (incl. taxes)" : "Total"}</span>
+                        <span>{formatGhs(totalWithTax)}</span>
+                      </span>
                       <span className="text-xs text-muted">
                         Excludes delivery. Final totals at checkout.
                       </span>
