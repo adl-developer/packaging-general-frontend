@@ -75,9 +75,13 @@ export function ProductGallery({
         )}
       </div>
 
-      {/* Thumbnail strip — Figma pad 8/16/16/16, gap 8. */}
+      {/* Thumbnail strip — Figma pad 8/16/16/16, gap 8. Scrolls sideways
+          when the thumbnails outgrow the panel: five 64px thumbs need 384px,
+          and without the scroll they pushed the whole page wider than a
+          375px phone (2026-10-05). Scrollbar hidden: the clipped last
+          thumbnail already says "swipe for more". */}
       {count > 1 && (
-        <div className="flex gap-2 px-4 pb-4 pt-2">
+        <div className="flex gap-2 overflow-x-auto overscroll-x-contain px-4 pb-4 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {images.map((img, i) => (
             <button
               key={img.src}
