@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { MessageCircle } from "lucide-react";
+import { Mail, MessageCircle } from "lucide-react";
 import { getFooterHoursLines } from "@/lib/site-content";
-import { supportWhatsappUrl } from "@/lib/whatsapp";
+import { SUPPORT_EMAIL, supportWhatsappUrl } from "@/lib/whatsapp";
 import { BrandLockup } from "./brand-lockup";
 
 // Neutral opener — deliberately not page-aware. A footer button is a
@@ -92,13 +92,11 @@ async function FooterHours() {
  *  Synchronous shell — the one await lives in <FooterHours>. */
 export function SiteFooter() {
   // supportWhatsappUrl returns null only if SUPPORT_PHONE is ever blanked
-  // (lib/whatsapp.ts). The heading + sub-line + button are ONE CTA unit: the
-  // sub-line ("Chat with our support team") is a verbal promise the button
-  // fulfils, so rendering it with no button beneath would read worse than
-  // showing nothing at all — hide all three together, never just the
-  // button. Business Hours is unrelated, informationally independent
-  // content (posted opening hours are useful whether or not chat is
-  // configured) and always renders regardless.
+  // (lib/whatsapp.ts). The sub-line + button are ONE CTA unit: the sub-line
+  // ("Chat with our support team") is a verbal promise the button fulfils,
+  // so they hide together, never just the button. The "Need Help?" heading
+  // stays because the support email below it always renders. Business Hours
+  // is independent content and always renders regardless.
   const whatsappUrl = supportWhatsappUrl(SUPPORT_MESSAGE);
 
   return (
@@ -129,9 +127,9 @@ export function SiteFooter() {
           </div>
 
           <div className="flex flex-col gap-3">
+            <FooterHeading>Need Help?</FooterHeading>
             {whatsappUrl && (
               <>
-                <FooterHeading>Need Help?</FooterHeading>
                 <p className="text-xs text-muted">Chat with our support team</p>
                 <a
                   href={whatsappUrl}
@@ -144,13 +142,18 @@ export function SiteFooter() {
                 </a>
               </>
             )}
-            <div
-              className={
-                whatsappUrl
-                  ? "mt-2 flex flex-col gap-1 border-t border-line pt-4"
-                  : "flex flex-col gap-1"
-              }
+            {/* Support email under the chat button (user, 2026-10-05). Always
+                shown, so "Need Help?" never goes empty even if the WhatsApp
+                line is blanked. Same address as the legal pages and the
+                checkout's outside-area notice (`SUPPORT_EMAIL`). */}
+            <a
+              href={`mailto:${SUPPORT_EMAIL}`}
+              className="inline-flex items-center gap-2 self-start text-xs text-muted transition-colors hover:text-brand"
             >
+              <Mail className="size-4 shrink-0" aria-hidden />
+              {SUPPORT_EMAIL}
+            </a>
+            <div className="mt-2 flex flex-col gap-1 border-t border-line pt-4">
               <p className="text-sm font-semibold text-brand">
                 Business Hours
               </p>
