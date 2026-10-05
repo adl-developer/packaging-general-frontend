@@ -146,12 +146,20 @@ export function SiteFooter() {
                 shown, so "Need Help?" never goes empty even if the WhatsApp
                 line is blanked. Same address as the legal pages and the
                 checkout's outside-area notice (`SUPPORT_EMAIL`). */}
+            {/* Icon, then two lines (user, 2026-10-05): the lead-in, and the
+                address under it so it never wraps mid-address. The icon is
+                as tall as both lines together (2 × 16px + gap ≈ 34px). */}
             <a
               href={`mailto:${SUPPORT_EMAIL}`}
-              className="inline-flex items-center gap-2 self-start text-xs text-muted transition-colors hover:text-brand"
+              className="group inline-flex items-center gap-2.5 self-start text-xs text-muted transition-colors hover:text-brand"
             >
-              <Mail className="size-4 shrink-0" aria-hidden />
-              {SUPPORT_EMAIL}
+              <Mail className="size-8 shrink-0" strokeWidth={1.5} aria-hidden />
+              <span className="flex flex-col gap-0.5">
+                <span>Contact us by email at</span>
+                <span className="font-medium text-brand group-hover:underline">
+                  {SUPPORT_EMAIL}
+                </span>
+              </span>
             </a>
             <div className="mt-2 flex flex-col gap-1 border-t border-line pt-4">
               <p className="text-sm font-semibold text-brand">
