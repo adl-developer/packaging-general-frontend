@@ -887,7 +887,10 @@ export function ProductCustomizer({
                         </span>
                         <span>{formatGhs(unitPrice * quantity)}</span>
                       </span>
-                      {activeTier && activeTier.priceMultiplier !== 1 && (
+                      {/* Shown for EVERY matching tier, the ×1 base tier
+                          included (user, 2026-10-05): the shopper always sees
+                          which bracket they're in and its per-unit price. */}
+                      {activeTier && (
                         <span className="flex justify-between text-muted">
                           <span>Volume price · {activeTier.label}</span>
                           <span>{formatGhs(unitPrice)}/unit</span>
