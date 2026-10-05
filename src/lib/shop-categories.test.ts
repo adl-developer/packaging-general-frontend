@@ -126,3 +126,39 @@ describe("buildShopCategories", () => {
     expect(cards).toEqual([]);
   });
 });
+
+describe("category card photo (2026-10-05)", () => {
+  const gifts = (metadata: Record<string, unknown> | null) =>
+    buildShopCategories(
+      [cat({ name: "Gift Boxes", handle: "gift-boxes", metadata })],
+      [
+        { slug: "a", category: "Gift Boxes" },
+        { slug: "b", category: "Gift Boxes" },
+      ],
+    )[0];
+
+  it("passes through an image on the store's media domain", () => {
+    const url = "https://media.packaginggeneral.com/products/category-01J9.webp";
+    expect(gifts({ image: url }).image).toBe(url);
+  });
+
+  it("has no image when none is stored or it was cleared", () => {
+    expect(gifts(null).image).toBeNull();
+    expect(gifts({ image: "" }).image).toBeNull();
+    expect(gifts({ image: 42 }).image).toBeNull();
+  });
+
+  // next/image throws for a host missing from next.config's remotePatterns,
+  // which would take the whole homepage down — so anything else is dropped
+  // (the card falls back to its icon) rather than rendered.
+  it("drops an image on any other host or scheme", () => {
+    for (const image of [
+      "https://evil.example.com/x.webp",
+      "http://media.packaginggeneral.com/x.webp",
+      "javascript:alert(1)",
+      "not a url",
+    ]) {
+      expect(gifts({ image }).image).toBeNull();
+    }
+  });
+});

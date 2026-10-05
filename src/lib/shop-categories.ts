@@ -64,8 +64,30 @@ export type ShopCategoryData = {
   title: string;
   description: string;
   iconKey: CategoryIconKey;
+  /** Card banner photo (admin-uploaded WebP), or null → the icon card. */
+  image: string | null;
   href: string;
 };
+
+/**
+ * The only host a category photo may come from. ⚠ Must match
+ * `images.remotePatterns` in next.config.ts: next/image THROWS for an
+ * unlisted host, which would take the whole browse (and homepage) down — so
+ * any other URL is dropped here and the card falls back to its icon.
+ */
+const CATEGORY_IMAGE_HOST = "media.packaginggeneral.com";
+
+function categoryImage(stored: unknown): string | null {
+  if (typeof stored !== "string" || !stored) return null;
+  try {
+    const url = new URL(stored);
+    return url.protocol === "https:" && url.hostname === CATEGORY_IMAGE_HOST
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The original hard-coded card copy, now the fallback for categories that
@@ -143,6 +165,7 @@ export function buildShopCategories(
         title: c.name,
         description: c.description || canonical?.description || "",
         iconKey,
+        image: categoryImage(c.metadata?.image),
         href:
           inCategory.length === 1
             ? `/products/${inCategory[0].slug}`

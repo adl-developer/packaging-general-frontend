@@ -14,6 +14,18 @@ describe("isDeadVariantError", () => {
   const REAL_MESSAGE =
     "Variants variant_01JXXXXXXXXXXXXXXXXXXXXXXX do not exist or belong to a product that is not published";
 
+  // The backend's archived-variant guard (2026-10-05,
+  // `backend/src/api/utils/archived-variant-guard.ts`, HTTP 400). Must count
+  // as a dead VARIANT, or `clearStaleCartOn4xx` would drop a healthy cart.
+  it("recognises the archived-variant refusal", () => {
+    expect(
+      isDeadVariantError({
+        status: 400,
+        message: "This option is no longer available. Please choose another.",
+      }),
+    ).toBe(true);
+  });
+
   it("recognises the real backend rejection", () => {
     expect(isDeadVariantError(new FetchError(REAL_MESSAGE, 400))).toBe(true);
   });
