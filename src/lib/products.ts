@@ -295,8 +295,21 @@ export function isServiceProduct(p: HttpTypes.StoreProduct): boolean {
   return Boolean((p.metadata as Record<string, unknown> | null)?.service);
 }
 
+/**
+ * The variants a customer can buy: everything except ARCHIVED ones
+ * (2026-10-05, admin Archive — `metadata.pg_archived === true`). Archived
+ * PRODUCTS never reach the storefront (they're unpublished); a single archived
+ * variant of a live product does, so every reader filters through this. The
+ * backend refuses it at add-to-cart too. Needs `variants.metadata` selected.
+ */
+export function activeVariants<
+  V extends { metadata?: Record<string, unknown> | null },
+>(variants: V[] | null | undefined): V[] {
+  return (variants ?? []).filter((v) => v.metadata?.pg_archived !== true);
+}
+
 export function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
-  const prices = (p.variants ?? [])
+  const prices = activeVariants(p.variants)
     .map((v) => v.calculated_price?.calculated_amount)
     .filter((n): n is number => typeof n === "number");
   const meta = (p.metadata ?? {}) as Record<string, unknown>;
@@ -313,7 +326,7 @@ export function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
       .map((image) => image.url)
       .filter((url): url is string => !!url),
     thumbnail: p.thumbnail ?? null,
-    variantIds: (p.variants ?? []).map((v) => v.id),
+    variantIds: activeVariants(p.variants).map((v) => v.id),
   };
 }
 
@@ -321,7 +334,7 @@ export function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
 // `variants.calculated_price` adds the computed price, `*variants.options` +
 // `variants.options.option.title` expose which option values a variant holds.
 export const DETAIL_FIELDS =
-  "id,title,handle,description,thumbnail,images.url,metadata,*categories,*variants,variants.calculated_price,*variants.options,variants.options.option.title";
+  "id,title,handle,description,thumbnail,images.url,metadata,*categories,*variants,variants.metadata,variants.calculated_price,*variants.options,variants.options.option.title";
 
 export function variantOptionMap(
   v: HttpTypes.StoreProductVariant,
@@ -337,7 +350,7 @@ export function variantOptionMap(
 export function toFullProduct(p: HttpTypes.StoreProduct): Product {
   const summary = toSummary(p);
   const meta = (p.metadata ?? {}) as Record<string, unknown>;
-  const variants = p.variants ?? [];
+  const variants = activeVariants(p.variants);
 
   // Quantity price tiers — every product has carried `tiers` since the
   // catalog import; it became non-empty on 2026-08-14 (admin MOQ Tiers).

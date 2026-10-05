@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { sdk } from "@/lib/medusa";
 import { CACHE_TAGS } from "@/lib/revalidate";
 import {
+  activeVariants,
   CROSS_SELL_ITEMS,
   DETAIL_FIELDS,
   SAMPLE_PRODUCTS,
@@ -65,7 +66,7 @@ const cachedProductList = unstable_cache(
     const { products: live } = await sdk.store.product.list({
       region_id,
       fields:
-        "id,title,handle,description,thumbnail,images.url,metadata,*categories,*variants,variants.calculated_price",
+        "id,title,handle,description,thumbnail,images.url,metadata,*categories,*variants,variants.metadata,variants.calculated_price",
       limit: 100,
     });
     const browsable = live.filter((p) => !isServiceProduct(p));
@@ -139,15 +140,17 @@ const cachedCrossSell = unstable_cache(
       region_id,
       handle: handles,
       fields:
-        "id,title,handle,description,metadata,*variants,variants.calculated_price",
+        "id,title,handle,description,metadata,*variants,variants.metadata,variants.calculated_price",
       limit: handles.length,
     });
     return CROSS_SELL_ITEMS.map((item): CrossSellProduct | null => {
       const p = live.find((x) => x.handle === item.handle);
       if (!p) return null;
+      // Archived variants (2026-10-05) are never offered.
+      const offered = activeVariants(p.variants);
       const variant = item.sku
-        ? p.variants?.find((v) => v.sku === item.sku)
-        : p.variants?.[0];
+        ? offered.find((v) => v.sku === item.sku)
+        : offered[0];
       if (!variant) return null;
       const meta = (p.metadata ?? {}) as Record<string, unknown>;
       return {

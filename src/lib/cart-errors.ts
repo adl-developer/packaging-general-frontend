@@ -24,7 +24,13 @@
 export function isDeadVariantError(err: unknown): boolean {
   const message = (err as { message?: unknown })?.message;
   if (typeof message !== "string") return false;
-  return /variants?\b.*\bdo(?:es)? not exist/i.test(message);
+  return (
+    /variants?\b.*\bdo(?:es)? not exist/i.test(message) ||
+    // An ARCHIVED variant (2026-10-05): the backend's add-to-cart guard says
+    // "This option is no longer available. Please choose another." Same
+    // response — the line is gone, the cart is fine.
+    /option is no longer available/i.test(message)
+  );
 }
 
 /**

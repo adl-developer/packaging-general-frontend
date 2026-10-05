@@ -1,3 +1,4 @@
+import { activeVariants } from "@/lib/products";
 import {
   toStockState,
   type StockState,
@@ -36,7 +37,7 @@ import {
 // (undefined ?? 0 > 0 is false), while tsc and every unit test stay green —
 // the bug would only show up live. Do not trim this string.
 const STOCK_FIELDS =
-  "id,variants.id,+variants.inventory_quantity,+variants.manage_inventory,+variants.allow_backorder";
+  "id,variants.id,variants.metadata,+variants.inventory_quantity,+variants.manage_inventory,+variants.allow_backorder";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000";
@@ -88,11 +89,15 @@ export async function getCatalogStock(productIds: string[]): Promise<CatalogStoc
     const { products } = (await res.json()) as {
       products: Array<{
         id: string;
-        variants?: Array<VariantStockFields & { id?: string }>;
+        variants?: Array<
+          VariantStockFields & { id?: string; metadata?: Record<string, unknown> | null }
+        >;
       }>;
     };
     for (const p of products) {
-      for (const v of p.variants ?? []) {
+      // Archived variants (2026-10-05) are left OUT, so a resolved map reads
+      // them as discontinued (reorder skips them) — never as buyable stock.
+      for (const v of activeVariants(p.variants)) {
         if (v.id) out.set(v.id, toStockState(v));
       }
     }
