@@ -25,13 +25,32 @@ export function CategoryCard({ category: c }: { category: ShopCategory }) {
       >
         {c.image ? (
           <>
-            <div className="relative aspect-[16/9] w-full bg-background">
+            {/* The WHOLE photo is shown (`object-contain`), centred in a 16:9
+                frame — never cropped (user, 2026-10-05: a near-square photo
+                lost its top and bottom). Whatever the photo doesn't cover is
+                filled with a blurred, enlarged copy of the same photo, so the
+                banner always reads full-width in the photo's own colours
+                (manager's request, Apple Music style). The backdrop asks
+                next/image for a tiny variant (`sizes="64px"`): a heavy blur
+                needs no detail, so it costs a few KB. */}
+            <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#f5f4f2]">
+              <Image
+                src={c.image}
+                alt=""
+                aria-hidden
+                fill
+                sizes="64px"
+                // `object-fill` (stretched, not cropped) keeps the photo's
+                // full colour layout — e.g. a yellow wall above a teal floor
+                // — where `cover` would keep only its middle band.
+                className="scale-110 object-fill blur-2xl saturate-150"
+              />
               <Image
                 src={c.image}
                 alt=""
                 fill
                 sizes="(min-width: 1280px) 616px, (min-width: 640px) 50vw, 100vw"
-                className="object-cover"
+                className="object-contain drop-shadow-md"
               />
             </div>
             <div className="flex flex-1 flex-col items-start gap-4 p-8">
