@@ -38,6 +38,9 @@ export interface ShopCategory {
   description: string;
   /** Line icon shown in the card's circular badge (design frame). */
   icon: ComponentType<{ className?: string; strokeWidth?: number | string }>;
+  /** Banner photo from the admin (WebP on the media domain); null shows the
+   *  icon card instead. Optional only for cards cached before 2026-10-05. */
+  image?: string | null;
   /** Where the browse-page card leads. */
   href: string;
 }
@@ -65,6 +68,7 @@ function withIcon(card: ShopCategoryData): ShopCategory {
     title: card.title,
     description: card.description,
     icon: ICONS[card.iconKey],
+    image: card.image,
     href: card.href,
   };
 }
