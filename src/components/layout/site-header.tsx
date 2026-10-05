@@ -4,6 +4,7 @@ import { BrandLockup } from "./brand-lockup";
 import { PromoBar } from "./promo-bar";
 import { HeaderAccount, HeaderAccountFallback } from "./header-account";
 import { HeaderCart, HeaderCartFallback } from "./header-cart";
+import { HeaderHeightSync } from "./header-height-sync";
 
 /**
  * Global site header: brand lockup + Cart/Account, with the promo bar
@@ -43,6 +44,7 @@ export function SiteHeader() {
         </div>
       </div>
       <PromoBar />
+      <HeaderHeightSync />
     </header>
   );
 }

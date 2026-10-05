@@ -23,10 +23,11 @@ import {
 /**
  * Floating feedback button (user request, 2026-09-22).
  *
- * A "Send Feedback" text pill (2026-09-28: was a round icon-only button; the
- * user wanted it obvious what it is) fixed bottom-LEFT — the cart toast owns bottom-right on
- * desktop and bottom-centre on mobile, so this corner is the one that never
- * collides with it. Click → small card with optional Title, required Message
+ * A small vertical "Feedback" tab on the right edge, mid-height (2026-10-05;
+ * was a bottom-left "Send Feedback" pill that covered page content and sat on
+ * the product page's action bar). Mid-height stays clear of the cart toast
+ * (bottom-right on desktop, bottom-centre on mobile). The card opens on the
+ * same side. Click → small card with optional Title, required Message
  * (2026-09-29: only the message is required), optional Name / Phone / Email
  * (2026-09-28, prefilled for a signed-in customer on every open), Submit. On
  * success a "Feedback sent" state shows for `SENT_MS`, then the card dismisses
@@ -151,32 +152,39 @@ export function FeedbackWidget() {
 
   return (
     <>
-      {/* Text pill trigger — hidden while the card is up so the two never stack.
-          `--pinned-bar-h` is set by a page's bottom-pinned action bar (the
-          product page's, product-customizer.tsx) so the pill sits above it
-          rather than over its Keep Shopping button; 0 everywhere else. */}
-      <AnimatePresence>
-        {!showCard && (
-          <m.button
-            key="fab"
-            type="button"
-            onClick={open}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
-            className="fixed bottom-[calc(1.5rem+var(--pinned-bar-h,0px))] left-6 z-40 flex h-11 items-center justify-center rounded-full bg-brand px-5 text-sm font-semibold text-brand-foreground shadow-lg transition-[background-color,bottom] duration-200 hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2"
-          >
-            Send Feedback
-          </m.button>
-        )}
-      </AnimatePresence>
+      {/* Side-tab trigger (2026-10-05, Rachael: "the way we did it in
+          Kuajiri — sideways and smaller", desktop and mobile): a narrow
+          vertical "Feedback" tab hugging the right edge at mid-height, so it
+          no longer sits over page content or the product page's bottom
+          action bar. Hidden while the card is up so the two never stack.
+          The wrapper owns the -50% centring because motion's own transform
+          would overwrite a translate class on the button itself. ⚠ px/py are
+          LOGICAL padding, so in vertical text px is top/bottom and py is
+          left/right. */}
+      <div className="fixed right-0 top-1/2 z-40 -translate-y-1/2">
+        <AnimatePresence>
+          {!showCard && (
+            <m.button
+              key="fab"
+              type="button"
+              onClick={open}
+              initial={{ opacity: 0, x: "100%" }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: "100%" }}
+              transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
+              className="flex items-center justify-center rounded-l-[10px] bg-brand px-3.5 py-2 text-xs font-semibold tracking-wide text-brand-foreground shadow-lg transition-colors duration-200 [writing-mode:vertical-rl] hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2"
+            >
+              Feedback
+            </m.button>
+          )}
+        </AnimatePresence>
+      </div>
 
       <AnimatePresence>
         {showCard && (
           <div
             key="feedback-layer"
-            className="fixed inset-0 z-50 flex items-end justify-start"
+            className="fixed inset-0 z-50 flex items-center justify-end"
           >
             {/* Backdrop: click to dismiss while editing. */}
             <m.div
@@ -192,9 +200,9 @@ export function FeedbackWidget() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="feedback-title"
-              initial={{ opacity: 0, y: 24, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 24, scale: 0.98 }}
+              initial={{ opacity: 0, x: 24, scale: 0.98 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 24, scale: 0.98 }}
               transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
               className="relative m-4 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-sm overflow-y-auto rounded-card border border-line bg-surface p-5 shadow-xl sm:m-6"
             >

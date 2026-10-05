@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, Info, Loader2, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Check, Info, Loader2, ShoppingCart, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   resolveCombo,
@@ -368,17 +368,13 @@ export function ProductCustomizer({
   // The action bar is `fixed`, so it covers the last ~70px of the page — which
   // would otherwise permanently hide the tail of the site footer. Reserve its
   // real measured height (it grows when the error line shows, and is shorter on
-  // mobile) as body padding while this page is mounted. The same height is
-  // published as `--pinned-bar-h` so the floating "Send Feedback" pill
-  // (feedback-widget.tsx) rides above the bar instead of covering Keep Shopping.
+  // mobile) as body padding while this page is mounted.
   const actionBarRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
     const bar = actionBarRef.current;
     if (!bar) return;
-    const root = document.documentElement;
     const apply = () => {
       document.body.style.paddingBottom = `${bar.offsetHeight}px`;
-      root.style.setProperty("--pinned-bar-h", `${bar.offsetHeight}px`);
     };
     apply();
     const ro = new ResizeObserver(apply);
@@ -386,7 +382,6 @@ export function ProductCustomizer({
     return () => {
       ro.disconnect();
       document.body.style.paddingBottom = "";
-      root.style.removeProperty("--pinned-bar-h");
     };
   }, []);
 
@@ -587,16 +582,18 @@ export function ProductCustomizer({
       {goingToCart && (
         <div
           aria-hidden
-          className="fixed inset-0 z-[45] overflow-hidden bg-background pt-[121px]"
+          className="fixed inset-0 z-[45] overflow-hidden bg-background pt-[var(--site-header-h,65px)]"
         >
           <CartSkeleton />
         </div>
       )}
       <div className="mx-auto w-full max-w-7xl">
-        {/* Sticky order-progress header — step 1 of the order. */}
+        {/* Sticky order-progress header — step 1 of the order. Pinned flush to
+            the site header's MEASURED height (`--site-header-h`, published by
+            header-height-sync.tsx); a fixed offset left a gap on mobile. */}
         <OrderProgress
           step={1}
-          className="sticky top-[121px] z-40"
+          className="sticky top-[var(--site-header-h,65px)] z-40"
           back={
             <button
               type="button"
@@ -616,10 +613,10 @@ export function ProductCustomizer({
 
         {/* Figma body container: 32px top / 96px bottom padding — the bottom
             padding is the clearance for the pinned action bar. */}
-        <div className="mx-auto grid max-w-7xl gap-6 px-4 pb-24 pt-8 sm:px-6 lg:grid-cols-[535fr_657fr] lg:items-start lg:px-8">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 pb-24 pt-8 sm:px-6 lg:grid-cols-[535fr_657fr] lg:items-start lg:px-8">
           {/* Left column — pinned product images. Sticky offset clears the site
-              header (121px) + the sticky progress header (99px) + 16px. */}
-          <div className="lg:sticky lg:top-[236px]">
+              header (measured) + the sticky progress header (87px) + 16px. */}
+          <div className="lg:sticky lg:top-[calc(var(--site-header-h,85px)+103px)]">
             <ProductGallery images={images} productName={product.name} />
           </div>
 
@@ -1021,23 +1018,26 @@ export function ProductCustomizer({
               {error}
             </p>
           )}
-          {/* Mobile stacks the three CTAs full-width — Add to Cart → Buy Now →
-              Keep Shopping, top to bottom. From `sm` they share one row with
-              Keep Shopping pushed left and Buy Now last. The `order-*` classes
-              drive both arrangements. */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          {/* One row at every width (2026-10-05: the old mobile stack of three
+              full-width buttons ate ~160px of the screen). On mobile Keep
+              Shopping shrinks to a square shop icon (label kept for screen
+              readers) and Add to Cart / Buy Now split the rest; from `sm`
+              Keep Shopping shows its text, pushed left. */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/products"
-              className="order-3 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button border border-line bg-background px-6 text-sm font-medium text-brand transition-colors hover:bg-line/30 sm:order-1 sm:mr-auto sm:w-auto"
+              title="Keep Shopping"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-button border border-line bg-background text-sm font-medium text-brand transition-colors hover:bg-line/30 sm:mr-auto sm:w-auto sm:px-6"
             >
-              Keep Shopping
+              <Store className="size-4 sm:hidden" aria-hidden />
+              <span className="sr-only sm:not-sr-only">Keep Shopping</span>
             </Link>
             <button
               type="button"
               onClick={() => addToCart()}
               disabled={selectionIncomplete || comboOutOfStock || comboShort}
               className={cn(
-                "order-1 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button border px-6 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-2 sm:w-auto",
+                "inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-button border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none sm:px-6",
                 justAdded
                   ? "border-[rgba(22,163,74,0.35)] bg-[rgba(22,163,74,0.12)] text-[#15803d]"
                   : "border-line bg-background text-brand hover:bg-line/30",
@@ -1056,7 +1056,7 @@ export function ProductCustomizer({
               type="button"
               onClick={onBuyNowClick}
               disabled={selectionIncomplete || comboOutOfStock || comboShort}
-              className="order-2 inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-button bg-brand px-6 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:order-3 sm:w-auto"
+              className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-button bg-brand px-3 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none sm:px-6"
             >
               {pendingKind === "buy" && (
                 <Loader2 className="size-4 animate-spin" aria-hidden />
