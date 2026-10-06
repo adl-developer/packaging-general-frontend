@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { initiatePaystack } from "@/lib/actions/checkout";
+import type { PaymentMethodChoice } from "@/lib/paystack-channels";
 
-type Method = "mobile_money" | "card";
+type Method = PaymentMethodChoice;
 
 interface PaymentOptionProps {
   selected: boolean;
@@ -48,11 +49,10 @@ function PaymentOption({
 }
 
 /**
- * Payment method chooser. The Mobile Money / Card toggle is presentational —
- * Paystack's hosted page lets the user pick between channels (MoMo, card,
- * USSD, bank) regardless, and asks for the MoMo number or card details
- * itself. Nothing typed here would reach it (initiatePaystack sends only the
- * email), so this step collects no payment details (2026-10-06). Pressing Pay initiates a Paystack payment session
+ * Payment method chooser. The Mobile Money / Card choice is sent to Paystack
+ * as its `channels`, so the hosted page opens on that method only
+ * (2026-10-06). Paystack asks for the MoMo number or card details itself, so
+ * this step collects no payment details. Pressing Pay initiates a Paystack payment session
  * and redirects to the authorization URL; on return Paystack hits
  * /checkout/callback?reference=… which completes the cart.
  */
@@ -71,7 +71,7 @@ export function PaymentMethod({
   function onPay() {
     setError(null);
     startTransition(async () => {
-      const result = await initiatePaystack();
+      const result = await initiatePaystack(method);
       if (!result.ok) {
         setError(result.error);
         // The cart's figures were just brought up to date (a product changed

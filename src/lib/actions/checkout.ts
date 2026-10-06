@@ -32,6 +32,7 @@ import {
 import { chosenMethod, isPickupCart } from "@/lib/fulfillment";
 import { goodsLines } from "@/lib/platform-fee";
 import { findCompletedOrder } from "@/lib/completed-order";
+import { paystackChannels, type PaymentMethodChoice } from "@/lib/paystack-channels";
 import { storefrontMetadata } from "@/lib/storefront-origin";
 
 /**
@@ -782,8 +783,10 @@ function productIdsFor(cart: HttpTypes.StoreCart): string[] {
 }
 
 /** Initialize a Paystack payment session for the current cart and return the
- *  authorization URL the browser should be redirected to. */
-export async function initiatePaystack(): Promise<
+ *  authorization URL the browser should be redirected to. `method` is the
+ *  payment step's Mobile Money / Card choice; Paystack's page then offers
+ *  only that channel (see paystackChannels). */
+export async function initiatePaystack(method?: PaymentMethodChoice): Promise<
   | { ok: true; authorizationUrl: string }
   /** `refresh`: the cart's figures changed; re-render the page before retrying. */
   | { ok: false; error: string; refresh?: boolean }
@@ -835,7 +838,7 @@ export async function initiatePaystack(): Promise<
   try {
     const { payment_collection } = await sdk.store.payment.initiatePaymentSession(cart, {
       provider_id: PAYSTACK_PROVIDER_ID,
-      data: { email: cart.email },
+      data: { email: cart.email, channels: paystackChannels(method) },
     });
 
     const session = payment_collection.payment_sessions?.find(
