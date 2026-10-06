@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     redirect("/checkout/payment?error=Missing+payment+reference");
   }
 
-  const result = await completeCheckout();
+  const result = await completeCheckout(reference);
 
   // Safe post-payment-failure branch: Paystack's hosted page already charged
   // the customer before this request ran, and cart.complete() then failed for
