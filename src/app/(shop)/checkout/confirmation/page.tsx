@@ -44,6 +44,7 @@ export default async function ConfirmationPage({
   if (!orderId) redirect("/");
 
   let displayId: string | number | undefined;
+  let customDisplayId: string | undefined;
   let createdAt: string | undefined;
   let email: string | undefined;
   let company: string | undefined;
@@ -56,9 +57,10 @@ export default async function ConfirmationPage({
   try {
     const { order } = await sdk.store.order.retrieve(orderId, {
       fields:
-        "id,display_id,created_at,email,metadata,total,item_subtotal,shipping_subtotal,discount_subtotal,*items,*promotions,*payment_collections,payment_collections.payment_sessions,*shipping_methods",
+        "id,display_id,custom_display_id,created_at,email,metadata,total,item_subtotal,shipping_subtotal,discount_subtotal,*items,*promotions,*payment_collections,payment_collections.payment_sessions,*shipping_methods",
     });
     displayId = order.display_id ?? undefined;
+    customDisplayId = order.custom_display_id ?? undefined;
     createdAt = order.created_at ? String(order.created_at) : undefined;
     email = order.email ?? undefined;
     const meta = (order.metadata ?? {}) as Record<string, unknown>;
@@ -102,7 +104,12 @@ export default async function ConfirmationPage({
     console.warn("[confirmation] order.retrieve failed; showing id only:", err);
   }
 
-  const formatted = formatOrderNumber(displayId, createdAt, orderId);
+  const formatted = formatOrderNumber({
+    id: orderId,
+    display_id: displayId,
+    created_at: createdAt,
+    custom_display_id: customDisplayId,
+  });
 
   // Signed-in customers already have an account (and the order is linked to it),
   // so they must not see the post-checkout "Create Your Account" dialog.

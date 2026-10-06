@@ -144,7 +144,7 @@ export default async function AccountOrdersPage() {
                       <div className="flex items-center gap-2">
                         <Package className="size-4 text-muted" aria-hidden />
                         <span className="text-base font-semibold text-brand">
-                          Order {formatOrderNumber(order.display_id, order.created_at, order.id)}
+                          Order {formatOrderNumber(order)}
                         </span>
                       </div>
                       <span className="text-sm text-muted">
@@ -194,7 +194,7 @@ export default async function AccountOrdersPage() {
                         explicit param. */}
                     <ReorderActions
                       orderId={order.id}
-                      viewHref={`/track-order?order=${formatOrderNumber(order.display_id, order.created_at, order.id)}${
+                      viewHref={`/track-order?order=${formatOrderNumber(order)}${
                         order.email && order.email !== customer.email
                           ? `&email=${encodeURIComponent(order.email)}`
                           : ""

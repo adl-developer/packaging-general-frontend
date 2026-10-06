@@ -633,7 +633,7 @@ export function TrackOrder({
                 id="order-number"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="e.g., PG-2026-001"
+                placeholder="e.g., PG-ORD-7K2M9Q"
                 className={cn(
                   "w-full rounded-button border border-line bg-surface px-4 py-2 text-base leading-6 text-brand placeholder:text-muted/70 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 sm:py-2.5 sm:text-sm sm:leading-5",
                   isLoggedIn && "sm:flex-1",

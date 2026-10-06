@@ -437,8 +437,8 @@ function CreateAccountModal({
                 We&apos;ve sent a verification link to <strong>{email}</strong>.
                 Check your email and click the link to activate your account.{" "}
                 {state.linked
-                  ? `Order #${orderNumber} is linked to your account.`
-                  : `We couldn't link order #${orderNumber} automatically, but you can still track it with your order number and email.`}
+                  ? `Order ${orderNumber} is linked to your account.`
+                  : `We couldn't link order ${orderNumber} automatically, but you can still track it with your order number and email.`}
               </p>
             </div>
             <button
@@ -517,7 +517,7 @@ function CreateAccountModal({
 
               <div className="rounded-option border border-[rgba(150,64,34,0.2)] bg-[rgba(150,64,34,0.05)] px-3 py-2.5">
                 <p className="text-xs font-bold text-rust">
-                  Order #{orderNumber} will be linked to your account
+                  Order {orderNumber} will be linked to your account
                 </p>
               </div>
 
@@ -607,14 +607,14 @@ function VerificationSentBody({
         <p className="text-sm text-muted">
           {sendState === "error" ? (
             <>
-              Please try again from the Sign In page. You can still track order
-              #{orderNumber} with your order number and email.
+              Please try again from the Sign In page. You can still track order{" "}
+              {orderNumber} with your order number and email.
             </>
           ) : (
             <>
               You already have an account for <strong>{email}</strong> that
               hasn&apos;t been verified. We&apos;ve sent a verification link to
-              that address. Click it to activate your account. Order #
+              that address. Click it to activate your account. Order{" "}
               {orderNumber} will be added to your account once verified.
             </>
           )}
