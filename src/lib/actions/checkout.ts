@@ -856,8 +856,13 @@ export async function initiatePaystack(): Promise<
 /** Complete the cart after Paystack redirects back. Medusa runs the provider's
  *  authorizePayment (which verifies the reference with Paystack), then places
  *  the order. On success the cart cookie is cleared so the user starts fresh
- *  next time. */
-export async function completeCheckout(): Promise<
+ *  next time.
+ *
+ *  `reference` is the Paystack reference from the callback URL. When our own
+ *  complete() can't produce the order, it finds the order the PAID cart
+ *  became (the webhook places it too), whatever cart this browser's cookie
+ *  holds. See findCompletedOrder. */
+export async function completeCheckout(reference?: string): Promise<
   | { ok: true; orderId: string }
   | { ok: false; error: string; cartId?: string; pending: false }
   | { ok: false; error: string; cartId: string; pending: true }
@@ -871,6 +876,14 @@ export async function completeCheckout(): Promise<
     const store = await cookies();
     const lastOrderId = store.get(LAST_ORDER_COOKIE)?.value;
     if (lastOrderId) return { ok: true, orderId: lastOrderId };
+    // No cart and no remembered order: the browser may have come back on a
+    // different host from the one it paid on (2026-10-06). The payment may
+    // still have become an order.
+    const paidOrderId = await orderForReference(reference);
+    if (paidOrderId) {
+      await rememberLastOrder(paidOrderId);
+      return { ok: true, orderId: paidOrderId };
+    }
     return { ok: false, error: "Your checkout session has expired.", pending: false };
   }
 
@@ -907,23 +920,20 @@ export async function completeCheckout(): Promise<
     // to pay again.
     console.error("[checkout] completeCheckout failed:", err);
 
-    // ...unless the Paystack webhook completed this same cart first, which
-    // makes our own complete() fail (404 mid-completion, 400 after). Then the
-    // order exists and the customer belongs on its normal confirmation page.
-    const placedOrderId = await findCompletedOrder(async () => {
-      const { order_id } = await sdk.client.fetch<{ order_id: string | null }>(
-        `/store/carts/${cartId}/order`,
-      );
-      return order_id;
-    });
-    if (placedOrderId) {
+    // ...unless the payment already became an order. The webhook places it
+    // too, and on 2026-10-06 two customers came back to a different host
+    // (other cookies, other cart) after the webhook had placed their orders.
+    // Look up by the Paystack REFERENCE, which names the cart actually paid.
+    // The cookie is left alone: the cart it holds may not be the paid one,
+    // and a completed one is already handled by getCart.
+    const paidOrderId = await orderForReference(reference);
+    if (paidOrderId) {
       console.warn(
-        `[checkout] cart ${cartId} was already completed (webhook won the race); order ${placedOrderId}`,
+        `[checkout] reference ${reference} already became order ${paidOrderId} (cookie cart ${cartId})`,
       );
-      await rememberLastOrder(placedOrderId);
-      await clearCartCookie();
+      await rememberLastOrder(paidOrderId);
       revalidatePath("/cart");
-      return { ok: true, orderId: placedOrderId };
+      return { ok: true, orderId: paidOrderId };
     }
 
     const message = err instanceof Error ? err.message : String(err);
@@ -934,6 +944,17 @@ export async function completeCheckout(): Promise<
       error: message.slice(0, 2000),
     };
   }
+}
+
+/** The order a Paystack payment became, or null (see findCompletedOrder). */
+async function orderForReference(reference?: string): Promise<string | null> {
+  if (!reference) return null;
+  return findCompletedOrder(async () => {
+    const { order_id } = await sdk.client.fetch<{ order_id: string | null }>(
+      `/store/paystack/orders/${encodeURIComponent(reference)}`,
+    );
+    return order_id;
+  });
 }
 
 /**
