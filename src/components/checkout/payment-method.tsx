@@ -2,13 +2,10 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Smartphone, CreditCard, ChevronDown, Loader2 } from "lucide-react";
-import { Input, Label } from "@/components/ui/input";
+import { Smartphone, CreditCard, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatGhs } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { m, AnimatePresence } from "motion/react";
-import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import { initiatePaystack } from "@/lib/actions/checkout";
 
 type Method = "mobile_money" | "card";
@@ -53,7 +50,9 @@ function PaymentOption({
 /**
  * Payment method chooser. The Mobile Money / Card toggle is presentational —
  * Paystack's hosted page lets the user pick between channels (MoMo, card,
- * USSD, bank) regardless. Pressing Pay initiates a Paystack payment session
+ * USSD, bank) regardless, and asks for the MoMo number or card details
+ * itself. Nothing typed here would reach it (initiatePaystack sends only the
+ * email), so this step collects no payment details (2026-10-06). Pressing Pay initiates a Paystack payment session
  * and redirects to the authorization URL; on return Paystack hits
  * /checkout/callback?reference=… which completes the cart.
  */
@@ -104,50 +103,27 @@ export function PaymentMethod({
         />
       </div>
 
-      <AnimatePresence mode="wait" initial={false}>
-        {method === "mobile_money" ? (
-          <m.div
-            key="momo"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: DURATION.fast, ease: EASE_PREMIUM }}
-            className="flex flex-col gap-4"
-          >
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="country-code">Country Code</Label>
-              <button
-                type="button"
-                id="country-code"
-                className="flex h-9 items-center justify-between rounded-button border border-transparent bg-surface px-3 text-sm font-medium text-brand"
-              >
-                🇬🇭 Ghana (+233)
-                <ChevronDown className="size-4 text-muted" aria-hidden />
-              </button>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="momo-number">Mobile Money Number</Label>
-              <Input id="momo-number" inputMode="tel" placeholder="24 123 4567" />
-              <p className="text-xs text-muted">
-                You&apos;ll authorize the payment on Paystack and confirm the prompt
-                on this phone.
-              </p>
-            </div>
-          </m.div>
-        ) : (
-          <m.p
-            key="card"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: DURATION.fast, ease: EASE_PREMIUM }}
-            className="text-sm text-muted"
-          >
-            You&apos;ll be securely redirected to Paystack to complete your card
-            payment.
-          </m.p>
-        )}
-      </AnimatePresence>
+      {/* Customers were closing the tab on Paystack's page before the payment
+          finished (2026-10-06). */}
+      <div
+        role="note"
+        className="flex items-start gap-3 rounded-option border border-[rgba(184,168,217,0.4)] bg-accent/10 px-3 py-2.5 text-sm text-brand"
+      >
+        <Info className="mt-0.5 size-4 shrink-0 text-plum" aria-hidden />
+        <div className="flex flex-col gap-1">
+          <p>
+            On the next page, powered by Paystack, enter your payment details,
+            then wait while your payment is processed.
+          </p>
+          <p className="font-medium">
+            Do not close the window or tab until the payment is complete.
+          </p>
+          <p>
+            Once it succeeds, you&apos;ll be redirected to your order
+            confirmation automatically.
+          </p>
+        </div>
+      </div>
 
       {error && (
         <p role="alert" className="rounded-button bg-[rgba(231,0,11,0.08)] px-3 py-2 text-sm font-medium text-[#7e2a0c]">
