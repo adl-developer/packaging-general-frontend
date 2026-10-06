@@ -308,6 +308,33 @@ export function activeVariants<
   return (variants ?? []).filter((v) => v.metadata?.pg_archived !== true);
 }
 
+/**
+ * Option values ONLY archived variants use, per option title (2026-10-06,
+ * archive-and-replace). The admin keeps such a value on the product so the
+ * archived variant still describes what was ordered; the customer must not
+ * be offered it. A value no variant uses at all is not affected.
+ */
+export function archivedOnlyValues(
+  variants: HttpTypes.StoreProductVariant[] | null | undefined,
+): Map<string, Set<string>> {
+  const live = new Set<string>();
+  const archived = new Map<string, Set<string>>();
+  const active = new Set(activeVariants(variants));
+  for (const v of variants ?? []) {
+    for (const [title, value] of Object.entries(variantOptionMap(v))) {
+      if (active.has(v)) live.add(`${title}\u0000${value}`);
+      else archived.set(title, (archived.get(title) ?? new Set()).add(value));
+    }
+  }
+  for (const [title, values] of archived) {
+    for (const value of values) {
+      if (live.has(`${title}\u0000${value}`)) values.delete(value);
+    }
+    if (!values.size) archived.delete(title);
+  }
+  return archived;
+}
+
 export function toSummary(p: HttpTypes.StoreProduct): ProductSummary {
   const prices = activeVariants(p.variants)
     .map((v) => v.calculated_price?.calculated_amount)
@@ -351,6 +378,9 @@ export function toFullProduct(p: HttpTypes.StoreProduct): Product {
   const summary = toSummary(p);
   const meta = (p.metadata ?? {}) as Record<string, unknown>;
   const variants = activeVariants(p.variants);
+  // Values kept on the product only for archived variants — never offered.
+  const retired = archivedOnlyValues(p.variants);
+  const offered = (title: string, value: string) => !retired.get(title)?.has(value);
 
   // Quantity price tiers — every product has carried `tiers` since the
   // catalog import; it became non-empty on 2026-08-14 (admin MOQ Tiers).
@@ -401,7 +431,7 @@ export function toFullProduct(p: HttpTypes.StoreProduct): Product {
         value: string;
         description?: string;
         facets?: Record<string, string>;
-      } => !!m?.value,
+      } => !!m?.value && offered("Material", m.value),
     )
     .map((m) => ({
       id: m.value,
@@ -423,7 +453,10 @@ export function toFullProduct(p: HttpTypes.StoreProduct): Product {
     }));
 
   const printing: PrintingOption[] = metaPrinting
-    .filter((pr): pr is { value: string } & typeof pr => !!pr?.value)
+    .filter(
+      (pr): pr is { value: string } & typeof pr =>
+        !!pr?.value && offered("Printing", pr.value),
+    )
     .map((pr) => ({
       id: pr.value,
       label: pr.value,
@@ -498,7 +531,10 @@ export function toFullProduct(p: HttpTypes.StoreProduct): Product {
   // ── New N-axis model (metadata.pg_attributes) — additive only. Legacy
   // sizes/materials/printing/combos above stay untouched regardless of
   // whether this parses; `attributes` is [] on anything malformed. ──
-  const attributes = parseAttributes(meta.pg_attributes);
+  const attributes = parseAttributes(meta.pg_attributes).map((a) => ({
+    ...a,
+    values: a.values.filter((v) => offered(a.name, v.label)),
+  }));
   const combosV2: ComboV2[] = attributes.length
     ? variants.map((v) => ({
         options: variantOptionMap(v),
