@@ -11,7 +11,7 @@ const sdk = vi.hoisted(() => ({
   client: { fetch: vi.fn() },
 }));
 const authClient = vi.hoisted(() => ({
-  auth: { resetPassword: vi.fn() },
+  auth: { resetPassword: vi.fn(), login: vi.fn() },
 }));
 const redirect = vi.hoisted(() =>
   vi.fn((url: string) => {
@@ -39,7 +39,7 @@ vi.mock("next/headers", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect }));
 
-import { changeAccountPassword, sendAccountResetLink } from "./auth";
+import { changeAccountPassword, sendAccountResetLink, signInCustomer } from "./auth";
 
 const AUTH_COOKIE = "_medusa_jwt";
 const IDLE = { ok: false, error: null };
@@ -174,5 +174,66 @@ describe("sendAccountResetLink", () => {
 
     expect(state.ok).toBe(false);
     expect(state.error).toMatch(/Too many requests/);
+  });
+});
+
+/** A JWT-shaped token carrying `claims` (signature is irrelevant here — the
+ *  storefront only reads the payload; the backend verifies). */
+function jwtWith(claims: Record<string, unknown>): string {
+  const part = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  return `${part({ alg: "HS256" })}.${part(claims)}.sig`;
+}
+
+describe("signInCustomer", () => {
+  beforeEach(() => {
+    jar.clear();
+    sdk.store.customer.retrieve.mockResolvedValue({
+      customer: { email: "ama@example.com", metadata: { email_verified: true } },
+    });
+  });
+
+  it("signs a customer in and sets the session cookie", async () => {
+    const token = jwtWith({ actor_id: "cus_1", actor_type: "customer" });
+    authClient.auth.login.mockResolvedValue(token);
+
+    const outcome = await signInCustomer("ama@example.com", "pw-12345678");
+
+    expect(outcome).toEqual({ status: "ok" });
+    expect(jar.get(AUTH_COOKIE)).toBe(token);
+  });
+
+  it("refuses an admin-portal login (no customer linked) as a wrong password, with no session", async () => {
+    // Staff and customers share one emailpass identity per email; a staff-only
+    // identity logs in fine but its token names no customer.
+    authClient.auth.login.mockResolvedValue(
+      jwtWith({ actor_id: "", actor_type: "customer", app_metadata: { user_id: "user_1" } }),
+    );
+
+    const outcome = await signInCustomer("staff@example.com", "admin-password");
+
+    expect(outcome).toEqual({ status: "error", error: "Invalid email or password." });
+    expect(jar.has(AUTH_COOKIE)).toBe(false);
+    expect(sdk.store.cart.transferCart).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the backend rejects the new session, instead of bouncing back to sign-in", async () => {
+    authClient.auth.login.mockResolvedValue(jwtWith({ actor_id: "cus_gone", actor_type: "customer" }));
+    sdk.store.customer.retrieve.mockRejectedValue(Object.assign(new Error("401"), { status: 401 }));
+
+    const outcome = await signInCustomer("ama@example.com", "pw-12345678");
+
+    expect(outcome).toEqual({ status: "error", error: "Invalid email or password." });
+    expect(jar.has(AUTH_COOKIE)).toBe(false);
+  });
+
+  it("still signs in through a transient customer-read failure", async () => {
+    const token = jwtWith({ actor_id: "cus_1", actor_type: "customer" });
+    authClient.auth.login.mockResolvedValue(token);
+    sdk.store.customer.retrieve.mockRejectedValue(Object.assign(new Error("503"), { status: 503 }));
+
+    const outcome = await signInCustomer("ama@example.com", "pw-12345678");
+
+    expect(outcome).toEqual({ status: "ok" });
+    expect(jar.get(AUTH_COOKIE)).toBe(token);
   });
 });

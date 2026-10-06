@@ -93,6 +93,20 @@ export async function getCustomer(): Promise<HttpTypes.StoreCustomer | null> {
   }
 }
 
+/** True when a Medusa auth token is bound to a customer (`actor_id` set).
+ *  Reads the payload WITHOUT verifying it — only used to refuse a token
+ *  early; the backend still verifies every token it is handed. */
+function tokenNamesCustomer(token: string): boolean {
+  try {
+    const claims = JSON.parse(
+      Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8"),
+    ) as { actor_id?: unknown };
+    return typeof claims.actor_id === "string" && claims.actor_id !== "";
+  } catch {
+    return false;
+  }
+}
+
 function fieldError(message: string): AuthState {
   return { error: message };
 }
@@ -214,6 +228,15 @@ export async function signInCustomer(
     };
   }
 
+  // Staff and customers share ONE emailpass identity per email, so admin
+  // portal credentials log in here too — but a staff-only identity's token
+  // names no customer, and every customer read with it 401s. Refuse it as a
+  // wrong password (same wording, so it reveals nothing) rather than setting
+  // a cookie that the account page immediately throws away.
+  if (!tokenNamesCustomer(result)) {
+    return { status: "error", error: "Invalid email or password." };
+  }
+
   // Verification gate — only reached with CORRECT credentials, so showing the
   // "not verified" state here reveals nothing a wrong-password attempt could
   // learn (those get the generic error above). Legacy accounts have no
@@ -227,9 +250,15 @@ export async function signInCustomer(
     if (customer?.metadata?.email_verified === false) {
       return { status: "unverified", email };
     }
-  } catch {
-    // Transient failure — fall through and sign in as before; the gate only
-    // acts on a positive "unverified" read.
+  } catch (err) {
+    // The backend refusing the brand-new token (or the customer being gone)
+    // means this session can't work — same refusal as above. Anything else is
+    // transient: fall through and sign in as before; the gate only acts on a
+    // positive "unverified" read.
+    const status = (err as { status?: number })?.status;
+    if (status === 401 || status === 403 || status === 404) {
+      return { status: "error", error: "Invalid email or password." };
+    }
   }
 
   await setAuthToken(result);
@@ -694,6 +723,9 @@ export async function resetPassword(
       /* transient read failure — keep the token, gate only on a positive read */
     }
   }
+
+  // A staff-only identity (no customer) gets no session — see signInCustomer.
+  if (authToken && !tokenNamesCustomer(authToken)) authToken = null;
 
   // redirect() throws NEXT_REDIRECT, so it must live outside any try/catch.
   if (authToken) {
