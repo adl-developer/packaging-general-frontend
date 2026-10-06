@@ -31,6 +31,7 @@ import {
 } from "@/lib/validation";
 import { chosenMethod, isPickupCart } from "@/lib/fulfillment";
 import { goodsLines } from "@/lib/platform-fee";
+import { findCompletedOrder } from "@/lib/completed-order";
 import { storefrontMetadata } from "@/lib/storefront-origin";
 
 /**
@@ -905,6 +906,26 @@ export async function completeCheckout(): Promise<
     // out-of-stock plan exists to make survivable — never tell this customer
     // to pay again.
     console.error("[checkout] completeCheckout failed:", err);
+
+    // ...unless the Paystack webhook completed this same cart first, which
+    // makes our own complete() fail (404 mid-completion, 400 after). Then the
+    // order exists and the customer belongs on its normal confirmation page.
+    const placedOrderId = await findCompletedOrder(async () => {
+      const { order_id } = await sdk.client.fetch<{ order_id: string | null }>(
+        `/store/carts/${cartId}/order`,
+      );
+      return order_id;
+    });
+    if (placedOrderId) {
+      console.warn(
+        `[checkout] cart ${cartId} was already completed (webhook won the race); order ${placedOrderId}`,
+      );
+      await rememberLastOrder(placedOrderId);
+      await clearCartCookie();
+      revalidatePath("/cart");
+      return { ok: true, orderId: placedOrderId };
+    }
+
     const message = err instanceof Error ? err.message : String(err);
     return {
       ok: false,
