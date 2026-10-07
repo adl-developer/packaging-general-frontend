@@ -42,6 +42,10 @@ import type { ContinueRoute } from "@/lib/buy-now-auth";
 // custom). There is no separate SECTION_ORDER export in lib/attributes.ts.
 const SECTION_ORDER = Object.keys(SECTION_LABELS) as StorefrontSection[];
 
+/** The "Volume price · 50-99 units" row in the total summary. Hidden at the
+ *  PG team's request (2026-10-07); see its render site. */
+const SHOW_VOLUME_PRICE_IN_SUMMARY = false;
+
 /**
  * Product customizer — Figma frames 404:1371 → 3933:25640 (the "New Product
  * Page" redesign). Two columns on desktop: a PINNED product-image panel on the
@@ -887,10 +891,16 @@ export function ProductCustomizer({
                         </span>
                         <span>{formatGhs(unitPrice * quantity)}</span>
                       </span>
-                      {/* Shown for EVERY matching tier, the ×1 base tier
-                          included (user, 2026-10-05): the shopper always sees
-                          which bracket they're in and its per-unit price. */}
-                      {activeTier && (
+                      {/* HIDDEN (PG team, 2026-10-07): "To maintain
+                          consistency across all quantity ranges, please remove
+                          the volume price from the Total Amount Summary
+                          entirely." The bracket and its per-unit price still
+                          show, highlighted, in the Volume pricing list above.
+                          Kept behind SHOW_VOLUME_PRICE_IN_SUMMARY rather than
+                          deleted; set it true to bring the row back (it then
+                          shows for every matching tier, the x1 base included,
+                          per the 2026-10-05 request). */}
+                      {SHOW_VOLUME_PRICE_IN_SUMMARY && activeTier && (
                         <span className="flex justify-between text-muted">
                           <span>Volume price · {activeTier.label}</span>
                           <span>{formatGhs(unitPrice)}/unit</span>
