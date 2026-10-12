@@ -237,3 +237,24 @@ describe("signInCustomer", () => {
     expect(jar.get(AUTH_COOKIE)).toBe(token);
   });
 });
+
+describe("signUpCustomer — phone is required (2026-10-12)", () => {
+  const base = { fullName: "Ama Mensah", email: "ama@example.com", password: "longenough1" };
+
+  it("refuses a sign-up with no phone before calling the backend", async () => {
+    const { signUpCustomer } = await import("./auth");
+    expect(await signUpCustomer({ ...base, phoneLocal: "  " })).toEqual({
+      status: "error",
+      error: "Please enter your phone number.",
+    });
+    expect(authClient.auth.login).not.toHaveBeenCalled();
+    expect(sdk.client.fetch).not.toHaveBeenCalled();
+  });
+
+  it("refuses a phone that isn't a Ghana number", async () => {
+    const { signUpCustomer } = await import("./auth");
+    const out = await signUpCustomer({ ...base, phoneLocal: "12" });
+    expect(out.status).toBe("error");
+    expect(sdk.client.fetch).not.toHaveBeenCalled();
+  });
+});

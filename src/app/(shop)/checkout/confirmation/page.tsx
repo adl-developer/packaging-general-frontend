@@ -49,6 +49,7 @@ export default async function ConfirmationPage({
   let email: string | undefined;
   let company: string | undefined;
   let contactPerson: string | undefined;
+  let contactPhone: string | undefined;
   let total: number | undefined;
   let chargeRows: ChargeRow[] | null = null;
   let paymentProviderId: string | undefined;
@@ -66,6 +67,7 @@ export default async function ConfirmationPage({
     const meta = (order.metadata ?? {}) as Record<string, unknown>;
     if (typeof meta.company_name === "string") company = meta.company_name;
     if (typeof meta.contact_person === "string") contactPerson = meta.contact_person;
+    if (typeof meta.contact_phone === "string") contactPhone = meta.contact_phone;
     // Display only — the backend reads the charged option for anything that
     // matters; the cart's recorded choice is enough to word this page.
     pickup = meta.fulfillment_method === "pickup";
@@ -135,6 +137,7 @@ export default async function ConfirmationPage({
         email={email}
         company={company}
         contactPerson={contactPerson}
+        contactPhone={contactPhone}
         total={total}
         chargeRows={chargeRows}
         paymentProviderId={paymentProviderId}
