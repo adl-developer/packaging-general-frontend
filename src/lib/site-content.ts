@@ -7,6 +7,11 @@ import { unstable_cache } from "next/cache";
 import { sdk } from "@/lib/medusa";
 import { CACHE_TAGS } from "@/lib/revalidate";
 import { coerceLevies, STATUTORY_LEVIES, type LevyPoints } from "@/lib/charge-breakdown";
+import {
+  DEFAULT_FULFILLMENT_METHODS,
+  parseFulfillmentMethods,
+  type FulfillmentMethods,
+} from "@/lib/fulfillment-methods";
 
 /**
  * Admin-editable site content, served by the custom backend route
@@ -71,6 +76,8 @@ interface SiteContentResponse {
   delivery_area?: { accra_only?: unknown };
   /** Delivery quotes "Live quotes" switch — absent on a backend before 2026-09-29. */
   yango_delivery?: { live_quotes?: unknown };
+  /** Pickup / delivery switches — absent on a backend before 2026-10-12. */
+  fulfillment_methods?: unknown;
 }
 
 interface SiteContentState {
@@ -88,6 +95,8 @@ interface SiteContentState {
   /** Delivery quotes "Live quotes" switch. False when the backend didn't say:
    *  the badge makes a claim, so unknown never shows it. */
   yangoLiveQuotes: boolean;
+  /** Pickup / delivery switches; both ON when the backend didn't say. */
+  fulfillmentMethods: FulfillmentMethods;
 }
 
 /** Last-known-good copy, served only when the backend is unreachable. The
@@ -105,6 +114,7 @@ const EMPTY: SiteContentState = {
   levies: null,
   accraOnly: null,
   yangoLiveQuotes: false,
+  fulfillmentMethods: DEFAULT_FULFILLMENT_METHODS,
 };
 
 function mapDoc(
@@ -138,6 +148,7 @@ const cachedSiteContent = unstable_cache(
           ? res.delivery_area.accra_only
           : null,
       yangoLiveQuotes: res.yango_delivery?.live_quotes === true,
+      fulfillmentMethods: parseFulfillmentMethods(res.fulfillment_methods),
     };
   },
   ["site-content"],
@@ -185,6 +196,13 @@ export async function getLevies(): Promise<LevyPoints> {
  *  Unknown (older backend, unreachable) → true, the backend's own default. */
 export async function getDeliveryAreaAccraOnly(): Promise<boolean> {
   return (await getSiteContent()).accraOnly ?? true;
+}
+
+/** Settings → Platform pickup / delivery switches. Drives what the delivery
+ *  and payment steps show; the backend's delivery route enforces them.
+ *  Unknown (older backend, unreachable) → both ON, as before they existed. */
+export async function getFulfillmentMethods(): Promise<FulfillmentMethods> {
+  return (await getSiteContent()).fulfillmentMethods ?? DEFAULT_FULFILLMENT_METHODS;
 }
 
 /** Is Settings → Platform → Delivery quotes → "Live quotes" on? The

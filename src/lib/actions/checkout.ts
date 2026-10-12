@@ -34,6 +34,8 @@ import { goodsLines } from "@/lib/platform-fee";
 import { findCompletedOrder } from "@/lib/completed-order";
 import { paystackChannels, type PaymentMethodChoice } from "@/lib/paystack-channels";
 import { storefrontMetadata } from "@/lib/storefront-origin";
+import { methodOffMessage } from "@/lib/fulfillment-methods";
+import { getFulfillmentMethods } from "@/lib/site-content";
 
 /**
  * Checkout server actions — wire forms + payment to Medusa, then to Paystack.
@@ -812,6 +814,19 @@ export async function initiatePaystack(method?: PaymentMethodChoice): Promise<
   if (!cart.shipping_methods?.length) {
     return { ok: false, error: "Please choose a delivery option before paying." };
   }
+
+  // Settings → Platform pickup / delivery switches (2026-10-12): the method
+  // this cart chose may have been switched off since the delivery step.
+  const switchedOff = methodOffMessage(
+    await getFulfillmentMethods(),
+    isPickupCart(
+      cart.metadata as Record<string, unknown> | null,
+      cart.shipping_address?.metadata as Record<string, unknown> | null,
+    )
+      ? "pickup"
+      : "delivery",
+  );
+  if (switchedOff) return { ok: false, error: switchedOff };
 
   // Last check before money moves. Narrows — but cannot close — the window
   // between here and cart.complete(); the callback route (layer 3) is what
