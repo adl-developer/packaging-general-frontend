@@ -58,6 +58,9 @@ vi.mock("./auth", () => ({
   signUpCustomer: vi.fn(),
 }));
 vi.mock("@/lib/stock", () => ({ getStockMap: vi.fn(async () => new Map()) }));
+vi.mock("@/lib/site-content", () => ({
+  getFulfillmentMethods: vi.fn(async () => ({ pickup: true, delivery: true })),
+}));
 
 import { revalidatePath } from "next/cache";
 import {

@@ -18,7 +18,8 @@ import { goodsLines, platformFeeTotal } from "@/lib/platform-fee";
 import { addressLine, isPickupCart } from "@/lib/fulfillment";
 import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-progress";
 import { chargeBreakdown } from "@/lib/charge-breakdown";
-import { getLevies } from "@/lib/site-content";
+import { getFulfillmentMethods, getLevies } from "@/lib/site-content";
+import { methodOffMessage } from "@/lib/fulfillment-methods";
 
 export const metadata: Metadata = {
   title: "Payment",
@@ -77,6 +78,12 @@ export default async function PaymentPage({
     cart.metadata as Record<string, unknown> | null,
     cart.shipping_address?.metadata as Record<string, unknown> | null,
   );
+  // The method chosen at the delivery step was switched off in Settings →
+  // Platform since (2026-10-12): back to the delivery step, which greys it
+  // out and says why.
+  if (methodOffMessage(await getFulfillmentMethods(), pickup ? "pickup" : "delivery")) {
+    redirect("/checkout/delivery");
+  }
   // Subtotal → Discount → Delivery → Platform Fee → VAT → NHIL → GETFund →
   // Total (client, 2026-09-23) — same ladder as the receipt and emails.
   const { rows } = chargeBreakdown(

@@ -6,6 +6,12 @@ import { m } from "motion/react";
 import { DURATION, EASE_PREMIUM } from "@/lib/motion";
 import type { PickupLocation } from "@/lib/pickup";
 import { addressLine } from "@/lib/fulfillment";
+import {
+  DELIVERY_OFF_MESSAGE,
+  PICKUP_OFF_MESSAGE,
+  UNAVAILABLE_LABEL,
+  type FulfillmentMethods,
+} from "@/lib/fulfillment-methods";
 import { cn } from "@/lib/utils";
 import {
   OrderProgress,
@@ -23,6 +29,10 @@ import { PickupForm, type PickupInitial } from "./pickup-form";
  *
  * When pickup is NOT offered the page renders the plain `DeliveryForm`
  * instead of this — see `app/(shop)/checkout/delivery/page.tsx`.
+ *
+ * Settings → Platform switches (2026-10-12): a switched-off method stays on
+ * the page, greyed out as "Currently unavailable" and impossible to open
+ * (user's choice over hiding it). The page never renders this with BOTH off.
  */
 type Method = "pickup" | "delivery";
 
@@ -32,6 +42,7 @@ export function FulfillmentChooser({
   deliveryInitial,
   pickupInitial,
   initialMethod,
+  methods,
   accraOnly,
   yangoLiveQuotes = false,
 }: {
@@ -40,13 +51,25 @@ export function FulfillmentChooser({
   deliveryInitial: DeliveryInitial;
   pickupInitial: PickupInitial;
   initialMethod: Method | null;
+  /** Which methods Settings → Platform has switched on. */
+  methods: FulfillmentMethods;
   /** Home delivery Greater Accra only — passed to the delivery card. */
   accraOnly: boolean;
   /** Settings → Platform → Delivery quotes → "Live quotes" is on: the only
    *  time "Powered by Yango Delivery" shows (user rule, 2026-09-29). */
   yangoLiveQuotes?: boolean;
 }) {
-  const [open, setOpen] = React.useState<Method | null>(initialMethod);
+  // A cart that chose a method since switched off re-opens nothing on it.
+  const [open, setOpen] = React.useState<Method | null>(
+    initialMethod && methods[initialMethod] ? initialMethod : null,
+  );
+  // Back from payment on a now-unavailable method: say why it was dropped.
+  const droppedMessage =
+    initialMethod && !methods[initialMethod]
+      ? initialMethod === "pickup"
+        ? PICKUP_OFF_MESSAGE
+        : DELIVERY_OFF_MESSAGE
+      : null;
 
   return (
     <>
@@ -70,6 +93,15 @@ export function FulfillmentChooser({
             </p>
           </div>
 
+          {droppedMessage && (
+            <p
+              role="alert"
+              className="rounded-option border border-[rgba(251,44,54,0.4)] bg-[rgba(231,0,11,0.06)] px-4 py-3 text-sm font-medium text-brand"
+            >
+              {droppedMessage}
+            </p>
+          )}
+
           <OptionCard
             id="pickup"
             icon={Store}
@@ -78,6 +110,7 @@ export function FulfillmentChooser({
               pickupLocation.display ??
               addressLine(pickupLocation.address, pickupLocation.city)
             }`}
+            disabled={!methods.pickup}
             open={open === "pickup"}
             onToggle={() => setOpen((o) => (o === "pickup" ? null : "pickup"))}
           >
@@ -93,6 +126,7 @@ export function FulfillmentChooser({
             icon={Truck}
             title="Deliver to me"
             subtitle="Delivered by Yango in 2–3 business days"
+            disabled={!methods.delivery}
             open={open === "delivery"}
             onToggle={() =>
               setOpen((o) => (o === "delivery" ? null : "delivery"))
@@ -103,7 +137,7 @@ export function FulfillmentChooser({
               embedded
               accraOnly={accraOnly}
               yangoLiveQuotes={yangoLiveQuotes}
-              pickupAvailable
+              pickupAvailable={methods.pickup}
             />
           </OptionCard>
         </m.div>
@@ -117,6 +151,7 @@ function OptionCard({
   icon: Icon,
   title,
   subtitle,
+  disabled = false,
   open,
   onToggle,
   children,
@@ -125,6 +160,8 @@ function OptionCard({
   icon: typeof Store;
   title: string;
   subtitle: string;
+  /** Switched off in Settings → Platform: greyed out, can't be opened. */
+  disabled?: boolean;
   open: boolean;
   onToggle: () => void;
   children: React.ReactNode;
@@ -135,14 +172,16 @@ function OptionCard({
       className={cn(
         "overflow-hidden rounded-card border bg-surface transition-colors",
         open ? "border-brand" : "border-line",
+        disabled && "opacity-60",
       )}
     >
       <button
         type="button"
-        onClick={onToggle}
+        onClick={disabled ? undefined : onToggle}
+        disabled={disabled}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full items-center gap-3 p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40"
+        className="flex w-full items-center gap-3 p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40 disabled:cursor-not-allowed"
       >
         {/* Radio-style marker: the bars are a single choice. */}
         <span
@@ -160,18 +199,24 @@ function OptionCard({
             {title}
           </span>
           <span className="truncate text-sm leading-5 text-muted">
-            {subtitle}
+            {disabled ? UNAVAILABLE_LABEL : subtitle}
           </span>
         </span>
-        <ChevronDown
-          aria-hidden
-          className={cn(
-            "size-5 shrink-0 text-muted transition-transform",
-            open && "rotate-180",
-          )}
-        />
+        {disabled ? (
+          <span className="shrink-0 rounded-full border border-line px-2 py-0.5 text-xs font-medium text-muted">
+            Unavailable
+          </span>
+        ) : (
+          <ChevronDown
+            aria-hidden
+            className={cn(
+              "size-5 shrink-0 text-muted transition-transform",
+              open && "rotate-180",
+            )}
+          />
+        )}
       </button>
-      {open && (
+      {open && !disabled && (
         <div id={panelId} className="border-t border-line p-5 sm:p-6">
           {children}
         </div>
