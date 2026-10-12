@@ -235,6 +235,7 @@ export function AuthFormBody({
                 placeholder="24 123 4567"
                 pattern={GH_PHONE_PATTERN}
                 title={PHONE_ERROR}
+                required
                 className={fieldInput}
               />
             </div>

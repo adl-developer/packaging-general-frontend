@@ -292,9 +292,11 @@ export async function signUpCustomer(input: {
 
   const [firstName, ...rest] = fullName.split(/\s+/);
   const lastName = rest.join(" ");
-  // Phone is optional on signup, but when given it must be a real Ghana
-  // number — normalized to E.164 so SMS notifications work later.
-  const phone = phoneLocal ? normalizeGhanaPhone(phoneLocal) : undefined;
+  // Phone is REQUIRED (client, 2026-10-12: name, email and phone for every
+  // account) and must be a real Ghana number, normalized to E.164 so SMS
+  // notifications work.
+  if (!phoneLocal) return { status: "error", error: "Please enter your phone number." };
+  const phone = normalizeGhanaPhone(phoneLocal);
   if (phone === null) return { status: "error", error: PHONE_ERROR };
 
   const outcome = await registerCustomer({
@@ -380,6 +382,9 @@ export async function createAccountFromOrder(
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const contactPerson = String(formData.get("contact_person") || "").trim();
   const company = String(formData.get("company") || "").trim();
+  // The phone given at checkout (2026-10-12: every account carries one).
+  // Optional here: an unreadable one just leaves it off, never blocks signup.
+  const phone = normalizeGhanaPhone(String(formData.get("phone") || "")) ?? undefined;
   const password = String(formData.get("password") || "");
   const confirm = String(formData.get("confirm") || "");
 
@@ -408,6 +413,7 @@ export async function createAccountFromOrder(
     firstName: firstName || undefined,
     lastName: rest.join(" ") || undefined,
     company: company || undefined,
+    phone,
   });
   if ("error" in outcome) {
     return fail(outcome.error);

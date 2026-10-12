@@ -21,6 +21,8 @@ import {
  * 2. Medusa's Google callback exchanges the code → a token with no customer.
  * 3. POST /store/auth/google/complete links or creates the account.
  * 4. /auth/token/refresh → a token carrying the customer → session cookie.
+ * 5. No phone on the account (Google never gives one) → the "Add your phone
+ *    number" step first, then on to `next` (client, 2026-10-12).
  */
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,9 @@ export async function GET(request: NextRequest) {
   });
 
   // redirect() throws NEXT_REDIRECT, so it must live outside any try/catch.
+  if (outcome === "needs-phone") {
+    redirect(`/add-phone?next=${encodeURIComponent(next)}`);
+  }
   if (outcome !== "ok") redirect(`/sign-in?google=${outcome}`);
   redirect(next);
 }
@@ -49,7 +54,7 @@ async function finish(input: {
   state: string | null;
   error: string | null;
   expectedState: string | undefined;
-}): Promise<"ok" | GoogleSignInError> {
+}): Promise<"ok" | "needs-phone" | GoogleSignInError> {
   // The customer pressed Cancel on Google's screen.
   if (input.error) return "cancelled";
   if (
@@ -96,5 +101,20 @@ async function finish(input: {
   await setAuthToken(session);
   await transferGuestCart(session);
   revalidatePath("/", "layout");
-  return "ok";
+  return (await hasPhone(session)) ? "ok" : "needs-phone";
+}
+
+/** Does the signed-in account have a phone? A failed read counts as yes: the
+ *  sign-in itself worked, and the phone step must never strand anyone. */
+async function hasPhone(session: string): Promise<boolean> {
+  try {
+    const { customer } = await sdk.store.customer.retrieve(
+      { fields: "id,phone" },
+      authHeaders(session),
+    );
+    return Boolean(customer.phone?.trim());
+  } catch (err) {
+    console.error("[google-auth] phone check failed:", err);
+    return true;
+  }
 }

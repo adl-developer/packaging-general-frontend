@@ -70,6 +70,8 @@ interface OrderConfirmationProps {
   email?: string;
   company?: string;
   contactPerson?: string;
+  /** The checkout contact phone, so a post-order account gets it too. */
+  contactPhone?: string;
   total?: number;
   /** The charge ladder (Subtotal → … → GETFund) shown above Order Total —
    *  same rows as the receipt and emails. Absent when the order couldn't be
@@ -97,6 +99,7 @@ export function OrderConfirmation({
   email,
   company,
   contactPerson,
+  contactPhone,
   total,
   chargeRows,
   paymentProviderId,
@@ -218,6 +221,7 @@ export function OrderConfirmation({
             email={email}
             company={company}
             contactPerson={contactPerson}
+            contactPhone={contactPhone}
             accountStatus={accountStatus}
             onClose={() => setShowModal(false)}
           />
@@ -332,6 +336,7 @@ function CreateAccountModal({
   email,
   company,
   contactPerson,
+  contactPhone,
   accountStatus,
   onClose,
 }: {
@@ -339,6 +344,7 @@ function CreateAccountModal({
   email: string;
   company?: string;
   contactPerson?: string;
+  contactPhone?: string;
   accountStatus: OrderEmailAccountStatus;
   onClose: () => void;
 }) {
@@ -488,6 +494,7 @@ function CreateAccountModal({
               <input type="hidden" name="email" value={email} />
               <input type="hidden" name="contact_person" value={contactPerson ?? ""} />
               <input type="hidden" name="company" value={company ?? ""} />
+              <input type="hidden" name="phone" value={contactPhone ?? ""} />
 
               <PasswordField
                 id="create-password"
