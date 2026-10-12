@@ -19,6 +19,7 @@ import {
   installErrorRecorder,
   recordVisit,
 } from "@/lib/feedback-context";
+import { SUPPORT_EMAIL } from "@/lib/whatsapp";
 
 /**
  * Floating feedback button (user request, 2026-09-22).
@@ -233,7 +234,15 @@ export function FeedbackWidget() {
                         Send feedback
                       </h2>
                       <p className="mt-0.5 text-xs text-muted">
-                        Spotted a problem or have an idea? Tell us.
+                        Share any bugs/issues or ideas for the platform here.
+                        Any product inquiries should be sent to{" "}
+                        <a
+                          href={`mailto:${SUPPORT_EMAIL}`}
+                          className="font-medium text-brand underline underline-offset-2"
+                        >
+                          {SUPPORT_EMAIL}
+                        </a>
+                        .
                       </p>
                     </div>
                     <button
