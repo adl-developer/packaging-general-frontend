@@ -11,7 +11,10 @@ const sdk = vi.hoisted(() => ({
     cart: {
       retrieve: vi.fn(),
       deleteLineItem: vi.fn(),
+      create: vi.fn(),
+      createLineItem: vi.fn(),
     },
+    region: { list: vi.fn() },
   },
   client: { fetch: vi.fn() },
 }));
@@ -34,7 +37,7 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { getCart, getCartForPrefill, getCartWithChanges } from "./cart";
+import { addLineItem, getCart, getCartForPrefill, getCartWithChanges } from "./cart";
 
 const liveCart = {
   id: "cart_1",
@@ -185,5 +188,48 @@ describe("getCart sync policy", () => {
     expect(sdk.store.cart.retrieve).toHaveBeenCalledTimes(1);
     expect(sdk.client.fetch).toHaveBeenCalledTimes(1);
     expect(jar.get("pg_cart_id")).toBe("cart_1");
+  });
+});
+
+describe("addLineItem when the cart has vanished (Sentry STOREFRONT-9)", () => {
+  const goneCart = Object.assign(new Error("Cart id not found: cart_1"), { status: 404 });
+
+  beforeEach(() => {
+    sdk.store.region.list.mockResolvedValue({ regions: [{ id: "reg_gh", currency_code: "ghs" }] });
+    sdk.store.cart.create.mockResolvedValue({ cart: { id: "cart_new" } });
+  });
+
+  it("starts a fresh cart and repeats the add instead of failing", async () => {
+    sdk.store.cart.createLineItem
+      .mockRejectedValueOnce(goneCart)
+      .mockResolvedValueOnce({ cart: { ...liveCart, id: "cart_new", items: [] } });
+
+    await addLineItem("variant_1", 2);
+
+    expect(sdk.store.cart.createLineItem).toHaveBeenCalledTimes(2);
+    expect(sdk.store.cart.createLineItem.mock.calls[0][0]).toBe("cart_1");
+    expect(sdk.store.cart.createLineItem.mock.calls[1][0]).toBe("cart_new");
+    expect(jar.get("pg_cart_id")).toBe("cart_new");
+  });
+
+  it("does not retry (or drop the cart) when the problem is the variant", async () => {
+    const deadVariant = Object.assign(
+      new Error("Variants variant_1 do not exist or belong to a product that is not published"),
+      { status: 400 },
+    );
+    sdk.store.cart.createLineItem.mockRejectedValueOnce(deadVariant);
+
+    await expect(addLineItem("variant_1")).rejects.toBe(deadVariant);
+    expect(sdk.store.cart.createLineItem).toHaveBeenCalledTimes(1);
+    expect(sdk.store.cart.create).not.toHaveBeenCalled();
+    expect(jar.get("pg_cart_id")).toBe("cart_1");
+  });
+
+  it("gives up after one retry, leaving no stale cookie behind", async () => {
+    sdk.store.cart.createLineItem.mockRejectedValue(goneCart);
+
+    await expect(addLineItem("variant_1")).rejects.toBe(goneCart);
+    expect(sdk.store.cart.createLineItem).toHaveBeenCalledTimes(2);
+    expect(jar.has("pg_cart_id")).toBe(false);
   });
 });

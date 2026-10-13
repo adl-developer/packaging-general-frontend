@@ -48,3 +48,25 @@ export function isInsufficientInventoryError(err: unknown): boolean {
     message,
   );
 }
+
+/**
+ * True when the write failed because the CART itself is gone (2026-10-13,
+ * Sentry STOREFRONT-9): the cookie names a cart that was deleted or already
+ * completed. Medusa's wording:
+ *   404 "Cart id not found: cart_…" / "Cart with id 'cart_…' not found"
+ *   400 "Cart cart_… is already completed."
+ *
+ * Only then is it safe to start a fresh cart and repeat the add: nothing the
+ * shopper still wants lives in a cart that no longer exists. A dead variant or
+ * a stock shortfall is about the LINE and is never treated as this.
+ */
+export function isDeadCartError(err: unknown): boolean {
+  if (isDeadVariantError(err) || isInsufficientInventoryError(err)) return false;
+  const message = (err as { message?: unknown })?.message;
+  if (typeof message !== "string") return false;
+  const status = (err as { status?: unknown })?.status;
+  return (
+    (status === 404 && /\bcart\b.*\bnot found\b/i.test(message)) ||
+    /\bcart\b.*\balready completed\b/i.test(message)
+  );
+}
