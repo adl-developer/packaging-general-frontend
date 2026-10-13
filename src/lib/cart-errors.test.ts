@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDeadVariantError } from "./cart-errors";
+import { isDeadCartError, isDeadVariantError } from "./cart-errors";
 
 /** Mirrors @medusajs/js-sdk's FetchError: server message + HTTP status. */
 class FetchError extends Error {
@@ -53,5 +53,40 @@ describe("isDeadVariantError", () => {
     expect(isDeadVariantError(null)).toBe(false);
     expect(isDeadVariantError("Variants do not exist")).toBe(false);
     expect(isDeadVariantError({ message: 42 })).toBe(false);
+  });
+});
+
+describe("isDeadCartError", () => {
+  it("recognises both 404 wordings for a vanished cart", () => {
+    expect(
+      isDeadCartError(new FetchError("Cart id not found: cart_01M48ZSPTT94WSJ3SKHSHWNF8N", 404)),
+    ).toBe(true);
+    expect(
+      isDeadCartError(new FetchError("Cart with id 'cart_01M3NREAXNHQJ45WQY223RER64' not found", 404)),
+    ).toBe(true);
+  });
+
+  it("recognises a completed cart", () => {
+    expect(isDeadCartError(new FetchError("Cart cart_01ABC is already completed.", 400))).toBe(true);
+  });
+
+  it("never treats a line problem as a dead cart", () => {
+    expect(
+      isDeadCartError(
+        new FetchError(
+          "Variants variant_01ABC do not exist or belong to a product that is not published",
+          400,
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      isDeadCartError(new FetchError("Some variant does not have the required inventory", 400)),
+    ).toBe(false);
+  });
+
+  it("ignores a 404 that isn't about the cart, and network blips", () => {
+    expect(isDeadCartError(new FetchError("Product not found", 404))).toBe(false);
+    expect(isDeadCartError(new Error("fetch failed"))).toBe(false);
+    expect(isDeadCartError(undefined)).toBe(false);
   });
 });

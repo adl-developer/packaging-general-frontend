@@ -7,6 +7,7 @@ import { sdk } from "@/lib/medusa";
 import {
   isDeadVariantError,
   isInsufficientInventoryError,
+  isDeadCartError,
 } from "@/lib/cart-errors";
 import { goodsLines, syncPlatformFee } from "@/lib/platform-fee";
 
@@ -514,27 +515,55 @@ export async function warmCart(): Promise<void> {
   }
 }
 
+/**
+ * Run an add against the cookie'd cart; if that cart turns out to be GONE
+ * (deleted or already completed — `isDeadCartError`), start a fresh cart and
+ * run the add once more (2026-10-13, Sentry STOREFRONT-9). Before this the
+ * shopper's first Add to Cart after their cart vanished failed with "Couldn't
+ * add to cart" and only the second click worked. Any other failure keeps the
+ * old behaviour: `clearStaleCartOn4xx`, then rethrow for the caller's error UI.
+ * Returns the cart id the add actually landed on.
+ */
+async function addWithLiveCart<T>(
+  add: (cartId: string) => Promise<T>,
+): Promise<{ result: T; cartId: string }> {
+  const cartId = await ensureCartId();
+  try {
+    return { result: await add(cartId), cartId };
+  } catch (err) {
+    if (!isDeadCartError(err)) {
+      await clearStaleCartOn4xx(err);
+      throw err;
+    }
+  }
+  await clearCartId();
+  const fresh = await ensureCartId();
+  try {
+    return { result: await add(fresh), cartId: fresh };
+  } catch (err) {
+    await clearStaleCartOn4xx(err);
+    throw err;
+  }
+}
+
 /** Add a variant to the cart (creating the cart if needed). Returns the updated cart. */
 export async function addLineItem(
   variantId: string,
   quantity = 1
 ): Promise<HttpTypes.StoreCart | null> {
-  const cartId = await ensureCartId();
-  let updated: HttpTypes.StoreCart;
-  try {
-    // createLineItem returns the updated cart — asking for the slim mutation
-    // fields saves both the extra retrieve AND the totals/payment decoration.
-    ({ cart: updated } = await sdk.store.cart.createLineItem(
-      cartId,
-      { variant_id: variantId, quantity },
-      { fields: CART_MUTATION_FIELDS }
-    ));
-  } catch (err) {
-    // A 4xx means the cookie'd cart is gone/completed/invalid — clear it so
-    // the retry starts a fresh cart. Callers show error UI.
-    await clearStaleCartOn4xx(err);
-    throw err;
-  }
+  // createLineItem returns the updated cart — asking for the slim mutation
+  // fields saves both the extra retrieve AND the totals/payment decoration.
+  // A vanished cart is replaced and the add repeated (`addWithLiveCart`).
+  const { result: updated, cartId } = await addWithLiveCart(
+    async (id) =>
+      (
+        await sdk.store.cart.createLineItem(
+          id,
+          { variant_id: variantId, quantity },
+          { fields: CART_MUTATION_FIELDS }
+        )
+      ).cart
+  );
   await writeCartId(cartId); // sliding expiry
   revalidatePath("/cart");
   revalidatePath("/checkout");
@@ -586,7 +615,6 @@ export async function addConfiguredLineItem(input: {
   setupPrintingValue?: string | null;
   notes?: string;
 }): Promise<HttpTypes.StoreCart | null> {
-  const cartId = await ensureCartId();
   const notes = input.notes?.trim();
 
   // The setup-fee lookup doesn't depend on the carton line — run it while the
@@ -598,10 +626,13 @@ export async function addConfiguredLineItem(input: {
   // must not surface as an unhandledRejection — awaiting it later still throws.
   setupVariantPromise?.catch(() => {});
 
-  let updated: HttpTypes.StoreCart;
-  try {
-    ({ cart: updated } = await sdk.store.cart.createLineItem(
-      cartId,
+  // A vanished cart is replaced and the add repeated (`addWithLiveCart`);
+  // any other failure clears a stale cookie and reaches the customizer's
+  // "Couldn't add to cart".
+  const { result: updated, cartId } = await addWithLiveCart(async (id) => {
+    let cart: HttpTypes.StoreCart;
+    ({ cart } = await sdk.store.cart.createLineItem(
+      id,
       {
         variant_id: input.variantId,
         quantity: input.quantity,
@@ -612,23 +643,19 @@ export async function addConfiguredLineItem(input: {
 
     if (setupVariantPromise) {
       const setupVariantId = await setupVariantPromise;
-      const alreadyCharged = (updated.items ?? []).some(
+      const alreadyCharged = (cart.items ?? []).some(
         (item) => item.variant_id === setupVariantId
       );
       if (!alreadyCharged) {
-        ({ cart: updated } = await sdk.store.cart.createLineItem(
-          cartId,
+        ({ cart } = await sdk.store.cart.createLineItem(
+          id,
           { variant_id: setupVariantId, quantity: 1 },
           { fields: CART_MUTATION_FIELDS }
         ));
       }
     }
-  } catch (err) {
-    // A 4xx means the cookie'd cart is gone/completed/invalid — clear it so the
-    // retry (the customizer shows "Couldn't add to cart") starts fresh.
-    await clearStaleCartOn4xx(err);
-    throw err;
-  }
+    return cart;
+  });
 
   await writeCartId(cartId); // sliding expiry
   revalidatePath("/cart");
