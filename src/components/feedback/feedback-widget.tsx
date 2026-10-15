@@ -41,6 +41,9 @@ import { SUPPORT_EMAIL } from "@/lib/whatsapp";
 const SENT_MS = 2200;
 const TITLE_MAX = 120;
 const MESSAGE_MAX = 5000;
+/** 16px on phones: iOS Safari zooms the whole page into any focused field
+ *  under 16px, which shoved the card off-centre and left the page zoomed. */
+const FIELD_TEXT = "text-base sm:text-sm";
 
 type Phase = "closed" | "open" | "sending" | "sent";
 
@@ -64,7 +67,11 @@ export function FeedbackWidget() {
   }, [pathname]);
 
   React.useEffect(() => {
-    if (phase === "open") titleRef.current?.focus();
+    // Mouse/trackpad only: on a phone, focusing on open throws the keyboard
+    // over half the card before the reporter has even read it.
+    if (phase === "open" && window.matchMedia("(pointer: fine)").matches) {
+      titleRef.current?.focus();
+    }
   }, [phase]);
 
   React.useEffect(
@@ -159,9 +166,11 @@ export function FeedbackWidget() {
           no longer sits over page content or the product page's bottom
           action bar. Hidden while the card is up so the two never stack.
           The wrapper owns the -50% centring because motion's own transform
-          would overwrite a translate class on the button itself. ⚠ px/py are
-          LOGICAL padding, so in vertical text px is top/bottom and py is
-          left/right. */}
+          would overwrite a translate class on the button itself.
+          ⚠ The button is a FIXED-SIZE horizontal box and only the inner span
+          is vertical (2026-10-15): with writing-mode on the button itself,
+          iOS Safari sized the fixed wrapper narrower than the button and
+          pushed half the tab off the right edge. */}
       <div className="fixed right-0 top-1/2 z-40 -translate-y-1/2">
         <AnimatePresence>
           {!showCard && (
@@ -173,9 +182,9 @@ export function FeedbackWidget() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: "100%" }}
               transition={{ duration: DURATION.base, ease: EASE_PREMIUM }}
-              className="flex items-center justify-center rounded-l-[10px] bg-brand px-3.5 py-2 text-xs font-semibold tracking-wide text-brand-foreground shadow-lg transition-colors duration-200 [writing-mode:vertical-rl] hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2"
+              className="flex h-22 w-8 items-center justify-center rounded-l-[10px] bg-brand text-xs font-semibold tracking-wide text-brand-foreground shadow-lg transition-colors duration-200 hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2"
             >
-              Feedback
+              <span className="[writing-mode:vertical-rl]">Feedback</span>
             </m.button>
           )}
         </AnimatePresence>
@@ -262,6 +271,7 @@ export function FeedbackWidget() {
                       <span className="font-normal text-muted">(optional)</span>
                     </Label>
                     <Input
+                      className={FIELD_TEXT}
                       ref={titleRef}
                       id="feedback-subject"
                       name="title"
@@ -285,7 +295,7 @@ export function FeedbackWidget() {
                       placeholder="What happened, and what did you expect?"
                       disabled={phase === "sending"}
                       required
-                      className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-sm text-brand placeholder:text-muted focus-visible:border-accent focus-visible:outline-none disabled:opacity-50"
+                      className="w-full resize-none rounded-button border-2 border-input bg-surface px-3 py-2 text-base text-brand sm:text-sm placeholder:text-muted focus-visible:border-accent focus-visible:outline-none disabled:opacity-50"
                     />
                   </div>
 
@@ -299,6 +309,7 @@ export function FeedbackWidget() {
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor="feedback-name">Name</Label>
                       <Input
+                        className={FIELD_TEXT}
                         id="feedback-name"
                         name="name"
                         autoComplete="name"
@@ -310,6 +321,7 @@ export function FeedbackWidget() {
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor="feedback-phone">Phone number</Label>
                       <Input
+                        className={FIELD_TEXT}
                         id="feedback-phone"
                         name="phone"
                         type="tel"
@@ -324,6 +336,7 @@ export function FeedbackWidget() {
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor="feedback-email">Email address</Label>
                       <Input
+                        className={FIELD_TEXT}
                         id="feedback-email"
                         name="email"
                         type="email"
