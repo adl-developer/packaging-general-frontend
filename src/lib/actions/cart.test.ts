@@ -36,8 +36,18 @@ vi.mock("next/headers", () => ({
   }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+// Order Acceptance: open unless a test says otherwise.
+const ordersArePaused = vi.hoisted(() => vi.fn(async () => false));
+vi.mock("@/lib/site-content", () => ({ ordersArePaused }));
 
-import { addLineItem, getCart, getCartForPrefill, getCartWithChanges } from "./cart";
+import {
+  addConfiguredLineItem,
+  addLineItem,
+  getCart,
+  getCartForPrefill,
+  getCartWithChanges,
+} from "./cart";
+import { CHECKOUT_PAUSED_MESSAGE } from "@/lib/fulfillment-methods";
 
 const liveCart = {
   id: "cart_1",
@@ -188,6 +198,19 @@ describe("getCart sync policy", () => {
     expect(sdk.store.cart.retrieve).toHaveBeenCalledTimes(1);
     expect(sdk.client.fetch).toHaveBeenCalledTimes(1);
     expect(jar.get("pg_cart_id")).toBe("cart_1");
+  });
+});
+
+describe("adding while orders are paused (Order Acceptance off)", () => {
+  it("refuses both add paths before touching the cart", async () => {
+    ordersArePaused.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+
+    await expect(addLineItem("variant_1")).rejects.toThrow(CHECKOUT_PAUSED_MESSAGE);
+    await expect(
+      addConfiguredLineItem({ variantId: "variant_1", quantity: 50 }),
+    ).rejects.toThrow(CHECKOUT_PAUSED_MESSAGE);
+    expect(sdk.store.cart.createLineItem).not.toHaveBeenCalled();
+    expect(sdk.store.cart.create).not.toHaveBeenCalled();
   });
 });
 

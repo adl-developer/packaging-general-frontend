@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { BrandLockup } from "./brand-lockup";
 import { PromoBar } from "./promo-bar";
+import { OrdersPausedBar } from "@/components/orders-paused/orders-paused-bar";
 import { HeaderAccount, HeaderAccountFallback } from "./header-account";
 import { HeaderCart, HeaderCartFallback } from "./header-cart";
 import { HeaderHeightSync } from "./header-height-sync";
@@ -44,6 +45,9 @@ export function SiteHeader() {
         </div>
       </div>
       <PromoBar />
+      {/* Orders paused notice (2026-10-16). Inline for the same reason as
+          the promo bar: it changes the header height. */}
+      <OrdersPausedBar />
       <HeaderHeightSync />
     </header>
   );

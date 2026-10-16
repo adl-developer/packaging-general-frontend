@@ -243,6 +243,13 @@ export async function getOrderAcceptance(): Promise<OrderAcceptance> {
   return (await getSiteContent()).orderAcceptance ?? DEFAULT_ORDER_ACCEPTANCE;
 }
 
+/** True while Order Acceptance is off. The add-to-cart and Buy Now server
+ *  actions refuse then, so a tab opened before the pause can't fill a cart;
+ *  the backend still refuses delivery and payment on its own. */
+export async function ordersArePaused(): Promise<boolean> {
+  return !(await getOrderAcceptance()).open;
+}
+
 /** Settings → Business Location's customer phone and address (the "Orders
  *  paused" contact strip). Nulls when unset or unreachable — callers fall
  *  back to the support line and "Accra, Ghana". */

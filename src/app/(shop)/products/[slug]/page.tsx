@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getProductBySlug } from "@/lib/catalog";
 import { getStockForProduct } from "@/lib/stock";
 import { getCustomer } from "@/lib/actions/auth";
-import { getLevies } from "@/lib/site-content";
+import { getLevies, getOrderAcceptance } from "@/lib/site-content";
 import {
   LiveProductCustomizer,
   type StockByVariant,
@@ -33,7 +33,13 @@ export default async function ProductDetailPage({
   // `getLevies` rides the site-content cache (1 h, dropped on a Settings →
   // Platform save), read alongside the cached product: it prices the tax
   // line under the customizer's estimated total.
-  const [product, levies] = await Promise.all([getProductBySlug(slug), getLevies()]);
+  // Order Acceptance rides the same cached read: while paused the product
+  // stays browsable ("Just Browse") with Add to Cart / Buy Now disabled.
+  const [product, levies, acceptance] = await Promise.all([
+    getProductBySlug(slug),
+    getLevies(),
+    getOrderAcceptance(),
+  ]);
   if (!product) notFound();
 
   // The two per-request backend reads start here and are deliberately NOT
@@ -70,6 +76,7 @@ export default async function ProductDetailPage({
       levies={levies}
       stock={stock}
       isSignedIn={isSignedIn}
+      ordersPaused={!acceptance.open}
     />
   );
 }
