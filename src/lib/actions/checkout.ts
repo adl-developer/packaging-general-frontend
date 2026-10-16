@@ -34,8 +34,8 @@ import { goodsLines } from "@/lib/platform-fee";
 import { findCompletedOrder } from "@/lib/completed-order";
 import { paystackChannels, type PaymentMethodChoice } from "@/lib/paystack-channels";
 import { storefrontMetadata } from "@/lib/storefront-origin";
-import { methodOffMessage } from "@/lib/fulfillment-methods";
-import { getFulfillmentMethods } from "@/lib/site-content";
+import { CHECKOUT_PAUSED_MESSAGE, methodOffMessage } from "@/lib/fulfillment-methods";
+import { getFulfillmentMethods, ordersArePaused } from "@/lib/site-content";
 
 /**
  * Checkout server actions — wire forms + payment to Medusa, then to Paystack.
@@ -606,6 +606,9 @@ const BUY_NOW_NOTICE =
 export async function buyNow(input: BuyNowItem): Promise<BuyNowResult> {
   // Server-side auth is mandatory — the button now renders for guests too
   // (they get the auth modal), so this is the only real gate.
+  // Orders paused (Settings → Order Acceptance): say why, rather than the
+  // generic "Couldn't add" the add's refusal would surface.
+  if (await ordersArePaused()) return { ok: false, error: CHECKOUT_PAUSED_MESSAGE };
   const customer = await getCustomer();
   if (!customer) {
     return { ok: false, error: "Please sign in to use Buy Now." };
@@ -721,6 +724,8 @@ export async function buyNowAuth(
     notes: formData.get("notes") as string | null,
   });
   if (!parsed.ok) return { status: "error", error: parsed.error };
+  // Before any sign-in or sign-up: nothing can be bought while paused.
+  if (await ordersArePaused()) return { status: "error", error: CHECKOUT_PAUSED_MESSAGE };
 
   const mode = String(formData.get("mode") || "signin");
   const email = String(formData.get("email") || "").trim().toLowerCase();

@@ -47,11 +47,14 @@ export function LiveProductCustomizer({
   levies,
   stock,
   isSignedIn,
+  ordersPaused,
 }: {
   product: Product;
   levies: LevyPoints;
   stock: Promise<StockByVariant>;
   isSignedIn: Promise<boolean>;
+  /** Settings → Order Acceptance is off: browse only. */
+  ordersPaused: boolean;
 }) {
   const [liveStock, setLiveStock] = React.useState<StockByVariant>({});
   const [signedIn, setSignedIn] = React.useState(false);
@@ -62,6 +65,7 @@ export function LiveProductCustomizer({
         levies={levies}
         stock={liveStock}
         isSignedIn={signedIn}
+        ordersPaused={ordersPaused}
       />
       <React.Suspense fallback={null}>
         <Resolve promise={stock} onValue={setLiveStock} />

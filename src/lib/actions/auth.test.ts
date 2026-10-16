@@ -37,6 +37,8 @@ vi.mock("next/headers", () => ({
   }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+// cart.ts (pulled in by auth.ts) reads Order Acceptance; keep orders open.
+vi.mock("@/lib/site-content", () => ({ ordersArePaused: async () => false }));
 vi.mock("next/navigation", () => ({ redirect }));
 
 import { changeAccountPassword, sendAccountResetLink, signInCustomer } from "./auth";

@@ -20,6 +20,25 @@ export type OrderAcceptance = {
 export const DEFAULT_PAUSED_MESSAGE =
   "We are taking a quick break from online orders to restock and will be back soon. Thank you for your patience.";
 
+/**
+ * Routes that show the "Orders paused" page instead of their content while
+ * paused (user, 2026-10-16): home, cart, the three checkout steps, reorder.
+ * Everything else stays usable and shows the dark notice bar instead;
+ * product browsing works with Add to Cart / Buy Now disabled ("Just Browse").
+ * ⚠ Keep in step with the gates in `app/(shop)` (layouts + page guards).
+ */
+export function isPausedPageRoute(pathname: string): boolean {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return (
+    path === "/" ||
+    path === "/cart" ||
+    path === "/checkout" ||
+    path === "/checkout/delivery" ||
+    path === "/checkout/payment" ||
+    path.startsWith("/account/orders/reorder/")
+  );
+}
+
 /** Open, as before the switch existed: unknown never closes the shop. */
 export const DEFAULT_ORDER_ACCEPTANCE: OrderAcceptance = {
   open: true,

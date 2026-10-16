@@ -74,6 +74,7 @@ export function ProductCustomizer({
   levies = STATUTORY_LEVIES,
   stock,
   isSignedIn,
+  ordersPaused = false,
 }: {
   product: Product;
   /** Configured VAT / NHIL / GETFund split (Settings → Platform), shown as
@@ -89,6 +90,11 @@ export function ProductCustomizer({
    *  server action re-checks getCustomer() itself, so a stale or tampered
    *  value can't grant access. */
   isSignedIn: boolean;
+  /** Settings → Order Acceptance is off ("Just Browse", client 2026-10-16):
+   *  the product stays fully viewable and configurable, but Add to Cart and
+   *  Buy Now are disabled. The header's notice bar says why; the add and
+   *  Buy Now server actions refuse on their own. */
+  ordersPaused?: boolean;
 }) {
   const router = useRouter();
   const [size, setSize] = React.useState(product.sizes[0]?.id ?? "");
@@ -1048,7 +1054,7 @@ export function ProductCustomizer({
             <button
               type="button"
               onClick={() => addToCart()}
-              disabled={selectionIncomplete || comboOutOfStock || comboShort}
+              disabled={ordersPaused || selectionIncomplete || comboOutOfStock || comboShort}
               className={cn(
                 "inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-button border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none sm:px-6",
                 justAdded
@@ -1068,7 +1074,7 @@ export function ProductCustomizer({
             <button
               type="button"
               onClick={onBuyNowClick}
-              disabled={selectionIncomplete || comboOutOfStock || comboShort}
+              disabled={ordersPaused || selectionIncomplete || comboOutOfStock || comboShort}
               className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-button bg-brand px-3 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none sm:px-6"
             >
               {pendingKind === "buy" && (

@@ -3,6 +3,7 @@ import {
   DEFAULT_PAUSED_MESSAGE,
   formatGhanaPhone,
   formatReopenDate,
+  isPausedPageRoute,
   parseOrderAcceptance,
   pausedMessage,
 } from "./order-acceptance";
@@ -24,6 +25,37 @@ describe("parseOrderAcceptance", () => {
 
   it("drops a malformed date", () => {
     expect(parseOrderAcceptance({ open: false, reopen_date: "Monday" }).reopenDate).toBeNull();
+  });
+});
+
+describe("isPausedPageRoute", () => {
+  it("is the home, cart, checkout steps and reorder", () => {
+    for (const p of [
+      "/",
+      "/cart",
+      "/cart/",
+      "/checkout",
+      "/checkout/delivery",
+      "/checkout/payment",
+      "/account/orders/reorder/order_123",
+    ]) {
+      expect(isPausedPageRoute(p), p).toBe(true);
+    }
+  });
+
+  it("leaves browsing, tracking, accounts and the post-payment pages alone", () => {
+    for (const p of [
+      "/products",
+      "/products/pizza-box",
+      "/products/category/rsc-cartons",
+      "/track-order",
+      "/account/orders",
+      "/about",
+      "/checkout/confirmation",
+      "/checkout/callback",
+    ]) {
+      expect(isPausedPageRoute(p), p).toBe(false);
+    }
   });
 });
 

@@ -10,6 +10,8 @@ import {
   isDeadCartError,
 } from "@/lib/cart-errors";
 import { goodsLines, syncPlatformFee } from "@/lib/platform-fee";
+import { CHECKOUT_PAUSED_MESSAGE } from "@/lib/fulfillment-methods";
+import { ordersArePaused } from "@/lib/site-content";
 
 /**
  * Guest cart persistence.
@@ -546,11 +548,20 @@ async function addWithLiveCart<T>(
   }
 }
 
+/** Settings → Order Acceptance OFF (2026-10-16): nothing new goes into a
+ *  cart. The product page already disables its buttons; this covers a tab
+ *  opened before the pause. Every add path (customizer, Buy Now, reorder)
+ *  comes through addLineItem / addConfiguredLineItem. */
+async function refuseWhileOrdersPaused(): Promise<void> {
+  if (await ordersArePaused()) throw new Error(CHECKOUT_PAUSED_MESSAGE);
+}
+
 /** Add a variant to the cart (creating the cart if needed). Returns the updated cart. */
 export async function addLineItem(
   variantId: string,
   quantity = 1
 ): Promise<HttpTypes.StoreCart | null> {
+  await refuseWhileOrdersPaused();
   // createLineItem returns the updated cart — asking for the slim mutation
   // fields saves both the extra retrieve AND the totals/payment decoration.
   // A vanished cart is replaced and the add repeated (`addWithLiveCart`).
@@ -615,6 +626,7 @@ export async function addConfiguredLineItem(input: {
   setupPrintingValue?: string | null;
   notes?: string;
 }): Promise<HttpTypes.StoreCart | null> {
+  await refuseWhileOrdersPaused();
   const notes = input.notes?.trim();
 
   // The setup-fee lookup doesn't depend on the carton line — run it while the

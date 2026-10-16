@@ -1,5 +1,6 @@
 import { Poppins } from "next/font/google";
-import { Clock, Mail, MapPin, Phone } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Clock, Mail, MapPin, Phone } from "lucide-react";
 import {
   formatGhanaPhone,
   formatReopenDate,
@@ -108,6 +109,20 @@ export function OrdersPausedPanel({
           aria-hidden
           className="mt-12 h-px max-w-3xl bg-gradient-to-r from-[rgba(150,64,34,0.35)] via-[rgba(196,188,176,0.6)] to-transparent sm:mt-14"
         />
+        {/* "Just Browse" (client mockup, 2026-10-16): products stay viewable
+            while paused, with Add to Cart / Buy Now disabled. */}
+        <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <Link
+            href="/products"
+            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-button bg-dark px-5 text-sm font-medium text-dark-foreground transition-colors hover:bg-dark/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+          >
+            Just Browse
+            <ArrowRight className="size-4" aria-hidden />
+          </Link>
+          <p className="text-xs leading-4 text-[#a49a87]">
+            Explore our products - ordering will be available once we reopen.
+          </p>
+        </div>
       </div>
 
       {/* Contact strip. */}
