@@ -20,6 +20,7 @@ import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-pro
 import { chargeBreakdown } from "@/lib/charge-breakdown";
 import { getFulfillmentMethods, getLevies } from "@/lib/site-content";
 import { methodOffMessage } from "@/lib/fulfillment-methods";
+import { ordersPausedPanel } from "@/components/orders-paused/orders-paused-gate";
 
 export const metadata: Metadata = {
   title: "Payment",
@@ -45,6 +46,10 @@ export default async function PaymentPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  // Settings → Order Acceptance OFF → the "Orders paused" page (2026-10-16).
+  const paused = await ordersPausedPanel();
+  if (paused) return paused;
+
   // `itemsChanged`: a product's price or weight changed since it was added and
   // this read brought the cart up to date (2026-10-02) → say so above the
   // summary, whose figures are already the new ones.

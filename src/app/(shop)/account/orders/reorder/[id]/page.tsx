@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCustomer } from "@/lib/actions/auth";
 import { ReorderRunner } from "@/components/account/reorder-runner";
+import { ordersPausedPanel } from "@/components/orders-paused/orders-paused-gate";
 
 export const metadata: Metadata = {
   title: "Reorder",
@@ -25,6 +26,10 @@ export default async function ReorderPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // Settings → Order Acceptance OFF → the "Orders paused" page (2026-10-16).
+  const paused = await ordersPausedPanel();
+  if (paused) return paused;
+
   const [{ id }, customer] = await Promise.all([params, getCustomer()]);
   if (!customer) {
     redirect("/products");

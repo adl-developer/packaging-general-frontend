@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { BusinessHoursNotice } from "@/components/checkout/business-hours-notice";
 import { CompanyInfoForm } from "@/components/checkout/company-info-form";
 import { getCheckoutPrefill } from "@/lib/actions/checkout";
+import { ordersPausedPanel } from "@/components/orders-paused/orders-paused-gate";
 
 export const metadata: Metadata = {
   title: "Checkout",
@@ -13,6 +14,10 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function CheckoutPage() {
+  // Settings → Order Acceptance OFF → the "Orders paused" page (2026-10-16).
+  const paused = await ordersPausedPanel();
+  if (paused) return paused;
+
   const prefill = await getCheckoutPrefill();
   return (
     <CompanyInfoForm
