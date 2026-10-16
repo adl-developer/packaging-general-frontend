@@ -15,6 +15,11 @@ const redirect = vi.hoisted(() =>
 
 vi.mock("@/lib/actions/auth", () => ({ getCustomer }));
 vi.mock("next/navigation", () => ({ redirect }));
+// Orders open: the paused panel (and its next/font import) stays out of this
+// test. The pause rules are covered by lib/order-acceptance.test.ts.
+vi.mock("@/components/orders-paused/orders-paused-gate", () => ({
+  ordersPausedPanel: async () => null,
+}));
 
 import ReorderPage from "./page";
 import { ReorderRunner } from "@/components/account/reorder-runner";

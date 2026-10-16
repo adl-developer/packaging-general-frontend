@@ -15,6 +15,7 @@ import {
   getFulfillmentMethods,
   getYangoLiveQuotes,
 } from "@/lib/site-content";
+import { ordersPausedPanel } from "@/components/orders-paused/orders-paused-gate";
 
 export const metadata: Metadata = {
   title: "Delivery",
@@ -26,6 +27,10 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function DeliveryPage() {
+  // Settings → Order Acceptance OFF → the "Orders paused" page (2026-10-16).
+  const paused = await ordersPausedPanel();
+  if (paused) return paused;
+
   const [prefill, pickupLocation, hoursLines, accraOnly, yangoLiveQuotes, methods] = await Promise.all([
     getCheckoutPrefill(),
     getPickupLocation(),

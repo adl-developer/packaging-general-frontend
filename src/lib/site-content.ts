@@ -12,6 +12,11 @@ import {
   parseFulfillmentMethods,
   type FulfillmentMethods,
 } from "@/lib/fulfillment-methods";
+import {
+  DEFAULT_ORDER_ACCEPTANCE,
+  parseOrderAcceptance,
+  type OrderAcceptance,
+} from "@/lib/order-acceptance";
 
 /**
  * Admin-editable site content, served by the custom backend route
@@ -78,6 +83,10 @@ interface SiteContentResponse {
   yango_delivery?: { live_quotes?: unknown };
   /** Pickup / delivery switches — absent on a backend before 2026-10-12. */
   fulfillment_methods?: unknown;
+  /** Order Acceptance master switch — absent on a backend before 2026-10-16. */
+  order_acceptance?: unknown;
+  /** Settings → Business Location phone + address — absent before 2026-10-16. */
+  business_contact?: { phone?: unknown; location?: unknown };
 }
 
 interface SiteContentState {
@@ -97,6 +106,17 @@ interface SiteContentState {
   yangoLiveQuotes: boolean;
   /** Pickup / delivery switches; both ON when the backend didn't say. */
   fulfillmentMethods: FulfillmentMethods;
+  /** Orders open / paused + the closed page's text; OPEN when unknown. */
+  orderAcceptance: OrderAcceptance;
+  /** Settings → Business Location: customer phone + one-line address. */
+  businessContact: BusinessContact;
+}
+
+export interface BusinessContact {
+  /** As saved in Settings (pickup phone, else courier phone); null = unset. */
+  phone: string | null;
+  /** One-line "address, city"; null = unset. */
+  location: string | null;
 }
 
 /** Last-known-good copy, served only when the backend is unreachable. The
@@ -115,7 +135,12 @@ const EMPTY: SiteContentState = {
   accraOnly: null,
   yangoLiveQuotes: false,
   fulfillmentMethods: DEFAULT_FULFILLMENT_METHODS,
+  orderAcceptance: DEFAULT_ORDER_ACCEPTANCE,
+  businessContact: { phone: null, location: null },
 };
+
+const text = (v: unknown): string | null =>
+  typeof v === "string" && v.trim() ? v.trim() : null;
 
 function mapDoc(
   raw: SiteContentResponse["terms"] | undefined,
@@ -149,6 +174,11 @@ const cachedSiteContent = unstable_cache(
           : null,
       yangoLiveQuotes: res.yango_delivery?.live_quotes === true,
       fulfillmentMethods: parseFulfillmentMethods(res.fulfillment_methods),
+      orderAcceptance: parseOrderAcceptance(res.order_acceptance),
+      businessContact: {
+        phone: text(res.business_contact?.phone),
+        location: text(res.business_contact?.location),
+      },
     };
   },
   ["site-content"],
@@ -203,6 +233,21 @@ export async function getDeliveryAreaAccraOnly(): Promise<boolean> {
  *  Unknown (older backend, unreachable) → both ON, as before they existed. */
 export async function getFulfillmentMethods(): Promise<FulfillmentMethods> {
   return (await getSiteContent()).fulfillmentMethods ?? DEFAULT_FULFILLMENT_METHODS;
+}
+
+/** Settings → Order Acceptance: are orders paused, and what does the closed
+ *  page say? Unknown (older backend, unreachable with nothing cached) →
+ *  open, so a backend blip never closes the shop. The backend enforces the
+ *  pause on its own (delivery + payment-session refusals). */
+export async function getOrderAcceptance(): Promise<OrderAcceptance> {
+  return (await getSiteContent()).orderAcceptance ?? DEFAULT_ORDER_ACCEPTANCE;
+}
+
+/** Settings → Business Location's customer phone and address (the "Orders
+ *  paused" contact strip). Nulls when unset or unreachable — callers fall
+ *  back to the support line and "Accra, Ghana". */
+export async function getBusinessContact(): Promise<BusinessContact> {
+  return (await getSiteContent()).businessContact ?? EMPTY.businessContact;
 }
 
 /** Is Settings → Platform → Delivery quotes → "Live quotes" on? The
