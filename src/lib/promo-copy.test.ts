@@ -111,6 +111,17 @@ describe("derived promo copy", () => {
     expect(promoScope(easter)).toBe("for all Easter orders");
     expect(promoScope({ ...easter, campaignName: null })).toBe("your order");
   });
+
+  // 2026-10-28: a "Free shipping" promotion is 100% off DELIVERY. Without
+  // this the bar read "Enjoy 100% off your order".
+  it("says free delivery for a free-shipping promotion", () => {
+    const freeShip = { ...easter, code: "TEST10", value: 100, campaignName: null, freeDelivery: true };
+    expect(promoOffer(freeShip)).toBe("free delivery");
+    expect(promoMessage(freeShip, live(""))?.headline).toBe("Enjoy free delivery on your order");
+    expect(promoMessage({ ...freeShip, campaignName: "Easter" }, live(""))?.headline).toBe(
+      "Enjoy free delivery for all Easter orders",
+    );
+  });
 });
 
 describe("namedCode", () => {

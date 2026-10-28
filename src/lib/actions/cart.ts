@@ -12,6 +12,12 @@ import {
 import { goodsLines, syncPlatformFee } from "@/lib/platform-fee";
 import { CHECKOUT_PAUSED_MESSAGE } from "@/lib/fulfillment-methods";
 import { ordersArePaused } from "@/lib/site-content";
+import { isPickupCart } from "@/lib/fulfillment";
+import {
+  INVALID_CODE_MESSAGE,
+  droppedCodeMessage,
+  type PromoCodeKind,
+} from "@/lib/promo-code-notice";
 
 /**
  * Guest cart persistence.
@@ -352,11 +358,28 @@ export async function getCartLineCount(): Promise<number> {
 
 export type PromoResult =
   | { ok: true; discountTotal: number }
-  | { ok: false; error: string };
+  /** `tone: "info"` = a valid code with nothing to take off (see
+   *  `lib/promo-code-notice.ts`), shown as a note rather than a red error. */
+  | { ok: false; error: string; tone?: "error" | "info" };
 
-/** Apply a promotion code to the cart. Depending on the Medusa version an
- *  unknown code either 400s (caught below) or is silently dropped from the
- *  cart's promotions — both paths report "Invalid discount code". */
+/** The backend's word on what a code gives; null when it can't say (unknown
+ *  code, or a backend that predates the route), which keeps the old copy. */
+async function promoCodeKind(code: string): Promise<PromoCodeKind | null> {
+  try {
+    const { kind } = await sdk.client.fetch<{ kind: PromoCodeKind | null }>(
+      "/store/promo-code-kind",
+      { query: { code } },
+    );
+    return kind === "free_delivery" || kind === "discount" ? kind : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Apply a promotion code to the cart. An unknown code 400s (caught below).
+ *  A valid code that takes nothing off is silently dropped from the cart's
+ *  promotions by Medusa; a free-delivery code on a free delivery or a pickup
+ *  order then gets a reason, anything else "Invalid discount code". */
 export async function applyPromoCode(code: string): Promise<PromoResult> {
   const normalized = code.trim().toUpperCase();
   if (!normalized) return { ok: false, error: "Enter a discount code" };
@@ -380,7 +403,19 @@ export async function applyPromoCode(code: string): Promise<PromoResult> {
     const applied = (updated.promotions ?? []).some(
       (p) => p.code === normalized
     );
-    if (!applied) return { ok: false, error: "Invalid discount code" };
+    if (!applied) {
+      const kind = await promoCodeKind(normalized);
+      return {
+        ok: false,
+        ...droppedCodeMessage(kind, {
+          pickup: isPickupCart(
+            updated.metadata,
+            updated.shipping_address?.metadata,
+          ),
+          hasDeliveryMethod: (updated.shipping_methods ?? []).length > 0,
+        }),
+      };
+    }
 
     revalidatePath("/cart");
     revalidatePath("/checkout/payment");
@@ -388,7 +423,7 @@ export async function applyPromoCode(code: string): Promise<PromoResult> {
   } catch (err) {
     const status = (err as { status?: number })?.status;
     if (status === 400 || status === 404) {
-      return { ok: false, error: "Invalid discount code" };
+      return { ok: false, error: INVALID_CODE_MESSAGE };
     }
     console.error("[cart] applyPromoCode failed:", err);
     return { ok: false, error: "Couldn't apply the code. Please try again." };
