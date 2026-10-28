@@ -12,6 +12,9 @@ export interface ActivePromotion {
   valueType: "percentage" | "fixed";
   /** Campaign name (e.g. "Easter") for promo-specific copy, or null. */
   campaignName: string | null;
+  /** A "Free shipping" promotion (100% off delivery): the copy says "free
+   *  delivery", never "100% off your order". Absent = an ordinary discount. */
+  freeDelivery?: boolean;
 }
 
 /** The announcement-bar override set in admin (Promotions → Promotional
@@ -68,6 +71,7 @@ const cachedPromoState = unstable_cache(
             valueType:
               promotion.value_type === "fixed" ? "fixed" : "percentage",
             campaignName: promotion.campaign_name ?? null,
+            freeDelivery: promotion.target_type === "shipping_methods",
           }
         : null,
       banner: banner

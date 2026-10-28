@@ -10,6 +10,7 @@ const sdk = vi.hoisted(() => ({
   store: {
     cart: {
       retrieve: vi.fn(),
+      update: vi.fn(),
       deleteLineItem: vi.fn(),
       create: vi.fn(),
       createLineItem: vi.fn(),
@@ -43,6 +44,7 @@ vi.mock("@/lib/site-content", () => ({ ordersArePaused }));
 import {
   addConfiguredLineItem,
   addLineItem,
+  applyPromoCode,
   getCart,
   getCartForPrefill,
   getCartWithChanges,
@@ -254,5 +256,66 @@ describe("addLineItem when the cart has vanished (Sentry STOREFRONT-9)", () => {
     await expect(addLineItem("variant_1")).rejects.toBe(goneCart);
     expect(sdk.store.cart.createLineItem).toHaveBeenCalledTimes(2);
     expect(jar.has("pg_cart_id")).toBe(false);
+  });
+});
+
+describe("applyPromoCode: a valid code Medusa dropped (2026-10-28)", () => {
+  // Medusa keeps a code only while it takes money off. A free-delivery code
+  // on a GH₵0 delivery is dropped, and the page used to say "Invalid
+  // discount code" for it.
+  const kindIs = (kind: string | null) =>
+    sdk.client.fetch.mockImplementation(async (path: string) =>
+      path === "/store/promo-code-kind"
+        ? { kind }
+        : { cart: liveCart, sync: { changed: false } },
+    );
+  const dropped = (extra: Record<string, unknown>) =>
+    sdk.store.cart.update.mockResolvedValue({
+      cart: { ...liveCart, promotions: [], shipping_methods: [], ...extra },
+    });
+
+  it("says delivery is already free, as a note, for a free-delivery code on a GH₵0 delivery", async () => {
+    kindIs("free_delivery");
+    dropped({ shipping_methods: [{ id: "sm_1", amount: 0, name: "Yango Delivery" }] });
+
+    const result = await applyPromoCode("test10");
+
+    expect(sdk.client.fetch).toHaveBeenCalledWith("/store/promo-code-kind", {
+      query: { code: "TEST10" },
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: "Delivery is already free on your order.",
+      tone: "info",
+    });
+  });
+
+  it("explains a free-delivery code on a pickup order", async () => {
+    kindIs("free_delivery");
+    dropped({
+      metadata: { fulfillment_method: "pickup" },
+      shipping_methods: [{ id: "sm_1", amount: 0, name: "Store Pickup" }],
+    });
+
+    const result = await applyPromoCode("TEST10");
+
+    expect(result).toMatchObject({ ok: false, tone: "info" });
+    expect((result as { error: string }).error).toMatch(/pickup/);
+  });
+
+  it("keeps 'Invalid discount code' for any other dropped code, or when the lookup fails", async () => {
+    kindIs("discount");
+    dropped({});
+    expect(await applyPromoCode("WELCOME15")).toEqual({
+      ok: false,
+      error: "Invalid discount code",
+      tone: "error",
+    });
+
+    sdk.client.fetch.mockImplementation(async (path: string) => {
+      if (path === "/store/promo-code-kind") throw Object.assign(new Error("Not Found"), { status: 404 });
+      return { cart: liveCart, sync: { changed: false } };
+    });
+    expect(await applyPromoCode("TEST10")).toMatchObject({ error: "Invalid discount code" });
   });
 });

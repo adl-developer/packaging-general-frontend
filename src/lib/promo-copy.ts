@@ -9,18 +9,20 @@ import type { ActivePromotion, PromoBanner } from "@/lib/promotions";
  * Pure (no SDK import) so client components can use it too.
  */
 
-/** The discount itself: "10% off" or "GH₵ 50.00 off". */
+/** The discount itself: "10% off", "GH₵ 50.00 off" or "free delivery" (a
+ *  "Free shipping" promotion is 100% off delivery, not 100% off the order). */
 export function promoOffer(promo: ActivePromotion): string {
+  if (promo.freeDelivery) return "free delivery";
   return promo.valueType === "percentage"
     ? `${promo.value}% off`
     : `${formatGhs(promo.value)} off`;
 }
 
-/** What the discount applies to: "for all Easter orders" / "your order". */
+/** What the discount applies to: "for all Easter orders" / "your order"
+ *  ("on your order" after "free delivery"). */
 export function promoScope(promo: ActivePromotion): string {
-  return promo.campaignName
-    ? `for all ${promo.campaignName} orders`
-    : "your order";
+  if (promo.campaignName) return `for all ${promo.campaignName} orders`;
+  return promo.freeDelivery ? "on your order" : "your order";
 }
 
 /**

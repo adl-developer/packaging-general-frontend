@@ -11,9 +11,18 @@ import { applyPromoCode, removePromoCode } from "@/lib/actions/cart";
  * Discount code entry, wired to Medusa promotions. Applying updates the
  * cart's promo_codes server-side; on success we router.refresh() so the
  * server-rendered totals (subtotal/discount/total) re-render from the live
- * cart. Medusa silently ignores unknown codes — the server action reports
- * that back as "Invalid discount code".
+ * cart. An unknown code comes back as "Invalid discount code" (red). A valid
+ * code with nothing to take off (a free-delivery code when delivery is already
+ * free) comes back with `tone: "info"` and shows as a plain note instead.
  */
+function FieldNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p role="status" className="text-sm text-muted">
+      {children}
+    </p>
+  );
+}
+
 export function DiscountField({
   appliedCode = null,
 }: {
@@ -23,10 +32,12 @@ export function DiscountField({
   const router = useRouter();
   const [code, setCode] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+  const [note, setNote] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
   function apply() {
     const trimmed = code.trim();
+    setNote(null);
     if (!trimmed) {
       setError("Enter a discount code");
       return;
@@ -37,6 +48,8 @@ export function DiscountField({
       if (result.ok) {
         setCode("");
         router.refresh();
+      } else if (result.tone === "info") {
+        setNote(result.error);
       } else {
         setError(result.error);
       }
@@ -96,6 +109,7 @@ export function DiscountField({
           onChange={(e) => {
             setCode(e.target.value);
             if (error) setError(null);
+            if (note) setNote(null);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -114,6 +128,7 @@ export function DiscountField({
         </Button>
       </div>
       {error && <FieldError>{error}</FieldError>}
+      {note && <FieldNote>{note}</FieldNote>}
     </div>
   );
 }
