@@ -28,6 +28,7 @@ import {
 } from "@/lib/actions/cart";
 import { shortfall, type StockState } from "@/lib/stock-rules";
 import { notEnoughStockMessage } from "@/lib/restock";
+import { belowMoqMessage } from "@/lib/moq";
 import { RestockRequestDialog } from "@/components/products/restock-request-dialog";
 import { mapLineItem, TAX_RATE, type CartItem } from "./map-cart";
 import { mergeRefreshedItems } from "./merge-refreshed";
@@ -318,13 +319,18 @@ function CartLine({
   item: CartItem;
   pending: boolean;
   onRemove: (id: string) => void;
-  onStep: (id: string, delta: number) => void;
+  onStep: (id: string, delta: number, min: number) => void;
   /** Non-null when this line exceeds what can actually be sold — see
    *  shortfallFor in CartClient. Never carries a stock count, only the
    *  customer's own reduce-to target (Global Constraints: no counts shown). */
   shortfallInfo: { reduceTo: number } | null;
   onReduce: (reduceTo: number) => void;
 }) {
+  // The product's minimum order quantity (client, 2026-11-13): the stepper
+  // stops there, and a line already under it (added before this rule, or a
+  // reorder) is flagged with a one-tap fix and blocks checkout.
+  const moq = item.isService ? 1 : (item.moq ?? 1);
+  const belowMoq = !item.isService && item.quantity < moq;
   return (
     <div className="rounded-card border border-line bg-surface p-6">
       <div className="flex flex-col gap-4 sm:flex-row">
@@ -392,6 +398,24 @@ function CartLine({
               </button>
             </div>
           )}
+          {belowMoq && (
+            <div
+              role="alert"
+              className="flex flex-col items-start gap-2 rounded-option border border-[rgba(180,83,9,0.35)] bg-[rgba(254,243,199,0.5)] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p className="text-sm font-medium text-[#92400e]">
+                {belowMoqMessage(item.name, moq)}
+              </p>
+              <button
+                type="button"
+                onClick={() => onReduce(moq)}
+                disabled={pending}
+                className="inline-flex h-8 shrink-0 items-center rounded-button bg-[#92400e] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#92400e]/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {`Increase to ${moq}`}
+              </button>
+            </div>
+          )}
           <div className="flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex flex-col gap-2">
               {item.isService ? (
@@ -408,7 +432,8 @@ function CartLine({
                   </span>
                   <QtyStepper
                     qty={item.quantity}
-                    onStep={(delta) => onStep(item.id, delta)}
+                    min={moq}
+                    onStep={(delta) => onStep(item.id, delta, moq)}
                     label={item.name}
                   />
                 </>
@@ -867,12 +892,14 @@ export function CartClient({
   }, [drainQty]);
 
   const stepQty = React.useCallback(
-    (id: string, delta: number) => {
+    (id: string, delta: number, min = 1) => {
       // A line whose commit is still in flight has no server id to write to —
       // its controls are disabled, but guard the callback path too.
       if (isOptimisticLine(id)) return;
       const current = qtyTarget.current.get(id) ?? 1;
-      const nextQty = Math.max(1, current + delta);
+      // Never below the product's minimum; a + on a line still under it
+      // jumps straight to the minimum.
+      const nextQty = Math.max(min, 1, current + delta);
       if (nextQty === current) return;
       qtyTarget.current.set(id, nextQty);
       qtyDirty.current.set(id, nextQty);
@@ -1004,6 +1031,12 @@ export function CartClient({
   // and gates the Checkout CTA. Empty when stock is unknown or fine, per the
   // fail-open rule.
   const shortItems = goods.filter((it) => shortfallFor(it) !== null);
+  // Lines under their product's minimum order quantity (2026-11-13) — also
+  // flagged inline and also block checkout.
+  const belowMoqItems = goods.filter(
+    (it) => !it.isService && it.quantity < (it.moq ?? 1),
+  );
+  const blockedItems = shortItems.length + belowMoqItems.length;
 
   // Still waiting on the first cart snapshot (direct visit, promise pending).
   // The add→cart path adopts its handoff in the mount effect, so this shows
@@ -1159,7 +1192,7 @@ export function CartClient({
           {/* The charge ladder — the fee's one appearance is here, beside the
               levies, never among the things the shopper chose. */}
           <ChargeRows rows={chargeRows} className="border-t border-line pt-3" />
-          {shortItems.length > 0 ? (
+          {blockedItems > 0 ? (
             <div className="mt-1 flex flex-col gap-1.5">
               <button
                 type="button"
@@ -1175,7 +1208,7 @@ export function CartClient({
               </button>
               <p className="text-center text-xs text-muted">
                 Please resolve the highlighted item
-                {shortItems.length === 1 ? "" : "s"} above before checking out.
+                {blockedItems === 1 ? "" : "s"} above before checking out.
               </p>
             </div>
           ) : (

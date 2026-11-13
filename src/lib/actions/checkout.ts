@@ -35,6 +35,7 @@ import { findCompletedOrder } from "@/lib/completed-order";
 import { paystackChannels, type PaymentMethodChoice } from "@/lib/paystack-channels";
 import { storefrontMetadata } from "@/lib/storefront-origin";
 import { CHECKOUT_PAUSED_MESSAGE, methodOffMessage } from "@/lib/fulfillment-methods";
+import { cartBelowMoqMessage, cartLinesBelowMoq } from "@/lib/moq";
 import { getFulfillmentMethods, ordersArePaused } from "@/lib/site-content";
 
 /**
@@ -843,6 +844,14 @@ export async function initiatePaystack(method?: PaymentMethodChoice): Promise<
   // (the Printing Setup Fee) are unmanaged, so toStockState gives them
   // `available: null`, and shortfall() never flags a null availability —
   // they're exempt for free, without needing a separate isService check.
+  // Minimum order quantity per box type (client, 2026-11-13). The cart page
+  // blocks checkout too; this covers a stale tab or a cart edited elsewhere.
+  // The backend's payment-session guard is the boundary behind it.
+  const belowMoq = cartLinesBelowMoq(cart.items ?? []);
+  if (belowMoq.length) {
+    return { ok: false, error: cartBelowMoqMessage(belowMoq) };
+  }
+
   const stock = await getStockMap(productIdsFor(cart));
   for (const line of cart.items ?? []) {
     const state = line.variant_id ? stock.get(line.variant_id) : undefined;

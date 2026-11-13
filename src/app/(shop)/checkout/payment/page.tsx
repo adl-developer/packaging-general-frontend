@@ -20,6 +20,7 @@ import { OrderProgress, ProgressBackLink } from "@/components/checkout/order-pro
 import { chargeBreakdown } from "@/lib/charge-breakdown";
 import { getFulfillmentMethods, getLevies } from "@/lib/site-content";
 import { methodOffMessage } from "@/lib/fulfillment-methods";
+import { cartLinesBelowMoq } from "@/lib/moq";
 import { ordersPausedPanel } from "@/components/orders-paused/orders-paused-gate";
 
 export const metadata: Metadata = {
@@ -55,6 +56,9 @@ export default async function PaymentPage({
   // summary, whose figures are already the new ones.
   const { cart, itemsChanged } = await getCartWithChanges();
   if (!cart || !cart.items?.length) redirect("/cart");
+  // A line under its product's minimum order quantity can't be paid for
+  // (2026-11-13): back to the cart, which flags it with a one-tap fix.
+  if (cartLinesBelowMoq(cart.items ?? []).length) redirect("/cart");
   if (!cart.shipping_address?.address_1 || !cart.shipping_methods?.length) {
     redirect("/checkout/delivery");
   }

@@ -1,5 +1,6 @@
 import type { HttpTypes } from "@medusajs/types";
 import { isPlatformFeeLine } from "@/lib/platform-fee";
+import { productMoq } from "@/lib/moq";
 
 /** Ghana VAT 15% + NHIL 2.5% + GETFund 2.5% on the same base = 20% flat
  *  (VAT Act 2025, Act 1151, effective 1 Jan 2026 — matches the backend tax
@@ -55,6 +56,9 @@ export interface CartItem {
    *  cart client stages (plain literals, not `mapLineItem` output) don't all
    *  have to declare it. */
   isPlatformFee?: boolean;
+  /** The product's minimum order quantity (1 = none). Optional for the same
+   *  reason as `isPlatformFee`; an absent value means no minimum. */
+  moq?: number;
 }
 
 /** Spec display order for configured packaging lines. */
@@ -149,5 +153,8 @@ export function mapLineItem(item: HttpTypes.StoreCartLineItem): CartItem {
     productSlug: isService ? undefined : (item.product_handle ?? undefined),
     isService,
     isPlatformFee,
+    moq: isService
+      ? 1
+      : productMoq(item.product?.metadata as Record<string, unknown> | null),
   };
 }
